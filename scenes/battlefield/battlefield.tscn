@@ -1,0 +1,300 @@
+[gd_scene format=3 uid="uid://bf6b5cmmgukxy"]
+
+[ext_resource type="Script" uid="uid://cxs680sk2khit" path="res://scripts/battlefield/battlefield.gd" id="1_field"]
+[ext_resource type="PackedScene" uid="uid://cerjq4bw0ykkv" path="res://scenes/player/player_helicopter.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://b1nak3f5w8r2q" path="res://scenes/camera/camera_rig.tscn" id="3_cam"]
+[ext_resource type="PackedScene" uid="uid://c8n3w5m7k2x4v" path="res://scenes/weapons/projectile_pool.tscn" id="4_pool"]
+[ext_resource type="Script" uid="uid://debfp3kl8dhag" path="res://scripts/managers/upgrade_manager.gd" id="4_tsw4x"]
+[ext_resource type="Script" uid="uid://e3lrr3i24dde" path="res://scripts/directors/combat_director.gd" id="5_combat_dir"]
+[ext_resource type="Script" uid="uid://butv8nwj8mhot" path="res://scripts/common/game_manager.gd" id="8_game_mgr"]
+[ext_resource type="PackedScene" uid="uid://b2k8y4m6r1wap" path="res://scenes/ui/hud.tscn" id="9_hud"]
+[ext_resource type="PackedScene" uid="uid://c6v2nar4k8x1w" path="res://scenes/ui/level_up_menu.tscn" id="10_lvl"]
+[ext_resource type="PackedScene" uid="uid://be4m8k1v7w2ra" path="res://scenes/ui/death_screen.tscn" id="11_death"]
+[ext_resource type="PackedScene" uid="uid://df5m2wak4r1w8" path="res://scenes/ui/victory_screen.tscn" id="12_vic"]
+[ext_resource type="PackedScene" uid="uid://c5v8k2nax4w1q" path="res://scenes/ui/pause_menu.tscn" id="13_pause"]
+[ext_resource type="PackedScene" uid="uid://c4n8m2v5k7w1q" path="res://scenes/audio/sound_manager.tscn" id="14_snd"]
+[ext_resource type="PackedScene" uid="uid://dg2m4v8k1sax7" path="res://scenes/ui/wave_hud.tscn" id="14_yexbb"]
+[ext_resource type="PackedScene" uid="uid://df2k8m4r1waq7" path="res://scenes/ui/run_end_screen.tscn" id="15_kjtcb"]
+[ext_resource type="PackedScene" uid="uid://b8m2v4k1sax7w" path="res://scenes/spawners/enemy_spawn_points.tscn" id="16_26eqi"]
+[ext_resource type="PackedScene" uid="uid://c8m4x1v7w2rap" path="res://scenes/managers/wave_manager.tscn" id="17_kjtcb"]
+[ext_resource type="Script" uid="uid://25apokobcvu6" path="res://scripts/common/run_state_controller.gd" id="18_kjtcb"]
+[ext_resource type="PackedScene" uid="uid://sgu660fhujxv" path="res://scenes/environment/boundary/playable_area.tscn" id="21_61f51"]
+[ext_resource type="PackedScene" uid="uid://dxx3jujpswq3m" path="res://scenes/environment/city/civic_plaza.tscn" id="22_p5wp6"]
+[ext_resource type="PackedScene" uid="uid://bgfbv1p3teyxh" path="res://scenes/environment/city/building_large.tscn" id="23_2km1u"]
+[ext_resource type="PackedScene" uid="uid://b5b3hreu3688i" path="res://scenes/environment/city/building_medium.tscn" id="24_6dbsf"]
+[ext_resource type="PackedScene" uid="uid://ccdd05o0ekmwc" path="res://scenes/environment/city/building_small.tscn" id="25_nv5t8"]
+[ext_resource type="PackedScene" uid="uid://dcg68b3fc75bj" path="res://scenes/environment/props/streetlight.tscn" id="26_0dhpt"]
+[ext_resource type="PackedScene" uid="uid://dcvwdf754343h" path="res://scenes/environment/city/warehouse.tscn" id="27_o7u17"]
+[ext_resource type="PackedScene" uid="uid://cfqhdlseeosdk" path="res://scenes/spawners/spawn_system.tscn" id="28_6dbsf"]
+[ext_resource type="PackedScene" uid="uid://tyrvsv6047yt" path="res://scenes/environment/city/parking_lot.tscn" id="28_wrgpj"]
+[ext_resource type="PackedScene" uid="uid://d3ebdh0splvq3" path="res://scenes/environment/props/fuel_tank.tscn" id="29_vixb4"]
+[ext_resource type="PackedScene" uid="uid://cdsq1pdmth2tl" path="res://scenes/environment/props/crate.tscn" id="30_d6e8j"]
+[ext_resource type="PackedScene" uid="uid://ciopkawxyimcs" path="res://scenes/environment/props/fence.tscn" id="31_ivm54"]
+[ext_resource type="PackedScene" uid="uid://ddygpp17k2r3f" path="res://scenes/environment/military/hangar.tscn" id="32_va7fe"]
+[ext_resource type="PackedScene" uid="uid://cb3vdsgb58nqb" path="res://scenes/environment/military/radar_site.tscn" id="33_mq602"]
+[ext_resource type="PackedScene" uid="uid://dpyb4l3036abe" path="res://scenes/environment/military/sam_site_environment.tscn" id="34_nw58i"]
+[ext_resource type="PackedScene" uid="uid://dfkeeo0ntvx68" path="res://scenes/environment/military/checkpoint.tscn" id="35_ud71r"]
+[ext_resource type="PackedScene" uid="uid://deiyhgkluqg1e" path="res://scenes/environment/props/barrier.tscn" id="36_kak68"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.2, 0.35, 0.5, 1)
+sky_horizon_color = Color(0.65, 0.72, 0.78, 1)
+ground_bottom_color = Color(0.15, 0.18, 0.2, 1)
+ground_horizon_color = Color(0.65, 0.72, 0.78, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.4
+fog_enabled = true
+fog_light_color = Color(0.55, 0.62, 0.7, 1)
+fog_density = 0.0025
+
+[sub_resource type="StandardMaterial3D" id="Mat_Ground"]
+albedo_color = Color(0.18, 0.22, 0.24, 1)
+roughness = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_Ground"]
+material = SubResource("Mat_Ground")
+size = Vector2(340, 340)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_Ground"]
+size = Vector3(340, 2, 340)
+
+[sub_resource type="StandardMaterial3D" id="Mat_Road"]
+albedo_color = Color(0.1, 0.12, 0.13, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_RoadNS"]
+material = SubResource("Mat_Road")
+size = Vector2(16, 340)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_RoadEW"]
+material = SubResource("Mat_Road")
+size = Vector2(340, 16)
+
+[node name="Battlefield" type="Node3D" unique_id=896703022]
+script = ExtResource("1_field")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2099065004]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=805440154]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 1.4
+shadow_enabled = true
+
+[node name="Terrain" type="Node3D" parent="." unique_id=1255328092]
+
+[node name="GroundBody" type="StaticBody3D" parent="Terrain" unique_id=1545248874]
+collision_mask = 0
+
+[node name="GroundMesh" type="MeshInstance3D" parent="Terrain/GroundBody" unique_id=458509255]
+mesh = SubResource("PlaneMesh_Ground")
+
+[node name="GroundCollision" type="CollisionShape3D" parent="Terrain/GroundBody" unique_id=1493794895]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+shape = SubResource("BoxShape3D_Ground")
+
+[node name="RoadNS" type="MeshInstance3D" parent="Terrain" unique_id=1676850037]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("PlaneMesh_RoadNS")
+
+[node name="RoadEW" type="MeshInstance3D" parent="Terrain" unique_id=270370377]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("PlaneMesh_RoadEW")
+
+[node name="ProjectilePool" parent="." unique_id=1054862649 instance=ExtResource("4_pool")]
+
+[node name="CombatDirector" type="Node" parent="." unique_id=1063841506]
+script = ExtResource("5_combat_dir")
+
+[node name="UpgradeManager" type="Node" parent="." unique_id=586460690]
+script = ExtResource("4_tsw4x")
+
+[node name="GameManager" type="Node" parent="." unique_id=1074754262]
+script = ExtResource("8_game_mgr")
+
+[node name="PlayerHelicopter" parent="." unique_id=593427307 instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+
+[node name="CameraRig" parent="." unique_id=1070058541 instance=ExtResource("3_cam")]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=2108060181]
+
+[node name="HUD" parent="UI" unique_id=308889790 instance=ExtResource("9_hud")]
+
+[node name="LevelUpMenu" parent="UI" unique_id=1172330531 instance=ExtResource("10_lvl")]
+
+[node name="DeathScreen" parent="UI" unique_id=855691809 instance=ExtResource("11_death")]
+
+[node name="VictoryScreen" parent="UI" unique_id=105933403 instance=ExtResource("12_vic")]
+
+[node name="PauseMenu" parent="UI" unique_id=1712330105 instance=ExtResource("13_pause")]
+
+[node name="DamageNumberManager" type="Control" parent="UI" unique_id=1000863232]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="WaveHUD" parent="UI" unique_id=520698955 instance=ExtResource("14_yexbb")]
+
+[node name="RunEndScreen" parent="UI" unique_id=393582559 instance=ExtResource("15_kjtcb")]
+
+[node name="SoundManager" parent="." unique_id=1638617317 instance=ExtResource("14_snd")]
+
+[node name="EnemyContainer" type="Node3D" parent="." unique_id=1591464398]
+
+[node name="EnemySpawnPoints" parent="." unique_id=1144854879 instance=ExtResource("16_26eqi")]
+
+[node name="WaveManager" parent="." unique_id=186549889 instance=ExtResource("17_kjtcb")]
+
+[node name="RunStateController" type="Node" parent="." unique_id=336184116]
+script = ExtResource("18_kjtcb")
+
+[node name="SpawnSystem" parent="." unique_id=1134120607 instance=ExtResource("28_6dbsf")]
+
+[node name="PlayableArea" parent="." unique_id=100984454 instance=ExtResource("21_61f51")]
+
+[node name="Districts" type="Node3D" parent="." unique_id=938451625]
+
+[node name="District_CityCenter" type="Node3D" parent="Districts" unique_id=2012084258]
+
+[node name="CivicPlaza_01" parent="Districts/District_CityCenter" unique_id=811312086 instance=ExtResource("22_p5wp6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0, -50)
+
+[node name="BldLarge_01" parent="Districts/District_CityCenter" unique_id=1364757742 instance=ExtResource("23_2km1u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0, -25)
+
+[node name="BldLarge_02" parent="Districts/District_CityCenter" unique_id=1108248421 instance=ExtResource("23_2km1u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0, -35)
+
+[node name="BldLarge_03" parent="Districts/District_CityCenter" unique_id=200105920 instance=ExtResource("23_2km1u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0, -90)
+
+[node name="BldMed_01" parent="Districts/District_CityCenter" unique_id=1388805366 instance=ExtResource("24_6dbsf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75, 0, -75)
+
+[node name="BldMed_02" parent="Districts/District_CityCenter" unique_id=1254042448 instance=ExtResource("24_6dbsf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -65)
+
+[node name="BldMed_03" parent="Districts/District_CityCenter" unique_id=2049399952 instance=ExtResource("24_6dbsf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 90, 0, -105)
+
+[node name="BldSmall_01" parent="Districts/District_CityCenter" unique_id=993975150 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 0, -20)
+
+[node name="BldSmall_02" parent="Districts/District_CityCenter" unique_id=1076408828 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -38)
+
+[node name="Streetlight_01" parent="Districts/District_CityCenter" unique_id=1425482352 instance=ExtResource("26_0dhpt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -20)
+
+[node name="Streetlight_02" parent="Districts/District_CityCenter" unique_id=901289432 instance=ExtResource("26_0dhpt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -50)
+
+[node name="Streetlight_03" parent="Districts/District_CityCenter" unique_id=1673927364 instance=ExtResource("26_0dhpt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -80)
+
+[node name="District_Industrial" type="Node3D" parent="Districts" unique_id=587258002]
+
+[node name="Warehouse_01" parent="Districts/District_Industrial" unique_id=1421401752 instance=ExtResource("27_o7u17")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0, 45)
+
+[node name="Warehouse_02" parent="Districts/District_Industrial" unique_id=1469712058 instance=ExtResource("27_o7u17")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, 50)
+
+[node name="Warehouse_03" parent="Districts/District_Industrial" unique_id=646343909 instance=ExtResource("27_o7u17")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0, 95)
+
+[node name="ParkingLot_01" parent="Districts/District_Industrial" unique_id=1706286126 instance=ExtResource("28_wrgpj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 0, 70)
+
+[node name="ParkingLot_02" parent="Districts/District_Industrial" unique_id=1943701545 instance=ExtResource("28_wrgpj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, 85)
+
+[node name="FuelTank_01" parent="Districts/District_Industrial" unique_id=1501044442 instance=ExtResource("29_vixb4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0, 65)
+
+[node name="FuelTank_02" parent="Districts/District_Industrial" unique_id=920241945 instance=ExtResource("29_vixb4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72, 0, 30)
+
+[node name="FuelTank_03" parent="Districts/District_Industrial" unique_id=641176349 instance=ExtResource("29_vixb4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 95, 0, 85)
+
+[node name="Crate_Ind_01" parent="Districts/District_Industrial" unique_id=1604591116 instance=ExtResource("30_d6e8j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0, 62)
+
+[node name="Crate_Ind_02" parent="Districts/District_Industrial" unique_id=2081697178 instance=ExtResource("30_d6e8j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.8, 0, 62)
+
+[node name="Fence_Ind_01" parent="Districts/District_Industrial" unique_id=2020601209 instance=ExtResource("31_ivm54")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, 30)
+
+[node name="Fence_Ind_02" parent="Districts/District_Industrial" unique_id=177695386 instance=ExtResource("31_ivm54")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, 34)
+
+[node name="District_Military" type="Node3D" parent="Districts" unique_id=1942665733]
+
+[node name="Hangar_01" parent="Districts/District_Military" unique_id=434092438 instance=ExtResource("32_va7fe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 0, -50)
+
+[node name="Hangar_02" parent="Districts/District_Military" unique_id=199704903 instance=ExtResource("32_va7fe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 0, -85)
+
+[node name="RadarSite_01" parent="Districts/District_Military" unique_id=1742983873 instance=ExtResource("33_mq602")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 0, -80)
+
+[node name="SAMSite_01" parent="Districts/District_Military" unique_id=31028171 instance=ExtResource("34_nw58i")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -90, 0, -40)
+
+[node name="SAMSite_02" parent="Districts/District_Military" unique_id=1370380037 instance=ExtResource("34_nw58i")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0, -90)
+
+[node name="Checkpoint_01" parent="Districts/District_Military" unique_id=1887195131 instance=ExtResource("35_ud71r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -30)
+
+[node name="Checkpoint_02" parent="Districts/District_Military" unique_id=1403931168 instance=ExtResource("35_ud71r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0, -20)
+
+[node name="Barrier_Mil_01" parent="Districts/District_Military" unique_id=818320504 instance=ExtResource("36_kak68")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -30)
+
+[node name="Barrier_Mil_02" parent="Districts/District_Military" unique_id=1189118150 instance=ExtResource("36_kak68")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -26)
+
+[node name="District_Outskirts" type="Node3D" parent="Districts" unique_id=1945126140]
+
+[node name="BldSmall_Out_01" parent="Districts/District_Outskirts" unique_id=1144930187 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0, 45)
+
+[node name="BldSmall_Out_02" parent="Districts/District_Outskirts" unique_id=2055126073 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -75, 0, 50)
+
+[node name="BldSmall_Out_03" parent="Districts/District_Outskirts" unique_id=1246966613 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0, 80)
+
+[node name="BldSmall_Out_04" parent="Districts/District_Outskirts" unique_id=1123674734 instance=ExtResource("25_nv5t8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, 85)
+
+[node name="FuelTank_Out_01" parent="Districts/District_Outskirts" unique_id=1410766158 instance=ExtResource("29_vixb4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, 35)
+
+[node name="Crate_Out_01" parent="Districts/District_Outskirts" unique_id=1053983880 instance=ExtResource("30_d6e8j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -34, 0, 35)
+
+[node name="Fence_Out_01" parent="Districts/District_Outskirts" unique_id=1249248252 instance=ExtResource("31_ivm54")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 45)
+
+[node name="Fence_Out_02" parent="Districts/District_Outskirts" unique_id=1339483664 instance=ExtResource("31_ivm54")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 49)

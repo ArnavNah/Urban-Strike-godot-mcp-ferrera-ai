@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://cwd5qj8o18d2f"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_llc8k"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_qy12n"]
+
+[sub_resource type="Resource" id="Resource_7pimg"]
+script = ExtResource("2_qy12n")
+archetype_name = "Jammer Helicopter"
+threat_cost = 8
+threat_score = 1.15
+formation_tags = Array[String](["jammers"])
+max_health = 50.0
+salvage_reward = 60
+xp_reward = 60
+cruise_speed = 22.0
+attack_speed = 22.0
+turn_speed = 3.2
+preferred_distance = 52.0
+orbit_distance = 48.0
+altitude_min = 18.0
+altitude_max = 24.0
+aggression = 0.15
+attack_cooldown = 3.5
+reposition_delay = 3.0
+weapon_type = 4
+damage_per_shot = 1.5
+fire_rate = 3.0
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rwxkm"]
+radius = 1.0
+height = 3.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_f4fwo"]
+albedo_color = Color(0.12, 0.22, 0.35, 1)
+metallic = 0.5
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_bdwge"]
+material = SubResource("StandardMaterial3D_f4fwo")
+size = Vector3(1.2, 1, 3.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wuoak"]
+albedo_color = Color(0.2, 0.7, 0.8, 1)
+emission_enabled = true
+emission = Color(0.1, 0.5, 0.6, 1)
+emission_energy_multiplier = 1.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_khfna"]
+material = SubResource("StandardMaterial3D_wuoak")
+top_radius = 1.1
+bottom_radius = 1.1
+height = 0.25
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oism3"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_141ta"]
+material = SubResource("StandardMaterial3D_oism3")
+size = Vector3(4.4, 0.04, 0.22)
+
+[node name="AirJammerHelicopter" type="CharacterBody3D" unique_id=1485415646]
+collision_layer = 4
+script = ExtResource("1_llc8k")
+archetype = SubResource("Resource_7pimg")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1392922777]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_rwxkm")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=763654124]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1286034339]
+mesh = SubResource("BoxMesh_bdwge")
+
+[node name="RadomeDish" type="MeshInstance3D" parent="Visuals" unique_id=745592522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0.1)
+mesh = SubResource("CylinderMesh_khfna")
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=974771629]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=484277794]
+mesh = SubResource("BoxMesh_141ta")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=837888039]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_141ta")
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=2085220613]
+target_position = Vector3(0, 0, -50)

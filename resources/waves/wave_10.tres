@@ -1,0 +1,57 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://4wt70cwdturc"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_48i80"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_3otxy"]
+[ext_resource type="PackedScene" uid="uid://b7n2v8k4m1rar" path="res://scenes/enemies/boss_archon.tscn" id="2_38nqk"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="3_6njou"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="4_8b4jl"]
+[ext_resource type="PackedScene" uid="uid://df4m8v2k7xar1" path="res://scenes/enemies/sam_site.tscn" id="5_q33xu"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="6_iyqpj"]
+
+[sub_resource type="Resource" id="Resource_ynbrc"]
+script = ExtResource("1_48i80")
+enemy_scene = ExtResource("2_38nqk")
+spawn_cost = 6
+minimum_wave = 10
+category = 5
+
+[sub_resource type="Resource" id="Resource_gktbu"]
+script = ExtResource("1_48i80")
+enemy_scene = ExtResource("3_6njou")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 10
+category = 3
+
+[sub_resource type="Resource" id="Resource_7v2l5"]
+script = ExtResource("1_48i80")
+enemy_scene = ExtResource("4_8b4jl")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 10
+category = 1
+
+[sub_resource type="Resource" id="Resource_0fm63"]
+script = ExtResource("1_48i80")
+enemy_scene = ExtResource("5_q33xu")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 10
+category = 2
+
+[sub_resource type="Resource" id="Resource_r3rrj"]
+script = ExtResource("1_48i80")
+enemy_scene = ExtResource("6_iyqpj")
+minimum_wave = 10
+
+[resource]
+script = ExtResource("2_3otxy")
+wave_number = 10
+spawn_interval = 1.4
+spawn_budget = 30
+maximum_alive = 16
+enemy_entries = Array[ExtResource("1_48i80")]([SubResource("Resource_ynbrc"), SubResource("Resource_gktbu"), SubResource("Resource_7v2l5"), SubResource("Resource_0fm63"), SubResource("Resource_r3rrj")])
+final_wave = true
+announcement = "FINAL WAVE // WARNING: ARCHON GUNSHIP ASSAULT"
+ground_attack_slots = 4
+air_attack_slots = 2

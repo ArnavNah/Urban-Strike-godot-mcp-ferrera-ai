@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://c8m4x1v7w2q9p"]
+
+[ext_resource type="Script" path="res://scripts/managers/wave_manager.gd" id="1_mgr"]
+
+[node name="WaveManager" type="Node"]
+script = ExtResource("1_mgr")
+
+[node name="WaveTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="IntermissionTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="SpawnTimer" type="Timer" parent="."]
+
+[node name="CountdownTimer" type="Timer" parent="."]

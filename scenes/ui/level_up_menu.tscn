@@ -1,0 +1,58 @@
+[gd_scene format=3 uid="uid://c6v2nar4k8x1w"]
+
+[ext_resource type="Script" path="res://scripts/ui/level_up_menu.gd" id="1_lvl"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Backdrop"]
+bg_color = Color(0.04, 0.06, 0.08, 0.82)
+
+[node name="LevelUpMenu" type="Control"]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_lvl")
+
+[node name="Backdrop" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_Backdrop")
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="Header" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 32
+text = "PILOT UPGRADE AVAILABLE"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.8, 0.85, 1)
+theme_override_font_sizes/font_size = 15
+text = "Choose one system modification. Each standard upgrade creates strengths and trade-offs."
+horizontal_alignment = 1
+
+[node name="CardContainer" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1

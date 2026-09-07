@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://bd1sswh1jlfq6"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_o8ma0"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_2d7xi"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="2_65iu1"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="3_mdyvh"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="4_813t4"]
+
+[sub_resource type="Resource" id="Resource_5pgyu"]
+script = ExtResource("1_o8ma0")
+enemy_scene = ExtResource("2_65iu1")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 6
+category = 3
+
+[sub_resource type="Resource" id="Resource_f7jax"]
+script = ExtResource("1_o8ma0")
+enemy_scene = ExtResource("3_mdyvh")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 6
+category = 1
+
+[sub_resource type="Resource" id="Resource_wjnjw"]
+script = ExtResource("1_o8ma0")
+enemy_scene = ExtResource("4_813t4")
+minimum_wave = 6
+
+[resource]
+script = ExtResource("2_2d7xi")
+wave_number = 6
+spawn_interval = 2.0
+spawn_budget = 16
+maximum_alive = 10
+enemy_entries = Array[ExtResource("1_o8ma0")]([SubResource("Resource_5pgyu"), SubResource("Resource_f7jax"), SubResource("Resource_wjnjw")])
+announcement = "WAVE 6 // AIR CONTACT: HUNTER HELICOPTER DETECTED"
+ground_attack_slots = 3
+air_attack_slots = 1

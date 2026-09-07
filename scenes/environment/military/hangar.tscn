@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://ddygpp17k2r3f"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_xfg15"]
+size = Vector3(28, 12, 26)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5qw8b"]
+albedo_color = Color(0.28, 0.32, 0.28, 1)
+metallic = 0.3
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_wdpki"]
+material = SubResource("StandardMaterial3D_5qw8b")
+size = Vector3(28, 12, 26)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wqvbs"]
+albedo_color = Color(0.08, 0.09, 0.08, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_f4f71"]
+material = SubResource("StandardMaterial3D_wqvbs")
+size = Vector3(18, 9, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_irtak"]
+albedo_color = Color(0.25, 0.25, 0.24, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_vyxd4"]
+material = SubResource("StandardMaterial3D_irtak")
+size = Vector2(20, 14)
+
+[node name="MilitaryHangar" type="StaticBody3D" unique_id=434092438]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=850879626]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
+shape = SubResource("BoxShape3D_xfg15")
+
+[node name="HangarArchMesh" type="MeshInstance3D" parent="." unique_id=1208603250]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
+mesh = SubResource("BoxMesh_wdpki")
+
+[node name="HangarDoorOpening" type="MeshInstance3D" parent="." unique_id=1992530841]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 13.1)
+mesh = SubResource("BoxMesh_f4f71")
+
+[node name="LandingApron" type="MeshInstance3D" parent="." unique_id=174994882]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 20)
+mesh = SubResource("PlaneMesh_vyxd4")
+
+[node name="LandingZone" type="Marker3D" parent="." unique_id=1804927802]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 20)

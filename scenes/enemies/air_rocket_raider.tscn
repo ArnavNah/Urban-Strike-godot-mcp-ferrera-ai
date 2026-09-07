@@ -1,0 +1,100 @@
+[gd_scene format=3 uid="uid://c3dildtoi3bkj"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_dfbgx"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_kv8h6"]
+
+[sub_resource type="Resource" id="Resource_vpo71"]
+script = ExtResource("2_kv8h6")
+archetype_name = "Rocket Raider"
+threat_cost = 6
+threat_score = 0.75
+formation_tags = Array[String](["rocket_raiders"])
+max_health = 45.0
+cruise_speed = 26.0
+attack_speed = 30.0
+turn_speed = 3.8
+preferred_distance = 44.0
+orbit_distance = 40.0
+altitude_min = 15.0
+altitude_max = 22.0
+aggression = 0.65
+attack_cooldown = 2.4
+strafe_duration = 2.2
+reposition_delay = 2.6
+weapon_type = 1
+damage_per_shot = 16.0
+fire_rate = 4.0
+burst_count = 3
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_nla0o"]
+radius = 0.95
+height = 3.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_iy6b0"]
+albedo_color = Color(0.65, 0.18, 0.18, 1)
+metallic = 0.5
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_844ia"]
+material = SubResource("StandardMaterial3D_iy6b0")
+size = Vector3(1.1, 0.95, 3.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_55kfa"]
+material = SubResource("StandardMaterial3D_iy6b0")
+size = Vector3(2.4, 0.1, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ni1qp"]
+albedo_color = Color(0.18, 0.18, 0.18, 1)
+metallic = 0.7
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_nxxer"]
+material = SubResource("StandardMaterial3D_ni1qp")
+top_radius = 0.18
+bottom_radius = 0.18
+height = 0.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lorg3"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_p7niw"]
+material = SubResource("StandardMaterial3D_lorg3")
+size = Vector3(4.2, 0.04, 0.22)
+
+[node name="AirRocketRaider" type="CharacterBody3D" unique_id=967515329]
+collision_layer = 4
+script = ExtResource("1_dfbgx")
+archetype = SubResource("Resource_vpo71")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1801835123]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_nla0o")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=2014929870]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1587676060]
+mesh = SubResource("BoxMesh_844ia")
+
+[node name="StubWings" type="MeshInstance3D" parent="Visuals" unique_id=524272162]
+mesh = SubResource("BoxMesh_55kfa")
+
+[node name="RocketPodLeft" type="MeshInstance3D" parent="Visuals" unique_id=1108288411]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -1.1, -0.05, 0)
+mesh = SubResource("CylinderMesh_nxxer")
+
+[node name="RocketPodRight" type="MeshInstance3D" parent="Visuals" unique_id=1479514998]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.1, -0.05, 0)
+mesh = SubResource("CylinderMesh_nxxer")
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=814267856]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1415318855]
+mesh = SubResource("BoxMesh_p7niw")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=687795099]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_p7niw")
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1259717923]
+target_position = Vector3(0, 0, -50)

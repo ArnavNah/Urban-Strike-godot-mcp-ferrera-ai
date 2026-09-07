@@ -1,0 +1,86 @@
+[gd_scene format=3 uid="uid://cqu3anhd8w2np"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_wdnoe"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_nqgl6"]
+
+[sub_resource type="Resource" id="Resource_lqjmg"]
+script = ExtResource("2_nqgl6")
+archetype_name = "Transport Helicopter"
+threat_cost = 7
+threat_score = 0.7
+formation_tags = Array[String](["transports"])
+max_health = 75.0
+salvage_reward = 60
+xp_reward = 50
+cruise_speed = 22.0
+attack_speed = 20.0
+turn_speed = 2.8
+preferred_distance = 32.0
+orbit_distance = 30.0
+altitude_min = 8.0
+altitude_max = 16.0
+aggression = 0.2
+attack_cooldown = 3.0
+strafe_duration = 2.5
+reposition_delay = 3.0
+approach_timeout = 6.0
+weapon_type = 2
+damage_per_shot = 1.5
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_kwing"]
+radius = 1.3
+height = 5.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tcf42"]
+albedo_color = Color(0.25, 0.35, 0.22, 1)
+metallic = 0.3
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_jq0xl"]
+material = SubResource("StandardMaterial3D_tcf42")
+size = Vector3(1.7, 1.4, 4.8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_85x86"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_g26c1"]
+material = SubResource("StandardMaterial3D_85x86")
+size = Vector3(4.6, 0.04, 0.24)
+
+[node name="AirTransportHelicopter" type="CharacterBody3D" unique_id=338967523]
+collision_layer = 4
+script = ExtResource("1_wdnoe")
+archetype = SubResource("Resource_lqjmg")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=799366592]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_kwing")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=1136466168]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1447105239]
+mesh = SubResource("BoxMesh_jq0xl")
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=2013884585]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.8)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=2143708334]
+mesh = SubResource("BoxMesh_g26c1")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1651102111]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_g26c1")
+
+[node name="AftRotor" type="Node3D" parent="Visuals" unique_id=1363171624]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 1.8)
+
+[node name="Blade3" type="MeshInstance3D" parent="Visuals/AftRotor" unique_id=424787570]
+mesh = SubResource("BoxMesh_g26c1")
+
+[node name="Blade4" type="MeshInstance3D" parent="Visuals/AftRotor" unique_id=937563292]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_g26c1")
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=2133198298]
+target_position = Vector3(0, 0, -45)

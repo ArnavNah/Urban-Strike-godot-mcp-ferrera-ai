@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://dpyb4l3036abe"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kerek"]
+size = Vector3(18, 2, 3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_noxlg"]
+albedo_color = Color(0.48, 0.44, 0.35, 1)
+roughness = 0.95
+
+[sub_resource type="BoxMesh" id="BoxMesh_cpk81"]
+material = SubResource("StandardMaterial3D_noxlg")
+size = Vector3(18, 2, 3)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wkde4"]
+size = Vector3(3, 2, 16)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ydd5n"]
+material = SubResource("StandardMaterial3D_noxlg")
+size = Vector3(3, 2, 16)
+
+[node name="SAMSiteEnvironment" type="Node3D" unique_id=31028171]
+
+[node name="BackBerm" type="StaticBody3D" parent="." unique_id=1625980058]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -9)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BackBerm" unique_id=1667825663]
+shape = SubResource("BoxShape3D_kerek")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="BackBerm" unique_id=1243536182]
+mesh = SubResource("BoxMesh_cpk81")
+
+[node name="LeftBerm" type="StaticBody3D" parent="." unique_id=1948737695]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 1, 0)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="LeftBerm" unique_id=311718287]
+shape = SubResource("BoxShape3D_wkde4")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="LeftBerm" unique_id=468503449]
+mesh = SubResource("BoxMesh_ydd5n")
+
+[node name="RightBerm" type="StaticBody3D" parent="." unique_id=1203971912]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1, 0)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RightBerm" unique_id=1065671142]
+shape = SubResource("BoxShape3D_wkde4")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RightBerm" unique_id=1070494174]
+mesh = SubResource("BoxMesh_ydd5n")
+
+[node name="SAMSpawnPoint" type="Marker3D" parent="." unique_id=222983081]

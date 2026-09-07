@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://cb3vdsgb58nqb"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ss81q"]
+size = Vector3(22, 0.4, 22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4qx5g"]
+albedo_color = Color(0.42, 0.44, 0.42, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_y0uug"]
+material = SubResource("StandardMaterial3D_4qx5g")
+size = Vector3(22, 0.4, 22)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_38q7r"]
+size = Vector3(4.5, 2.6, 3.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wbdww"]
+albedo_color = Color(0.25, 0.3, 0.26, 1)
+metallic = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_cxony"]
+material = SubResource("StandardMaterial3D_wbdww")
+size = Vector3(4.5, 2.6, 3.5)
+
+[node name="RadarSiteEnvironment" type="Node3D" unique_id=1742983873]
+
+[node name="ConcretePad" type="StaticBody3D" parent="." unique_id=40022571]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ConcretePad" unique_id=186819545]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+shape = SubResource("BoxShape3D_ss81q")
+
+[node name="PadMesh" type="MeshInstance3D" parent="ConcretePad" unique_id=691409784]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("BoxMesh_y0uug")
+
+[node name="PowerGenerator" type="StaticBody3D" parent="." unique_id=1126691351]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 1.5, -6)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PowerGenerator" unique_id=464293005]
+shape = SubResource("BoxShape3D_38q7r")
+
+[node name="GeneratorMesh" type="MeshInstance3D" parent="PowerGenerator" unique_id=1927693077]
+mesh = SubResource("BoxMesh_cxony")
+
+[node name="RadarObjectiveMarker" type="Marker3D" parent="." unique_id=17310111]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.4, 2)

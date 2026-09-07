@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://b8m2v4k1r9x7w"]
+
+[node name="EnemySpawnPoints" type="Node3D"]
+
+[node name="SpawnPoint01" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -85)
+
+[node name="SpawnPoint02" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0, -85)
+
+[node name="SpawnPoint03" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 0, -85)
+
+[node name="SpawnPoint04" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 85)
+
+[node name="SpawnPoint05" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0, 85)
+
+[node name="SpawnPoint06" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 0, 85)
+
+[node name="SpawnPoint07" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, 0)
+
+[node name="SpawnPoint08" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, -60)
+
+[node name="SpawnPoint09" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, 60)
+
+[node name="SpawnPoint10" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0, 0)
+
+[node name="SpawnPoint11" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0, -60)
+
+[node name="SpawnPoint12" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0, 60)
+
+[node name="SpawnPoint13" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75, 0, 75)
+
+[node name="SpawnPoint14" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -75, 0, 75)
+
+[node name="SpawnPoint15" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75, 0, -75)
+
+[node name="SpawnPoint16" type="Marker3D" parent="." groups=["enemy_spawn_point"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -75, 0, -75)

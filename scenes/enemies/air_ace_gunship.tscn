@@ -1,0 +1,126 @@
+[gd_scene format=3 uid="uid://bhro1v62s1862"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_wqtpq"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_2a81k"]
+
+[sub_resource type="Resource" id="Resource_f7pp3"]
+script = ExtResource("2_2a81k")
+archetype_name = "Ace Gunship"
+threat_cost = 12
+threat_score = 1.2
+is_elite = true
+formation_tags = Array[String](["ace_gunships", "elites"])
+max_health = 150.0
+salvage_reward = 120
+xp_reward = 110
+turn_speed = 4.2
+altitude_min = 14.0
+altitude_max = 20.0
+aggression = 0.85
+attack_cooldown = 1.8
+strafe_duration = 2.2
+reposition_delay = 2.0
+approach_timeout = 4.5
+weapon_type = 5
+damage_per_shot = 4.0
+fire_rate = 9.5
+missile_cooldown = 5.0
+missile_lock_time = 1.0
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_0mp4w"]
+radius = 1.2
+height = 4.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_m0132"]
+albedo_color = Color(0.1, 0.1, 0.12, 1)
+metallic = 0.7
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_wtvf8"]
+material = SubResource("StandardMaterial3D_m0132")
+size = Vector3(1.4, 1.15, 4.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bfx2u"]
+albedo_color = Color(0.95, 0.75, 0.1, 1)
+metallic = 0.8
+roughness = 0.2
+
+[sub_resource type="BoxMesh" id="BoxMesh_gpyvi"]
+material = SubResource("StandardMaterial3D_bfx2u")
+size = Vector3(1.44, 0.05, 1.8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_46kqs"]
+albedo_color = Color(0.2, 0.2, 0.22, 1)
+metallic = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_2r5v0"]
+material = SubResource("StandardMaterial3D_46kqs")
+size = Vector3(0.12, 0.12, 1.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_w1dvb"]
+material = SubResource("StandardMaterial3D_m0132")
+size = Vector3(3, 0.12, 0.75)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_e7cjm"]
+material = SubResource("StandardMaterial3D_46kqs")
+top_radius = 0.22
+bottom_radius = 0.22
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y54e0"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+metallic = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_d6puc"]
+material = SubResource("StandardMaterial3D_y54e0")
+size = Vector3(5.2, 0.04, 0.26)
+
+[node name="AirAceGunship" type="CharacterBody3D" unique_id=390544546]
+collision_layer = 4
+script = ExtResource("1_wqtpq")
+archetype = SubResource("Resource_f7pp3")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1897664766]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_0mp4w")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=1123719490]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1435027896]
+mesh = SubResource("BoxMesh_wtvf8")
+
+[node name="EliteTrim" type="MeshInstance3D" parent="Visuals" unique_id=1926302891]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, -0.2)
+mesh = SubResource("BoxMesh_gpyvi")
+
+[node name="ChinGunL" type="MeshInstance3D" parent="Visuals" unique_id=654245828]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, -0.48, -1.9)
+mesh = SubResource("BoxMesh_2r5v0")
+
+[node name="ChinGunR" type="MeshInstance3D" parent="Visuals" unique_id=12595514]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, -0.48, -1.9)
+mesh = SubResource("BoxMesh_2r5v0")
+
+[node name="StubWings" type="MeshInstance3D" parent="Visuals" unique_id=959344390]
+mesh = SubResource("BoxMesh_w1dvb")
+
+[node name="MissilePodL" type="MeshInstance3D" parent="Visuals" unique_id=1790387696]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -1.35, -0.05, 0)
+mesh = SubResource("CylinderMesh_e7cjm")
+
+[node name="MissilePodR" type="MeshInstance3D" parent="Visuals" unique_id=1340788546]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.35, -0.05, 0)
+mesh = SubResource("CylinderMesh_e7cjm")
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=714613946]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=839637066]
+mesh = SubResource("BoxMesh_d6puc")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1395472062]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_d6puc")
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=559952112]
+target_position = Vector3(0, 0, -55)

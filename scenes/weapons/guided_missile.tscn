@@ -1,0 +1,52 @@
+[gd_scene format=3 uid="uid://b3wak8m2x5q1w"]
+
+[ext_resource type="Script" path="res://scripts/weapons/guided_missile.gd" id="1_missile"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_Missile"]
+albedo_color = Color(0.85, 0.85, 0.88, 1)
+metallic = 0.8
+roughness = 0.2
+
+[sub_resource type="CylinderMesh" id="Mesh_Missile"]
+material = SubResource("Mat_Missile")
+top_radius = 0.08
+bottom_radius = 0.08
+height = 1.1
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Smoke"]
+direction = Vector3(0, 0, 1)
+spread = 15.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+gravity = Vector3(0, 0.5, 0)
+scale_min = 0.15
+scale_max = 0.35
+
+[sub_resource type="StandardMaterial3D" id="Mat_Smoke"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.7, 0.7, 0.7, 0.5)
+
+[sub_resource type="SphereMesh" id="Mesh_Smoke"]
+material = SubResource("Mat_Smoke")
+radius = 0.15
+height = 0.3
+
+[node name="GuidedMissile" type="Node3D"]
+script = ExtResource("1_missile")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+mesh = SubResource("Mesh_Missile")
+
+[node name="RayCast3D" type="RayCast3D" parent="."]
+target_position = Vector3(0, 0, -2)
+collision_mask = 5
+hit_from_inside = true
+
+[node name="SmokeTrail" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.6)
+amount = 24
+lifetime = 0.45
+process_material = SubResource("ParticleProcessMaterial_Smoke")
+draw_pass_1 = SubResource("Mesh_Smoke")

@@ -1,0 +1,104 @@
+[gd_scene format=3 uid="uid://d2ajrb4a80s3p"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_dy54l"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_aik34"]
+
+[sub_resource type="Resource" id="Resource_w6yup"]
+script = ExtResource("2_aik34")
+archetype_name = "Attack Gunship"
+threat_cost = 9
+threat_score = 0.9
+formation_tags = Array[String](["attack_gunships"])
+max_health = 95.0
+salvage_reward = 75
+xp_reward = 70
+cruise_speed = 25.0
+attack_speed = 29.0
+turn_speed = 3.5
+preferred_distance = 32.0
+orbit_distance = 30.0
+aggression = 0.75
+attack_cooldown = 2.2
+strafe_duration = 2.2
+reposition_delay = 2.4
+weapon_type = 3
+damage_per_shot = 3.5
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_bmlxu"]
+radius = 1.1
+height = 4.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_c62ix"]
+albedo_color = Color(0.28, 0.3, 0.32, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_uh12b"]
+material = SubResource("StandardMaterial3D_c62ix")
+size = Vector3(1.3, 1.1, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_b7i7m"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_ue4vf"]
+material = SubResource("StandardMaterial3D_b7i7m")
+size = Vector3(0.25, 0.25, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2ittj"]
+material = SubResource("StandardMaterial3D_c62ix")
+size = Vector3(2.8, 0.12, 0.7)
+
+[sub_resource type="BoxMesh" id="BoxMesh_yl6hf"]
+material = SubResource("StandardMaterial3D_b7i7m")
+size = Vector3(0.18, 0.15, 0.85)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5jam3"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_xde68"]
+material = SubResource("StandardMaterial3D_5jam3")
+size = Vector3(4.8, 0.04, 0.25)
+
+[node name="AirAttackGunship" type="CharacterBody3D" unique_id=1072788237]
+collision_layer = 4
+script = ExtResource("1_dy54l")
+archetype = SubResource("Resource_w6yup")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=191784810]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_bmlxu")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=1352196511]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1889444453]
+mesh = SubResource("BoxMesh_uh12b")
+
+[node name="ChinTurret" type="MeshInstance3D" parent="Visuals" unique_id=565363106]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, -1.7)
+mesh = SubResource("BoxMesh_ue4vf")
+
+[node name="StubWings" type="MeshInstance3D" parent="Visuals" unique_id=76051167]
+mesh = SubResource("BoxMesh_2ittj")
+
+[node name="MissileRailL" type="MeshInstance3D" parent="Visuals" unique_id=1022542863]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, -0.08, 0)
+mesh = SubResource("BoxMesh_yl6hf")
+
+[node name="MissileRailR" type="MeshInstance3D" parent="Visuals" unique_id=826860531]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, -0.08, 0)
+mesh = SubResource("BoxMesh_yl6hf")
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=1901561529]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=799529734]
+mesh = SubResource("BoxMesh_xde68")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1210361269]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("BoxMesh_xde68")
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1349470447]
+target_position = Vector3(0, 0, -50)

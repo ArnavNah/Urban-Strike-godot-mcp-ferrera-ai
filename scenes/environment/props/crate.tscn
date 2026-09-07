@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cdsq1pdmth2tl"]
+
+[ext_resource type="Script" uid="uid://8f1tcjidpon4" path="res://scripts/environment/destructible_prop.gd" id="1_3k6sm"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kctot"]
+size = Vector3(1.6, 1.6, 1.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l8cfh"]
+albedo_color = Color(0.35, 0.42, 0.32, 1)
+metallic = 0.2
+roughness = 0.75
+
+[sub_resource type="BoxMesh" id="BoxMesh_vncai"]
+material = SubResource("StandardMaterial3D_l8cfh")
+size = Vector3(1.6, 1.6, 1.6)
+
+[node name="MilitaryCrate" type="StaticBody3D" unique_id=1604591116]
+collision_layer = 4
+script = ExtResource("1_3k6sm")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=566778728]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("BoxShape3D_kctot")
+
+[node name="CrateMesh" type="MeshInstance3D" parent="." unique_id=2049757221]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("BoxMesh_vncai")

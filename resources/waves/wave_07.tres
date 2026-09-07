@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://cf1bv4rgnmci0"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_alexh"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="2_21025"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_ha5ri"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="3_0bkmw"]
+[ext_resource type="PackedScene" uid="uid://df4m8v2k7xar1" path="res://scenes/enemies/sam_site.tscn" id="4_w5am5"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="5_s1t2l"]
+
+[sub_resource type="Resource" id="Resource_mbiw5"]
+script = ExtResource("1_alexh")
+enemy_scene = ExtResource("2_21025")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 7
+category = 3
+
+[sub_resource type="Resource" id="Resource_hr7md"]
+script = ExtResource("1_alexh")
+enemy_scene = ExtResource("3_0bkmw")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 7
+category = 1
+
+[sub_resource type="Resource" id="Resource_osnqt"]
+script = ExtResource("1_alexh")
+enemy_scene = ExtResource("4_w5am5")
+spawn_cost = 2
+minimum_wave = 7
+category = 2
+
+[sub_resource type="Resource" id="Resource_5p5rd"]
+script = ExtResource("1_alexh")
+enemy_scene = ExtResource("5_s1t2l")
+minimum_wave = 7
+
+[resource]
+script = ExtResource("2_ha5ri")
+wave_number = 7
+spawn_interval = 1.85
+spawn_budget = 19
+maximum_alive = 11
+enemy_entries = Array[ExtResource("1_alexh")]([SubResource("Resource_mbiw5"), SubResource("Resource_hr7md"), SubResource("Resource_osnqt"), SubResource("Resource_5p5rd")])
+announcement = "WAVE 7 // MIXED GROUND & AIR ASSAULT"
+ground_attack_slots = 3
+air_attack_slots = 1

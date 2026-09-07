@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://df7w1k8m5x4p2"]
+
+[ext_resource type="Script" path="res://scripts/weapons/missile_pod.gd" id="1_pod"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_Pod"]
+albedo_color = Color(0.2, 0.25, 0.22, 1)
+metallic = 0.5
+roughness = 0.4
+
+[sub_resource type="CylinderMesh" id="Mesh_Pod"]
+material = SubResource("Mat_Pod")
+top_radius = 0.22
+bottom_radius = 0.22
+height = 0.85
+
+[node name="MissilePod" type="Node3D"]
+script = ExtResource("1_pod")
+
+[node name="PodMeshLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -1.3, 0, 0)
+mesh = SubResource("Mesh_Pod")
+
+[node name="PodMeshRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 1.3, 0, 0)
+mesh = SubResource("Mesh_Pod")
+
+[node name="LeftMuzzle" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0, -0.55)
+
+[node name="RightMuzzle" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0, -0.55)

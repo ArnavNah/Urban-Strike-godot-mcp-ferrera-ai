@@ -1,0 +1,254 @@
+[gd_scene format=3 uid="uid://df2m4k6w8sav1"]
+
+[ext_resource type="Script" uid="uid://1o6l0uljdeg0" path="res://scripts/menu/main_menu.gd" id="1_menu"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat_Menu"]
+sky_top_color = Color(0.1, 0.15, 0.24, 1)
+sky_horizon_color = Color(0.3, 0.38, 0.46, 1)
+ground_bottom_color = Color(0.06, 0.08, 0.1, 1)
+
+[sub_resource type="Sky" id="Sky_Menu"]
+sky_material = SubResource("SkyMat_Menu")
+
+[sub_resource type="Environment" id="Env_Menu"]
+background_mode = 2
+sky = SubResource("Sky_Menu")
+tonemap_mode = 2
+glow_enabled = true
+fog_enabled = true
+fog_light_color = Color(0.18, 0.24, 0.3, 1)
+fog_density = 0.012
+
+[sub_resource type="StandardMaterial3D" id="Mat_Skyline"]
+albedo_color = Color(0.12, 0.16, 0.2, 1)
+metallic = 0.7
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="Mesh_Tower"]
+material = SubResource("Mat_Skyline")
+size = Vector3(18, 55, 18)
+
+[sub_resource type="StandardMaterial3D" id="Mat_Heli"]
+albedo_color = Color(0.2, 0.3, 0.28, 1)
+metallic = 0.6
+
+[sub_resource type="BoxMesh" id="Mesh_Heli"]
+material = SubResource("Mat_Heli")
+size = Vector3(2, 1.4, 4.6)
+
+[sub_resource type="BoxMesh" id="Mesh_RotorBlade"]
+material = SubResource("Mat_Skyline")
+size = Vector3(7.2, 0.05, 0.4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Bg"]
+bg_color = Color(0.04, 0.06, 0.08, 0.65)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Settings"]
+bg_color = Color(0.12, 0.15, 0.18, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.75, 0.65, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="MainMenu" type="Control" unique_id=1052966136]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=321520004]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer" unique_id=1184667841]
+handle_input_locally = false
+size = Vector2i(1280, 720)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SubViewport" unique_id=1610834653]
+environment = SubResource("Env_Menu")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=1237906180]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 25, 0)
+light_color = Color(0.85, 0.9, 1, 1)
+light_energy = 1.3
+
+[node name="Skyline" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=666374201]
+
+[node name="Tower1" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Skyline" unique_id=411914995]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 12, -35)
+mesh = SubResource("Mesh_Tower")
+
+[node name="Tower2" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Skyline" unique_id=379780271]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 16, -42)
+mesh = SubResource("Mesh_Tower")
+
+[node name="HeliModel" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=1504064940]
+transform = Transform3D(0.965926, 0, 0.258819, 0, 1, 0, -0.258819, 0, 0.965926, 4, 1.2, -10)
+
+[node name="Body" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/HeliModel" unique_id=679019517]
+mesh = SubResource("Mesh_Heli")
+
+[node name="Rotor" type="Node3D" parent="SubViewportContainer/SubViewport/HeliModel" unique_id=93230680]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="Blade" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/HeliModel/Rotor" unique_id=2010019645]
+mesh = SubResource("Mesh_RotorBlade")
+
+[node name="CamRig" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=1914675339]
+physics_interpolation_mode = 2
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
+
+[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport/CamRig" unique_id=1481927109]
+physics_interpolation_mode = 2
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 0, 2.5, 14)
+
+[node name="Background" type="Panel" parent="." unique_id=1254444916]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_Bg")
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=1093757692]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1888198797]
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="HeaderBox" type="VBoxContainer" parent="CenterContainer/VBoxContainer" unique_id=660543138]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="CenterContainer/VBoxContainer/HeaderBox" unique_id=1850993257]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.9, 0.8, 1)
+theme_override_font_sizes/font_size = 48
+text = "HELI-STRIKE"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="CenterContainer/VBoxContainer/HeaderBox" unique_id=1839532242]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_font_sizes/font_size = 16
+text = "URBAN STRIKE ROGUE // FIRST PLAYABLE"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/VBoxContainer" unique_id=914248807]
+layout_mode = 2
+
+[node name="ButtonContainer" type="VBoxContainer" parent="CenterContainer/VBoxContainer" unique_id=527160406]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="PlayButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer" unique_id=969774854]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "DEPLOY TO BATTLEFIELD"
+
+[node name="HangarButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer" unique_id=1292609094]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 46)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.3, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 18
+text = "HANGAR / RETROFIT"
+
+[node name="SettingsButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer" unique_id=9947734]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 18
+text = "CONTROLS & SETTINGS"
+
+[node name="QuitButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer" unique_id=1728067334]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 18
+text = "QUIT TO DESKTOP"
+
+[node name="SettingsDialog" type="PanelContainer" parent="." unique_id=737371268]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(460, 280)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -140.0
+offset_right = 230.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_Settings")
+
+[node name="Margin" type="MarginContainer" parent="SettingsDialog" unique_id=1734548490]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="SettingsDialog/Margin" unique_id=14296863]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="SettingsDialog/Margin/VBox" unique_id=1609892161]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.9, 0.8, 1)
+theme_override_font_sizes/font_size = 20
+text = "FLIGHT & COMBAT CONTROLS"
+horizontal_alignment = 1
+
+[node name="ControlsInfo" type="Label" parent="SettingsDialog/Margin/VBox" unique_id=1266285259]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "• Flight: W / A / S / D (Camera-relative)
+• Lateral Strafe: Q / E (Keeps nose forward)
+• Altitude: Space (Climb) / Shift or C (Descend) [2.6m - 26m]
+• Chaingun: Left Mouse Button (Auto-aims closest target)
+• Manual Aim: Right Mouse Button (Immediate override)
+• Guided Missile: F (0.95s lock acquisition)
+• Thermal Flares: X (Breaks SAM & missile locks)
+• Camera Orbit: J / L or Middle-Mouse Drag | Recenter: R"
+
+[node name="CloseSettingsButton" type="Button" parent="SettingsDialog/Margin/VBox" unique_id=1839132216]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 38)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "CLOSE"

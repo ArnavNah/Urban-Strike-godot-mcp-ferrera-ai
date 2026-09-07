@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://dqiu4gdu466fv"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_eds23"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="2_gdjso"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_xdnx0"]
+[ext_resource type="PackedScene" uid="uid://c6j2m8b4r1v5p" path="res://scenes/enemies/ground_turret.tscn" id="3_lb7e6"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="4_hib0e"]
+
+[sub_resource type="Resource" id="Resource_coec1"]
+script = ExtResource("1_eds23")
+enemy_scene = ExtResource("2_gdjso")
+spawn_weight = 2.0
+minimum_wave = 3
+
+[sub_resource type="Resource" id="Resource_qo81y"]
+script = ExtResource("1_eds23")
+enemy_scene = ExtResource("3_lb7e6")
+minimum_wave = 3
+
+[sub_resource type="Resource" id="Resource_utwdl"]
+script = ExtResource("1_eds23")
+enemy_scene = ExtResource("4_hib0e")
+spawn_cost = 2
+minimum_wave = 3
+category = 1
+
+[resource]
+script = ExtResource("2_xdnx0")
+wave_number = 3
+spawn_interval = 2.6
+spawn_budget = 10
+maximum_alive = 7
+enemy_entries = Array[ExtResource("1_eds23")]([SubResource("Resource_coec1"), SubResource("Resource_qo81y"), SubResource("Resource_utwdl")])
+announcement = "WAVE 3 // ARMORED VEHICLE & TURRET ESCALATION"
+ground_attack_slots = 3

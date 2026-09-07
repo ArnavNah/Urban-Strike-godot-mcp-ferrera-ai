@@ -1,0 +1,195 @@
+[gd_scene format=3 uid="uid://df2k8m4r1v9q7"]
+
+[ext_resource type="Script" path="res://scripts/ui/run_end_screen.gd" id="1_end"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Panel"]
+bg_color = Color(0.08, 0.1, 0.14, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.4, 0.55, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_BtnNormal"]
+bg_color = Color(0.14, 0.2, 0.28, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.55, 0.75, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_BtnHover"]
+bg_color = Color(0.24, 0.38, 0.52, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.85, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="RunEndScreen" type="CanvasLayer"]
+process_mode = 3
+script = ExtResource("1_end")
+
+[node name="DimBackground" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.75)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MainPanel" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(440, 340)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_Panel")
+
+[node name="Margin" type="MarginContainer" parent="Center/MainPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="Center/MainPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="HeaderBox" type="VBoxContainer" parent="Center/MainPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ResultLabel" type="Label" parent="Center/MainPanel/Margin/VBox/HeaderBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.25, 0.25, 1)
+theme_override_font_sizes/font_size = 28
+text = "MISSION FAILED"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="Center/MainPanel/Margin/VBox/HeaderBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "AH-9 VULTURE LOST IN ACTION"
+horizontal_alignment = 1
+
+[node name="Divider1" type="HSeparator" parent="Center/MainPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="StatsGrid" type="GridContainer" parent="Center/MainPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="TimeTitle" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "SURVIVAL TIME"
+
+[node name="TimeValueLabel" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "00:00"
+horizontal_alignment = 2
+
+[node name="WaveTitle" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "HIGHEST WAVE"
+
+[node name="WaveValueLabel" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 15
+text = "1 / 10"
+horizontal_alignment = 2
+
+[node name="KillsTitle" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "HOSTILES DESTROYED"
+
+[node name="KillsValueLabel" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.45, 0.45, 1)
+theme_override_font_sizes/font_size = 15
+text = "0"
+horizontal_alignment = 2
+
+[node name="SalvageTitle" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "SALVAGE SECURED"
+
+[node name="SalvageValueLabel" type="Label" parent="Center/MainPanel/Margin/VBox/StatsGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.95, 0.75, 1)
+theme_override_font_sizes/font_size = 15
+text = "0 CR"
+horizontal_alignment = 2
+
+[node name="Divider2" type="HSeparator" parent="Center/MainPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="ButtonBox" type="HBoxContainer" parent="Center/MainPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="RetryButton" type="Button" parent="Center/MainPanel/Margin/VBox/ButtonBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 38)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_BtnNormal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_BtnHover")
+theme_override_styles/focus = SubResource("StyleBoxFlat_BtnHover")
+text = "RETRY MISSION"
+
+[node name="MainMenuButton" type="Button" parent="Center/MainPanel/Margin/VBox/ButtonBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 38)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_BtnNormal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_BtnHover")
+theme_override_styles/focus = SubResource("StyleBoxFlat_BtnHover")
+text = "RETURN TO HANGAR"
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]

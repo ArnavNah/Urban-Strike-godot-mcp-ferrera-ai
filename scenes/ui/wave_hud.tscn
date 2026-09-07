@@ -1,0 +1,131 @@
+[gd_scene format=3 uid="uid://dg2m4v8k1r9x7"]
+
+[ext_resource type="Script" path="res://scripts/ui/wave_hud.gd" id="1_whud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_HeaderBG"]
+bg_color = Color(0.08, 0.1, 0.13, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.35, 0.45, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+expand_margin_left = 12.0
+expand_margin_top = 4.0
+expand_margin_right = 12.0
+expand_margin_bottom = 4.0
+
+[node name="WaveHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_whud")
+
+[node name="HeaderContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -160.0
+offset_top = 16.0
+offset_right = 160.0
+offset_bottom = 52.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="HeaderContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_HeaderBG")
+
+[node name="HBox" type="HBoxContainer" parent="HeaderContainer/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="WaveNumberLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 15
+text = "WAVE 1 / 10"
+horizontal_alignment = 1
+
+[node name="Sep1" type="Label" parent="HeaderContainer/Panel/HBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.45, 0.5, 1)
+text = "|"
+
+[node name="WaveTimerLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "0:24"
+horizontal_alignment = 1
+
+[node name="Sep2" type="Label" parent="HeaderContainer/Panel/HBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.45, 0.5, 1)
+text = "|"
+
+[node name="EnemyCountLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 15
+text = "HOSTILES: 0"
+horizontal_alignment = 1
+
+[node name="CenterNotifications" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -140.0
+offset_right = 300.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterNotifications"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="CountdownLabel" type="Label" parent="CenterNotifications/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.15, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 38
+text = "DEPLOYING IN 3"
+horizontal_alignment = 1
+
+[node name="TransitionBannerLabel" type="Label" parent="CenterNotifications/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.9, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 32
+text = "WAVE 1"
+horizontal_alignment = 1

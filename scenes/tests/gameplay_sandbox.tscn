@@ -1,0 +1,116 @@
+[gd_scene format=3 uid="uid://dm4k8p2w1x7ye"]
+
+[ext_resource type="PackedScene" uid="uid://c7k2w9a5r4m1f" path="res://scenes/player/player_helicopter.tscn" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://b1m9k3f5w8r2q" path="res://scenes/camera/camera_rig.tscn" id="2_cam"]
+[ext_resource type="PackedScene" uid="uid://c6j2k4x8p1m9e" path="res://scenes/enemies/target_dummy.tscn" id="3_dummy"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="4_inf"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="5_tank"]
+[ext_resource type="PackedScene" uid="uid://df4m8v2k7xar1" path="res://scenes/enemies/sam_site.tscn" id="6_sam"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="7_hunter"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/projectile_pool.tscn" id="8_pool"]
+[ext_resource type="Script" path="res://scripts/directors/combat_director.gd" id="9_dir"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="10_hud"]
+[ext_resource type="PackedScene" path="res://scenes/audio/sound_manager.tscn" id="11_snd"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.12, 0.14, 0.18, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.65, 0.7, 0.75, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_Ground"]
+size = Vector3(300, 2, 300)
+
+[sub_resource type="StandardMaterial3D" id="Mat_Ground"]
+albedo_color = Color(0.2, 0.22, 0.24, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_Ground"]
+material = SubResource("Mat_Ground")
+size = Vector2(300, 300)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_Building"]
+size = Vector3(16, 24, 16)
+
+[sub_resource type="StandardMaterial3D" id="Mat_Building"]
+albedo_color = Color(0.32, 0.35, 0.38, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Building"]
+material = SubResource("Mat_Building")
+size = Vector3(16, 24, 16)
+
+[node name="GameplaySandbox" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 40, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="Ground" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+shape = SubResource("BoxShape3D_Ground")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("PlaneMesh_Ground")
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="CoverBuildingCenter" type="StaticBody3D" parent="Buildings"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, -60)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Buildings/CoverBuildingCenter"]
+shape = SubResource("BoxShape3D_Building")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Buildings/CoverBuildingCenter"]
+mesh = SubResource("BoxMesh_Building")
+
+[node name="CoverBuildingWest" type="StaticBody3D" parent="Buildings"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 12, -20)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Buildings/CoverBuildingWest"]
+shape = SubResource("BoxShape3D_Building")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Buildings/CoverBuildingWest"]
+mesh = SubResource("BoxMesh_Building")
+
+[node name="ProjectilePool" parent="." instance=ExtResource("8_pool")]
+
+[node name="CombatDirector" type="Node" parent="."]
+script = ExtResource("9_dir")
+max_ground_attack_slots = 2
+max_air_attack_slots = 1
+
+[node name="PlayerHelicopter" parent="." instance=ExtResource("1_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+
+[node name="CameraRig" parent="." instance=ExtResource("2_cam")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+
+[node name="TargetDummy" parent="." instance=ExtResource("3_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -25)
+
+[node name="InfantryCluster" parent="." instance=ExtResource("4_inf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -30)
+
+[node name="Tank" parent="." instance=ExtResource("5_tank")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -35)
+
+[node name="SAMSite" parent="." instance=ExtResource("6_sam")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0, -50)
+
+[node name="HunterHelicopter" parent="." instance=ExtResource("7_hunter")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 10, -55)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" parent="UI" instance=ExtResource("10_hud")]
+
+[node name="SoundManager" parent="." instance=ExtResource("11_snd")]

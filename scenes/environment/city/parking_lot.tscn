@@ -1,0 +1,55 @@
+[gd_scene format=3 uid="uid://tyrvsv6047yt"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0yojr"]
+albedo_color = Color(0.14, 0.15, 0.16, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_m04ah"]
+material = SubResource("StandardMaterial3D_0yojr")
+size = Vector2(24, 20)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_odlvx"]
+size = Vector3(2, 1.2, 4.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dt0se"]
+albedo_color = Color(0.15, 0.25, 0.45, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_qmfau"]
+material = SubResource("StandardMaterial3D_dt0se")
+size = Vector3(2, 1.2, 4.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wd1m7"]
+size = Vector3(2.2, 1.8, 5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g83pg"]
+albedo_color = Color(0.65, 0.2, 0.15, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mt50c"]
+material = SubResource("StandardMaterial3D_g83pg")
+size = Vector3(2.2, 1.8, 5)
+
+[node name="ParkingLot" type="Node3D" unique_id=1706286126]
+
+[node name="Tarmac" type="MeshInstance3D" parent="." unique_id=1324419803]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_m04ah")
+
+[node name="ParkedCar1" type="StaticBody3D" parent="." unique_id=414337082]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.6, -5)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ParkedCar1" unique_id=22503983]
+shape = SubResource("BoxShape3D_odlvx")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ParkedCar1" unique_id=1537723666]
+mesh = SubResource("BoxMesh_qmfau")
+
+[node name="ParkedTruck2" type="StaticBody3D" parent="." unique_id=125150452]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.9, -4.5)
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ParkedTruck2" unique_id=1171696496]
+shape = SubResource("BoxShape3D_wd1m7")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="ParkedTruck2" unique_id=1733697456]
+mesh = SubResource("BoxMesh_mt50c")

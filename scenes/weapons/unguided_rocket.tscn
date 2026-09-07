@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://wfl1j7ys5df4"]
+
+[ext_resource type="Script" uid="uid://c71fjxug3no2p" path="res://scripts/weapons/unguided_rocket.gd" id="1_feqy4"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oq8yb"]
+albedo_color = Color(0.9, 0.45, 0.1, 1)
+emission_enabled = true
+emission = Color(1, 0.5, 0.1, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_himsl"]
+material = SubResource("StandardMaterial3D_oq8yb")
+top_radius = 0.08
+bottom_radius = 0.12
+height = 0.8
+
+[node name="UnguidedRocket" type="Node3D" unique_id=1797015832]
+script = ExtResource("1_feqy4")
+
+[node name="RayCast3D" type="RayCast3D" parent="." unique_id=1838687991]
+target_position = Vector3(0, 0, -2)
+collision_mask = 3
+
+[node name="RocketMesh" type="MeshInstance3D" parent="." unique_id=1082565509]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+mesh = SubResource("CylinderMesh_himsl")

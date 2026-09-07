@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://bcn68bglouqal"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_we5xl"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_2l0um"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="2_w1mr1"]
+
+[sub_resource type="Resource" id="Resource_wl762"]
+script = ExtResource("1_we5xl")
+enemy_scene = ExtResource("2_w1mr1")
+
+[resource]
+script = ExtResource("2_2l0um")
+enemy_entries = Array[ExtResource("1_we5xl")]([SubResource("Resource_wl762")])
+announcement = "WAVE 1 // HOSTILE INFANTRY CONTACT"

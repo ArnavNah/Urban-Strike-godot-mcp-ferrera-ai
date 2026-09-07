@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://51j6skgid53q"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_g2lcm"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="2_j0q0n"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_nn2wf"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="3_qp8sp"]
+[ext_resource type="PackedScene" uid="uid://c6j2m8b4r1v5p" path="res://scenes/enemies/ground_turret.tscn" id="4_a1wkm"]
+
+[sub_resource type="Resource" id="Resource_vox07"]
+script = ExtResource("1_g2lcm")
+enemy_scene = ExtResource("2_j0q0n")
+spawn_weight = 1.5
+minimum_wave = 4
+
+[sub_resource type="Resource" id="Resource_5xsxx"]
+script = ExtResource("1_g2lcm")
+enemy_scene = ExtResource("3_qp8sp")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 4
+category = 1
+
+[sub_resource type="Resource" id="Resource_5c84j"]
+script = ExtResource("1_g2lcm")
+enemy_scene = ExtResource("4_a1wkm")
+minimum_wave = 4
+
+[resource]
+script = ExtResource("2_nn2wf")
+wave_number = 4
+spawn_interval = 2.4
+spawn_budget = 12
+maximum_alive = 8
+enemy_entries = Array[ExtResource("1_g2lcm")]([SubResource("Resource_vox07"), SubResource("Resource_5xsxx"), SubResource("Resource_5c84j")])
+announcement = "WAVE 4 // MEDIUM GROUND PATROL INBOUND"
+ground_attack_slots = 3

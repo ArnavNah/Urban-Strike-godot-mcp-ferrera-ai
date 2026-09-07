@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://cfqhdlseeosdk"]
+
+[ext_resource type="Script" uid="uid://c6rc6647nu1dk" path="res://scripts/directors/spawn_director.gd" id="1_dhq36"]
+
+[node name="SpawnSystem" type="Node3D" unique_id=696647088 node_paths=PackedStringArray("ground_zones_node", "air_zones_node", "rooftop_zones_node", "stream_timer", "formation_timer", "surge_timer")]
+script = ExtResource("1_dhq36")
+ground_zones_node = NodePath("GroundSpawnZones")
+air_zones_node = NodePath("AirSpawnZones")
+rooftop_zones_node = NodePath("RooftopSpawnZones")
+stream_timer = NodePath("StreamTimer")
+formation_timer = NodePath("FormationTimer")
+surge_timer = NodePath("SurgeTimer")
+
+[node name="GroundSpawnZones" type="Node3D" parent="." unique_id=929438992]
+
+[node name="RoadSpawn_North" type="Marker3D" parent="GroundSpawnZones" unique_id=1157418054 groups=["spawn_ground", "spawn_road"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -80)
+
+[node name="RoadSpawn_South" type="Marker3D" parent="GroundSpawnZones" unique_id=17885878 groups=["spawn_ground", "spawn_road"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 80)
+
+[node name="RoadSpawn_East" type="Marker3D" parent="GroundSpawnZones" unique_id=959935881 groups=["spawn_ground", "spawn_road"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0, 0)
+
+[node name="RoadSpawn_West" type="Marker3D" parent="GroundSpawnZones" unique_id=1093828469 groups=["spawn_ground", "spawn_road"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, 0)
+
+[node name="OpenGround_NE" type="Marker3D" parent="GroundSpawnZones" unique_id=83806325 groups=["spawn_ground", "spawn_open"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 0, -55)
+
+[node name="OpenGround_NW" type="Marker3D" parent="GroundSpawnZones" unique_id=1675596334 groups=["spawn_ground", "spawn_open"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55, 0, -55)
+
+[node name="OpenGround_SE" type="Marker3D" parent="GroundSpawnZones" unique_id=1918345891 groups=["spawn_ground", "spawn_open"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 0, 55)
+
+[node name="OpenGround_SW" type="Marker3D" parent="GroundSpawnZones" unique_id=389455492 groups=["spawn_ground", "spawn_open"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55, 0, 55)
+
+[node name="AirSpawnZones" type="Node3D" parent="." unique_id=275612154]
+
+[node name="AirCorridor_North" type="Marker3D" parent="AirSpawnZones" unique_id=2054398286 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -100)
+
+[node name="AirCorridor_South" type="Marker3D" parent="AirSpawnZones" unique_id=596117642 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 100)
+
+[node name="AirCorridor_East" type="Marker3D" parent="AirSpawnZones" unique_id=667598593 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 14, 0)
+
+[node name="AirCorridor_West" type="Marker3D" parent="AirSpawnZones" unique_id=737470555 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -100, 14, 0)
+
+[node name="AirCorridor_NE" type="Marker3D" parent="AirSpawnZones" unique_id=1303405244 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 16, -80)
+
+[node name="AirCorridor_NW" type="Marker3D" parent="AirSpawnZones" unique_id=1296523955 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 16, -80)
+
+[node name="AirCorridor_SE" type="Marker3D" parent="AirSpawnZones" unique_id=17936333 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 16, 80)
+
+[node name="AirCorridor_SW" type="Marker3D" parent="AirSpawnZones" unique_id=890534577 groups=["spawn_air"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 16, 80)
+
+[node name="RooftopSpawnZones" type="Node3D" parent="." unique_id=648383736]
+
+[node name="Rooftop_Center" type="Marker3D" parent="RooftopSpawnZones" unique_id=1390873843 groups=["spawn_rooftop"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12.5, -60)
+
+[node name="Rooftop_West" type="Marker3D" parent="RooftopSpawnZones" unique_id=420322094 groups=["spawn_rooftop"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 12.5, -20)
+
+[node name="StreamTimer" type="Timer" parent="." unique_id=1988659776]
+wait_time = 1.2
+
+[node name="FormationTimer" type="Timer" parent="." unique_id=968274649]
+wait_time = 4.0
+
+[node name="SurgeTimer" type="Timer" parent="." unique_id=600667437]
+wait_time = 90.0

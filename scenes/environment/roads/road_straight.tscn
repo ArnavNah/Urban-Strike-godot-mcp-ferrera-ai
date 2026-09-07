@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://jww4yuob3bj7"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oc13w"]
+albedo_color = Color(0.12, 0.13, 0.14, 1)
+roughness = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_npy60"]
+material = SubResource("StandardMaterial3D_oc13w")
+size = Vector2(16, 32)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_883f8"]
+albedo_color = Color(0.9, 0.9, 0.88, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_5jlfp"]
+material = SubResource("StandardMaterial3D_883f8")
+size = Vector2(0.4, 30)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y1gw7"]
+albedo_color = Color(0.55, 0.55, 0.52, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_jvpvk"]
+material = SubResource("StandardMaterial3D_y1gw7")
+size = Vector3(2, 0.15, 32)
+
+[node name="RoadStraight" type="Node3D" unique_id=315113687]
+
+[node name="Asphalt" type="MeshInstance3D" parent="." unique_id=985577130]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_npy60")
+
+[node name="CenterStripe" type="MeshInstance3D" parent="." unique_id=459119117]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("PlaneMesh_5jlfp")
+
+[node name="SidewalkLeft" type="MeshInstance3D" parent="." unique_id=1329961721]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.075, 0)
+mesh = SubResource("BoxMesh_jvpvk")
+
+[node name="SidewalkRight" type="MeshInstance3D" parent="." unique_id=2110920996]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.075, 0)
+mesh = SubResource("BoxMesh_jvpvk")

@@ -1,0 +1,7 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+.fennara/
+*.log
+run_output.txt
+test_results.txt

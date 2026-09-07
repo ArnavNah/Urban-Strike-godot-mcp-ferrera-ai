@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://cx68iamwdjnm0"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xn6ho"]
+albedo_color = Color(0.12, 0.13, 0.14, 1)
+roughness = 0.85
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_rfev3"]
+material = SubResource("StandardMaterial3D_xn6ho")
+size = Vector2(16, 16)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ywhme"]
+albedo_color = Color(0.55, 0.55, 0.52, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_8rfk7"]
+material = SubResource("StandardMaterial3D_ywhme")
+size = Vector3(2, 0.15, 16)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2802d"]
+material = SubResource("StandardMaterial3D_ywhme")
+size = Vector3(16, 0.15, 2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_28qyj"]
+material = SubResource("StandardMaterial3D_ywhme")
+size = Vector3(2, 0.15, 2)
+
+[node name="RoadCorner" type="Node3D" unique_id=1314858148]
+
+[node name="Asphalt" type="MeshInstance3D" parent="." unique_id=196139055]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("PlaneMesh_rfev3")
+
+[node name="SidewalkOuter1" type="MeshInstance3D" parent="." unique_id=171824624]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.075, 0)
+mesh = SubResource("BoxMesh_8rfk7")
+
+[node name="SidewalkOuter2" type="MeshInstance3D" parent="." unique_id=280778648]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 9)
+mesh = SubResource("BoxMesh_2802d")
+
+[node name="SidewalkInner" type="MeshInstance3D" parent="." unique_id=1743693294]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.075, -9)
+mesh = SubResource("BoxMesh_28qyj")

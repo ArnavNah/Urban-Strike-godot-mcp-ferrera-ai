@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://d1x8y9p2k4m7q"]
+
+[ext_resource type="Script" path="res://scripts/vfx/explosion.gd" id="1_expl"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_1"]
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 6.0
+initial_velocity_max = 14.0
+gravity = Vector3(0, -5.0, 0)
+scale_min = 0.2
+scale_max = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+shading_mode = 0
+albedo_color = Color(1.0, 0.45, 0.05, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector3(0.25, 0.25, 0.25)
+
+[node name="Explosion" type="Node3D"]
+script = ExtResource("1_expl")
+
+[node name="GPUParticles3D" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 28
+lifetime = 0.65
+one_shot = true
+explosiveness = 0.95
+process_material = SubResource("ParticleProcessMaterial_1")
+draw_pass_1 = SubResource("BoxMesh_1")

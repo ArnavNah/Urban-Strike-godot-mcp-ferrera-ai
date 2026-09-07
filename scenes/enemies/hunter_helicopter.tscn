@@ -1,0 +1,52 @@
+[gd_scene format=3 uid="uid://cm3w8k2r5wap1"]
+
+[ext_resource type="Script" path="res://scripts/enemies/hunter_helicopter.gd" id="1_hunter"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_Hunter"]
+radius = 1.0
+height = 3.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_Hunter"]
+albedo_color = Color(0.65, 0.2, 0.15, 1)
+metallic = 0.5
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="Mesh_Fuselage"]
+material = SubResource("Mat_Hunter")
+size = Vector3(1.1, 0.9, 3.2)
+
+[sub_resource type="StandardMaterial3D" id="Mat_Black"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="Mesh_RotorBlade"]
+material = SubResource("Mat_Black")
+size = Vector3(4.4, 0.04, 0.22)
+
+[node name="HunterHelicopter" type="CharacterBody3D" groups=["air_enemies", "enemies"]]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_hunter")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_Hunter")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals"]
+mesh = SubResource("Mesh_Fuselage")
+
+[node name="MainRotor" type="Node3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+
+[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor"]
+mesh = SubResource("Mesh_RotorBlade")
+
+[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
+mesh = SubResource("Mesh_RotorBlade")
+
+[node name="LOSRayCast" type="RayCast3D" parent="."]
+target_position = Vector3(0, 0, -45)
+collision_mask = 1

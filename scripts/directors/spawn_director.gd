@@ -1,0 +1,1663 @@
+class_name SpawnDirector
+extends Node
+
+## GDD Section 11 & 13: Ten-wave escalation and procedural Threat Director.
+## Manages ground/air threat budgets, active population caps, air corridors,
+## and tactical battlefield formations (air, ground, combined arms).
+
+@export var arena_half_extents: float = 120.0
+@export var recovery_pause_duration: float = 5.5
+@export var autostart_wave: bool = false
+
+@export_group("Air Enemy Active Caps")
+@export var cap_scout: int = 4
+@export var cap_raider: int = 2
+@export var cap_transport: int = 2
+@export var cap_gunship: int = 2
+@export var cap_jammer: int = 1
+@export var cap_ace: int = 1
+
+@export_group("Continuous Survival Tuning")
+@export var is_continuous_mode: bool = true
+@export var base_ground_budget_rate: float = 18.0
+@export var base_air_budget_rate: float = 10.0
+@export var surge_interval: float = 90.0
+@export var surge_duration: float = 15.0
+
+@export_group("Spawn Zones")
+@export var ground_zones_node: Node3D = null
+@export var air_zones_node: Node3D = null
+@export var rooftop_zones_node: Node3D = null
+
+@export_group("Timers")
+@export var stream_timer: Timer = null
+@export var formation_timer: Timer = null
+@export var surge_timer: Timer = null
+
+var current_wave: int = 1
+var is_wave_active: bool = false
+var _wave_enemies: Array[Node3D] = []
+var _total_wave_enemies: int = 0
+var _recovery_timer: float = 0.0
+
+var elapsed_survival_time: float = 0.0
+var continuous_ground_budget: float = 0.0
+var continuous_air_budget: float = 0.0
+var total_enemies_spawned: int = 0
+var total_enemies_killed: int = 0
+var surge_timer_duration_active: float = 0.0
+var surge_timer_value: float = 0.0
+var next_surge_time: float = 90.0
+
+var last_formation_name: String = "None"
+var last_spawn_source: String = "Initial Deployment"
+var failed_spawn_attempts: int = 0
+
+var _continuous_formation_cooldown: float = 4.0
+var _continuous_stream_cooldown: float = 1.0
+var _scheduled_events_triggered: Dictionary = {}
+
+var formation_history: Array[String] = []
+var is_radar_active: bool = false
+var _recent_spawn_sectors: Array[int] = []
+
+# Known open road points guaranteed free of building collisions
+var _safe_road_points: Array[Vector3] = [
+	Vector3(0.0, 0.0, -70.0),
+	Vector3(0.0, 0.0, 70.0),
+	Vector3(70.0, 0.0, 0.0),
+	Vector3(-70.0, 0.0, 0.0),
+	Vector3(55.0, 0.0, -55.0),
+	Vector3(-55.0, 0.0, 55.0),
+	Vector3(0.0, 0.0, -85.0),
+	Vector3(0.0, 0.0, 85.0)
+]
+
+# Preloaded enemy scenes
+var _scene_infantry: PackedScene = preload("res://scenes/enemies/infantry_cluster.tscn")
+var _scene_turret: PackedScene = preload("res://scenes/enemies/ground_turret.tscn")
+var _scene_tank: PackedScene = preload("res://scenes/enemies/tank.tscn")
+var _scene_sam: PackedScene = preload("res://scenes/enemies/sam_site.tscn")
+var _scene_hunter: PackedScene = preload("res://scenes/enemies/hunter_helicopter.tscn")
+var _scene_radar: PackedScene = preload("res://scenes/objects/radar_station.tscn")
+var _scene_archon: PackedScene = preload("res://scenes/enemies/boss_archon.tscn")
+
+# Modular Air Ecosystem scenes
+var _scene_air_scout: PackedScene = preload("res://scenes/enemies/air_scout_helicopter.tscn")
+var _scene_air_raider: PackedScene = preload("res://scenes/enemies/air_rocket_raider.tscn")
+var _scene_air_transport: PackedScene = preload("res://scenes/enemies/air_transport_helicopter.tscn")
+var _scene_air_gunship: PackedScene = preload("res://scenes/enemies/air_attack_gunship.tscn")
+var _scene_air_jammer: PackedScene = preload("res://scenes/enemies/air_jammer_helicopter.tscn")
+var _scene_air_ace: PackedScene = preload("res://scenes/enemies/air_ace_gunship.tscn")
+
+# GDD Section 11.2 & 12.2 wave table (Preserved for compatibility and tests)
+var wave_table: Array[Dictionary] = [
+	{
+		"wave": 1,
+		"announcement": "WAVE 1 // HOSTILE INFANTRY CONTACT",
+		"ground_budget": 40,
+		"air_budget": 0,
+		"ground_slots": 2,
+		"air_slots": 0,
+		"enemies": ["infantry", "turret"]
+	},
+	{
+		"wave": 2,
+		"announcement": "WAVE 2 // ARMORED TANK DIVISION INBOUND",
+		"ground_budget": 55,
+		"air_budget": 0,
+		"ground_slots": 2,
+		"air_slots": 0,
+		"enemies": ["infantry", "tank"]
+	},
+	{
+		"wave": 3,
+		"announcement": "WAVE 3 // SUSTAINED GROUND ASSAULT",
+		"ground_budget": 70,
+		"air_budget": 0,
+		"ground_slots": 3,
+		"air_slots": 0,
+		"enemies": ["infantry", "tank", "turret"]
+	},
+	{
+		"wave": 4,
+		"announcement": "WAVE 4 // SAM AIR-DEFENSE DETECTED - USE FLARES",
+		"ground_budget": 85,
+		"air_budget": 0,
+		"ground_slots": 3,
+		"air_slots": 0,
+		"enemies": ["sam", "tank", "infantry"]
+	},
+	{
+		"wave": 5,
+		"announcement": "WAVE 5 // MISSION OBJECTIVE: DESTROY RADAR STATION",
+		"ground_budget": 100,
+		"air_budget": 0,
+		"ground_slots": 3,
+		"air_slots": 0,
+		"enemies": ["sam", "tank", "turret"]
+	},
+	{
+		"wave": 6,
+		"announcement": "WAVE 6 // AIR THREAT: RECON & HUNTER CONTACT",
+		"ground_budget": 100,
+		"air_budget": 30,
+		"ground_slots": 3,
+		"air_slots": 1,
+		"enemies": ["hunter", "scout", "raider", "infantry", "turret"]
+	},
+	{
+		"wave": 7,
+		"announcement": "WAVE 7 // COMBINED AIR & ARMORED PRESSURE",
+		"ground_budget": 115,
+		"air_budget": 45,
+		"ground_slots": 3,
+		"air_slots": 1,
+		"enemies": ["hunter", "scout", "raider", "transport", "tank", "infantry"]
+	},
+	{
+		"wave": 8,
+		"announcement": "WAVE 8 // AIR STRIKE & SAM CODES ACTIVE",
+		"ground_budget": 130,
+		"air_budget": 60,
+		"ground_slots": 4,
+		"air_slots": 2,
+		"enemies": ["hunter", "scout", "raider", "gunship", "jammer", "sam", "tank"]
+	},
+	{
+		"wave": 9,
+		"announcement": "WAVE 9 // MAXIMUM ENEMY SATURATION",
+		"ground_budget": 150,
+		"air_budget": 75,
+		"ground_slots": 4,
+		"air_slots": 2,
+		"enemies": ["hunter", "scout", "raider", "gunship", "jammer", "ace", "sam", "tank", "turret"]
+	},
+	{
+		"wave": 10,
+		"announcement": "WAVE 10 // WARNING: ARCHON HEAVY GUNSHIP DETECTED",
+		"ground_budget": 50,
+		"air_budget": 25,
+		"ground_slots": 2,
+		"air_slots": 1,
+		"enemies": ["archon", "tank", "scout"]
+	}
+]
+
+func _ready() -> void:
+	add_to_group("spawn_director")
+	_setup_spawn_nodes_and_timers()
+	if EventBus:
+		EventBus.enemy_destroyed.connect(_on_enemy_destroyed)
+		if EventBus.has_signal("radar_status_changed"):
+			EventBus.radar_status_changed.connect(_on_radar_status_changed)
+	if autostart_wave:
+		get_tree().create_timer(1.0).timeout.connect(_on_intro_timeout)
+
+func _setup_spawn_nodes_and_timers() -> void:
+	if not ground_zones_node:
+		ground_zones_node = get_node_or_null("GroundSpawnZones") as Node3D
+	if not air_zones_node:
+		air_zones_node = get_node_or_null("AirSpawnZones") as Node3D
+	if not rooftop_zones_node:
+		rooftop_zones_node = get_node_or_null("RooftopSpawnZones") as Node3D
+
+	if not stream_timer:
+		stream_timer = get_node_or_null("StreamTimer") as Timer
+		if not stream_timer and is_inside_tree():
+			stream_timer = Timer.new()
+			stream_timer.name = "StreamTimer"
+			add_child(stream_timer)
+	if stream_timer and not stream_timer.timeout.is_connected(_on_stream_timer_timeout):
+		stream_timer.timeout.connect(_on_stream_timer_timeout)
+
+	if not formation_timer:
+		formation_timer = get_node_or_null("FormationTimer") as Timer
+		if not formation_timer and is_inside_tree():
+			formation_timer = Timer.new()
+			formation_timer.name = "FormationTimer"
+			add_child(formation_timer)
+	if formation_timer and not formation_timer.timeout.is_connected(_on_formation_timer_timeout):
+		formation_timer.timeout.connect(_on_formation_timer_timeout)
+
+	if not surge_timer:
+		surge_timer = get_node_or_null("SurgeTimer") as Timer
+		if not surge_timer and is_inside_tree():
+			surge_timer = Timer.new()
+			surge_timer.name = "SurgeTimer"
+			add_child(surge_timer)
+	if surge_timer and not surge_timer.timeout.is_connected(_on_surge_timer_timeout):
+		surge_timer.timeout.connect(_on_surge_timer_timeout)
+
+func get_ground_spawn_nodes() -> Array[Marker3D]:
+	var result: Array[Marker3D] = []
+	if ground_zones_node:
+		for child in ground_zones_node.get_children():
+			if child is Marker3D:
+				result.append(child)
+	if result.is_empty() and is_inside_tree() and get_tree():
+		var group_nodes := get_tree().get_nodes_in_group("spawn_ground")
+		for n in group_nodes:
+			if n is Marker3D:
+				result.append(n)
+	return result
+
+func get_air_spawn_nodes() -> Array[Marker3D]:
+	var result: Array[Marker3D] = []
+	if air_zones_node:
+		for child in air_zones_node.get_children():
+			if child is Marker3D:
+				result.append(child)
+	if result.is_empty() and is_inside_tree() and get_tree():
+		var group_nodes := get_tree().get_nodes_in_group("spawn_air")
+		for n in group_nodes:
+			if n is Marker3D:
+				result.append(n)
+	return result
+
+func get_rooftop_spawn_nodes() -> Array[Marker3D]:
+	var result: Array[Marker3D] = []
+	if rooftop_zones_node:
+		for child in rooftop_zones_node.get_children():
+			if child is Marker3D:
+				result.append(child)
+	if result.is_empty() and is_inside_tree() and get_tree():
+		var group_nodes := get_tree().get_nodes_in_group("spawn_rooftop")
+		for n in group_nodes:
+			if n is Marker3D:
+				result.append(n)
+	return result
+
+func _on_stream_timer_timeout() -> void:
+	if not is_wave_active or not is_continuous_mode:
+		return
+	var stage := get_survival_stage()
+	var current_living := get_living_enemy_count()
+	var target_count := get_target_active_count()
+	var cap := get_active_population_cap()
+
+	if current_living >= cap:
+		if stream_timer:
+			stream_timer.wait_time = randf_range(2.0, 3.5)
+		return
+
+	var player := _get_player()
+	var p_pos := player.global_position if player else Vector3.ZERO
+	var is_behind_target := current_living < target_count
+
+	_spawn_continuous_stream(stage, p_pos)
+
+	if is_behind_target and (current_living + 2 <= cap) and (current_living < target_count * 0.75):
+		_spawn_continuous_stream(stage, p_pos)
+
+	if stream_timer:
+		if is_behind_target:
+			var deficit_ratio := float(target_count - current_living) / float(maxi(1, target_count))
+			stream_timer.wait_time = lerpf(0.85, 1.6, 1.0 - deficit_ratio)
+		else:
+			stream_timer.wait_time = randf_range(1.9, 3.2)
+
+func _on_formation_timer_timeout() -> void:
+	if not is_wave_active or not is_continuous_mode:
+		return
+	var stage := get_survival_stage()
+	var cap := get_active_population_cap()
+	var current_living := get_living_enemy_count()
+	var target_count := get_target_active_count()
+
+	if current_living + 4 <= cap:
+		var player := _get_player()
+		var p_pos := player.global_position if player else Vector3.ZERO
+		var is_behind_target := current_living < target_count
+		if try_spawn_formation_with_fallback(stage, p_pos):
+			if formation_timer:
+				formation_timer.wait_time = randf_range(6.0, 10.0) if is_behind_target else randf_range(9.0, 15.0)
+			return
+
+	if formation_timer:
+		formation_timer.wait_time = randf_range(4.0, 8.0)
+
+func _on_surge_timer_timeout() -> void:
+	if not is_wave_active or not is_continuous_mode:
+		return
+	surge_timer_duration_active = surge_duration
+	continuous_ground_budget += 45.0
+	continuous_air_budget += 25.0
+	if EventBus:
+		EventBus.wave_started.emit(current_wave, "⚠ WARNING: HOSTILE HORDE SURGE INBOUND ⚠")
+	if surge_timer:
+		surge_timer.wait_time = surge_interval + randf_range(-10.0, 15.0)
+
+func _on_intro_timeout() -> void:
+	if is_inside_tree() and not is_queued_for_deletion() and not is_wave_active:
+		start_wave(1)
+
+func _on_radar_status_changed(active: bool) -> void:
+	is_radar_active = active
+
+func _process(delta: float) -> void:
+	if not is_wave_active and not is_continuous_mode and _recovery_timer > 0.0:
+		_recovery_timer -= delta
+		if _recovery_timer <= 0.0:
+			start_wave(current_wave + 1)
+		return
+
+	if not is_wave_active:
+		return
+
+	if is_continuous_mode:
+		_process_continuous_survival(delta)
+
+func start_wave(wave_num: int) -> void:
+	current_wave = wave_num
+	is_wave_active = true
+
+	var config: Dictionary
+	if wave_num > 10:
+		var endless_lvl: int = wave_num - 10
+		config = {
+			"wave": wave_num,
+			"announcement": "ENDLESS OVERDRIVE // SECTOR WAVE %d (2.0x SALVAGE)" % wave_num,
+			"ground_budget": 130 + endless_lvl * 30,
+			"air_budget": 60 + endless_lvl * 25,
+			"ground_slots": mini(4 + int(float(endless_lvl) * 0.5), 6),
+			"air_slots": mini(2 + int(float(endless_lvl) * 0.33), 4),
+			"enemies": ["hunter", "scout", "raider", "gunship", "jammer", "ace", "sam", "tank", "turret", "infantry"]
+		}
+	else:
+		var wave_idx: int = mini(wave_num - 1, wave_table.size() - 1)
+		config = wave_table[wave_idx]
+
+	if CombatDirector.instance:
+		CombatDirector.instance.set_wave_limits(config["ground_slots"], config["air_slots"])
+
+	if EventBus:
+		EventBus.wave_started.emit(current_wave, config["announcement"])
+
+	# Spawn specific wave objective / boss
+	if wave_num == 5 and not _scheduled_events_triggered.get("radar_station", false):
+		_scheduled_events_triggered["radar_station"] = true
+		_spawn_radar_objective()
+	elif wave_num == 10 and not _scheduled_events_triggered.get("archon_boss", false):
+		_scheduled_events_triggered["archon_boss"] = true
+		_spawn_archon_boss()
+
+	if is_continuous_mode:
+		if stream_timer and stream_timer.is_stopped():
+			stream_timer.start(1.2)
+		if formation_timer and formation_timer.is_stopped():
+			formation_timer.start(4.0)
+		if surge_timer and surge_timer.is_stopped():
+			surge_timer.start(surge_interval)
+
+		if elapsed_survival_time <= 0.1:
+			continuous_ground_budget = 40.0
+			continuous_air_budget = 10.0
+			var player := _get_player()
+			var p_pos := player.global_position if player else Vector3.ZERO
+			_spawn_initial_encounter(p_pos)
+		else:
+			_spend_budget(config)
+		_total_wave_enemies = _wave_enemies.size()
+		_notify_progress()
+	else:
+		_wave_enemies.clear()
+		_spend_budget(config)
+		_total_wave_enemies = _wave_enemies.size()
+		_notify_progress()
+
+## Guaranteed playable initial encounter on run start (4-6 ground + 1-2 air at 35-50m)
+func _spawn_initial_encounter(player_pos: Vector3) -> void:
+	# 1. First infantry squad in sector 6 (NW)
+	var pos_1 := _get_sector_spawn_position(player_pos, 6, 32.0, 44.0, false)
+	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, pos_1)
+
+	# 2. Second infantry squad in opposing direction (sector 2, SE)
+	var pos_2 := _get_sector_spawn_position(player_pos, 2, 33.0, 45.0, false)
+	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, pos_2)
+
+	# 3. Ground Turret in sector 0 (East)
+	var pos_3 := _get_sector_spawn_position(player_pos, 0, 35.0, 48.0, false)
+	_spawn_continuous_enemy(_scene_turret, player_pos, 0.0, pos_3)
+
+	# 4. Third infantry squad in sector 4 (West)
+	var pos_4 := _get_sector_spawn_position(player_pos, 4, 34.0, 46.0, false)
+	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, pos_4)
+
+	# 5. Two light air scouts approaching from opposing air corridors
+	var p_y: float = clampf(_get_player_altitude(), 11.0, 16.0)
+	var pos_air_1 := _get_sector_spawn_position(player_pos, 1, 38.0, 52.0, true)
+	_spawn_continuous_enemy(_scene_air_scout, player_pos, p_y, pos_air_1)
+
+	var pos_air_2 := _get_sector_spawn_position(player_pos, 5, 40.0, 54.0, true)
+	_spawn_continuous_enemy(_scene_air_scout, player_pos, p_y + 1.5, pos_air_2)
+
+func get_survival_stage() -> int:
+	if elapsed_survival_time < 120.0:
+		return 1 # 0-2 min: Opening
+	elif elapsed_survival_time < 300.0:
+		return 2 # 2-5 min: Build-Up
+	elif elapsed_survival_time < 480.0:
+		return 3 # 5-8 min: Pressure
+	elif elapsed_survival_time < 720.0:
+		return 4 # 8-12 min: Escalation
+	elif elapsed_survival_time < 900.0:
+		return 5 # 12-15 min: Crisis
+	else:
+		return 6 # 15+ min: Extreme
+
+func get_active_population_cap() -> int:
+	var stage := get_survival_stage()
+	match stage:
+		1: return 24
+		2: return 45
+		3: return 65
+		4: return 80
+		5: return 95
+		6: return 120
+		_: return 35
+
+func get_target_active_count() -> int:
+	if elapsed_survival_time < 120.0:
+		return int(lerpf(16.0, 24.0, elapsed_survival_time / 120.0))
+	elif elapsed_survival_time < 300.0:
+		return int(lerpf(25.0, 38.0, (elapsed_survival_time - 120.0) / 180.0))
+	elif elapsed_survival_time < 480.0:
+		return int(lerpf(38.0, 50.0, (elapsed_survival_time - 300.0) / 180.0))
+	else:
+		return int(lerpf(50.0, 68.0, clampf((elapsed_survival_time - 480.0) / 360.0, 0.0, 1.0)))
+
+func get_living_enemy_count() -> int:
+	if EnemyRegistry.instance:
+		return EnemyRegistry.instance.get_active_count()
+	var count: int = 0
+	for i in range(_wave_enemies.size() - 1, -1, -1):
+		var e := _wave_enemies[i]
+		if not is_instance_valid(e) or e.is_queued_for_deletion():
+			_wave_enemies.remove_at(i)
+		elif "is_alive" in e and not e.is_alive:
+			_wave_enemies.remove_at(i)
+		else:
+			count += 1
+	return count
+
+func apply_elite_modifier(enemy: Node3D) -> void:
+	if not is_instance_valid(enemy) or enemy.is_in_group("bosses") or enemy.is_in_group("elites"):
+		return
+	var mods := ["Armored", "Rapid Fire", "Fast", "Berserk"]
+	var mod: String = mods.pick_random()
+	enemy.add_to_group("elites")
+	enemy.set_meta("elite_type", mod)
+
+	match mod:
+		"Armored":
+			if "max_health" in enemy:
+				enemy.max_health *= 1.8
+				enemy.current_health = enemy.max_health
+			elif "health" in enemy:
+				enemy.health *= 1.8
+			if "damage_taken_mult" in enemy:
+				enemy.damage_taken_mult *= 0.6
+		"Rapid Fire":
+			if "fire_rate" in enemy:
+				enemy.fire_rate *= 1.5
+			if "attack_cooldown" in enemy:
+				enemy.attack_cooldown *= 0.65
+		"Fast":
+			if "move_speed" in enemy:
+				enemy.move_speed *= 1.4
+			if "max_speed" in enemy:
+				enemy.max_speed *= 1.4
+		"Berserk":
+			if "max_health" in enemy:
+				enemy.max_health *= 1.3
+				enemy.current_health = enemy.max_health
+			if "move_speed" in enemy:
+				enemy.move_speed *= 1.25
+			if "damage" in enemy:
+				enemy.damage *= 1.4
+
+	enemy.scale *= 1.2
+	var mesh: GeometryInstance3D = enemy.find_child("*Mesh*", true, false) as GeometryInstance3D
+	if not mesh:
+		mesh = enemy.find_child("Visuals", true, false) as GeometryInstance3D
+	if mesh and mesh.material_override:
+		var mat := mesh.material_override.duplicate() as StandardMaterial3D
+		if mat:
+			mat.albedo_color = mat.albedo_color.lerp(Color(1.3, 0.7, 0.2), 0.45)
+			mesh.material_override = mat
+
+	if "salvage_value" in enemy:
+		enemy.salvage_value = int(enemy.salvage_value * 3)
+	if "xp_value" in enemy:
+		enemy.xp_value = int(enemy.xp_value * 3)
+
+func _process_continuous_survival(delta: float) -> void:
+	elapsed_survival_time += delta
+
+	# Surge calculation
+	var surge_active := false
+	if surge_timer_duration_active > 0.0:
+		surge_timer_duration_active -= delta
+		surge_active = true
+	elif elapsed_survival_time >= next_surge_time:
+		surge_timer_duration_active = surge_duration
+		surge_active = true
+		next_surge_time = elapsed_survival_time + surge_interval + randf_range(-10.0, 15.0)
+		continuous_ground_budget += 45.0
+		continuous_air_budget += 25.0
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ WARNING: HOSTILE HORDE SURGE INBOUND ⚠")
+
+
+	# Budget accumulation scaling
+	var time_mult := 1.0 + (elapsed_survival_time / 140.0)
+	if surge_active:
+		time_mult *= 2.5
+
+	var diff_scale := 1.0
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and "difficulty_scale" in gm:
+		diff_scale = float(gm.difficulty_scale)
+
+	continuous_ground_budget += base_ground_budget_rate * time_mult * diff_scale * delta
+	continuous_air_budget += base_air_budget_rate * time_mult * diff_scale * delta
+
+	# Dynamic CombatDirector attack slot scaling
+	if CombatDirector.instance:
+		var stage := get_survival_stage()
+		var g_slots := mini(3 + stage, 6)
+		var a_slots := 1 if stage == 1 else mini(1 + stage, 4)
+		CombatDirector.instance.set_wave_limits(g_slots, a_slots)
+
+	# Check scheduled encounters
+	_check_scheduled_events()
+
+	# Process continuous spawning of formations and streams (fallback when timers are not used)
+	if not stream_timer and not formation_timer:
+		_process_continuous_spawning(delta)
+
+func _check_scheduled_events() -> void:
+	# 1. Transport Reinforcement Drop at ~150s (2.5m)
+	if elapsed_survival_time >= 150.0 and not _scheduled_events_triggered.get("transport_drop", false):
+		_scheduled_events_triggered["transport_drop"] = true
+		var player := _get_player()
+		var p_pos := player.global_position if player else Vector3.ZERO
+		var entry := get_air_corridor_entry(p_pos, 48.0, 75.0)
+		spawn_reinforcement_drop(entry["position"], entry["heading"], true)
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ INCOMING AIRBORNE REINFORCEMENT CONVOY ⚠")
+
+	# 2. Radar Station at ~270s (4.5m)
+	if elapsed_survival_time >= 270.0 and not _scheduled_events_triggered.get("radar_station", false):
+		_scheduled_events_triggered["radar_station"] = true
+		_spawn_radar_objective()
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ MISSION OBJECTIVE: DESTROY RADAR STATION ⚠")
+
+	# 3. Ace Gunship at ~420s (7.0m)
+	if elapsed_survival_time >= 420.0 and not _scheduled_events_triggered.get("ace_gunship", false):
+		_scheduled_events_triggered["ace_gunship"] = true
+		var player := _get_player()
+		var p_pos := player.global_position if player else Vector3.ZERO
+		var entry := get_air_corridor_entry(p_pos, 50.0, 80.0)
+		spawn_elite_air_encounter(entry["position"], entry["heading"])
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ ELITE AIR CONTACT: ACE GUNSHIP ⚠")
+
+	# 4. Archon Boss at ~600s (10.0m)
+	if elapsed_survival_time >= 600.0 and not _scheduled_events_triggered.get("archon_boss", false):
+		_scheduled_events_triggered["archon_boss"] = true
+		_spawn_archon_boss()
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ BOSS CONTACT: ARCHON HEAVY GUNSHIP ⚠")
+
+func _process_continuous_spawning(delta: float) -> void:
+	var stage := get_survival_stage()
+	var cap := get_active_population_cap()
+	var current_living := get_living_enemy_count()
+	var target_count := get_target_active_count()
+
+	if current_living >= cap:
+		return
+
+	var player := _get_player()
+	var p_pos := player.global_position if player else Vector3.ZERO
+
+	var is_behind_target := current_living < target_count
+
+	# 1. Formation Spawning
+	_continuous_formation_cooldown -= delta
+	if _continuous_formation_cooldown <= 0.0 and (current_living + 4 <= cap):
+		if try_spawn_formation_with_fallback(stage, p_pos):
+			_continuous_formation_cooldown = randf_range(6.0, 10.0) if is_behind_target else randf_range(9.0, 15.0)
+			return
+
+	# 2. Ambient Stream Spawning
+	_continuous_stream_cooldown -= delta
+	if _continuous_stream_cooldown <= 0.0:
+		_spawn_continuous_stream(stage, p_pos)
+		if is_behind_target and (current_living + 2 <= cap) and (current_living < target_count * 0.75):
+			_spawn_continuous_stream(stage, p_pos)
+
+		if is_behind_target:
+			var deficit_ratio := float(target_count - current_living) / float(maxi(1, target_count))
+			_continuous_stream_cooldown = lerpf(0.85, 1.6, 1.0 - deficit_ratio)
+		else:
+			_continuous_stream_cooldown = randf_range(1.9, 3.2)
+
+func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
+	# 1. Primary formation candidates
+	if _try_spawn_continuous_formation(stage, p_pos):
+		return true
+
+	# 2. Multi-tier Fallback: Cheaper formation (Infantry Squad)
+	if continuous_ground_budget >= 25.0 and can_spawn_formation("infantry_squad"):
+		var s_pos := get_frustum_safe_spawn_pos(p_pos, 35.0, 55.0)
+		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
+		var off := Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
+		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos + off)
+		continuous_ground_budget -= 25.0
+		_record_formation("infantry_squad")
+		last_formation_name = "infantry_squad (Fallback)"
+		return true
+
+	# 3. Final Fallback: Basic fodder stream from safe zone
+	var current_living := get_living_enemy_count()
+	var target_count := get_target_active_count()
+	if current_living < target_count:
+		continuous_ground_budget = maxf(continuous_ground_budget, 15.0)
+
+	if continuous_ground_budget >= 15.0:
+		var f_pos := get_frustum_safe_spawn_pos(p_pos, 32.0, 52.0)
+		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, f_pos)
+		continuous_ground_budget -= 15.0
+		last_formation_name = "basic_fodder (Fallback)"
+		return true
+
+	return false
+
+func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
+
+	if stage >= 4 and continuous_air_budget >= 20.0 and can_spawn_formation("elite_encounter") and get_active_air_count("ace_gunships") < cap_ace and randf() > 0.4:
+		var entry := get_air_corridor_entry(p_pos, 45.0, 75.0)
+		spawn_elite_air_encounter(entry["position"], entry["heading"])
+		continuous_air_budget -= 20.0
+		return true
+
+	if stage >= 4 and continuous_air_budget >= 17.0 and can_spawn_formation("electronic_strike") and get_active_air_count("jammers") < cap_jammer and randf() > 0.4:
+		var entry := get_air_corridor_entry(p_pos, 45.0, 75.0)
+		spawn_electronic_strike_group(entry["position"], entry["heading"], true)
+		continuous_air_budget -= 17.0
+		return true
+
+	if stage >= 3 and continuous_ground_budget >= 40.0 and continuous_air_budget >= 22.0 and can_spawn_formation("combined_arms") and randf() > 0.35:
+		var entry := get_air_corridor_entry(p_pos, 45.0, 72.0)
+		spawn_combined_arms_formation(entry["position"], entry["heading"])
+		continuous_ground_budget -= 40.0
+		continuous_air_budget -= 22.0
+		return true
+
+	if stage >= 3 and continuous_air_budget >= 13.0 and can_spawn_formation("air_intercept") and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.35:
+		var entry := get_air_corridor_entry(p_pos, 42.0, 70.0)
+		spawn_air_intercept(entry["position"], entry["heading"], 1)
+		continuous_air_budget -= 13.0
+		return true
+
+	if stage >= 2 and continuous_air_budget >= 14.0 and can_spawn_formation("harassment_group") and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.3:
+		var entry := get_air_corridor_entry(p_pos, 42.0, 70.0)
+		spawn_harassment_group(entry["position"], entry["heading"])
+		continuous_air_budget -= 14.0
+		return true
+
+	if stage >= 2 and continuous_ground_budget >= 55.0 and can_spawn_formation("road_column") and randf() > 0.3:
+		var col_pos := get_frustum_safe_spawn_pos(p_pos, 42.0, 70.0)
+		var approach := (p_pos - col_pos)
+		approach.y = 0.0
+		spawn_road_column(col_pos, approach.normalized(), 3)
+		continuous_ground_budget -= 55.0
+		return true
+
+	# Air Patrol (2 Scouts) available in Stage 1 & 2
+	if continuous_air_budget >= 8.0 and can_spawn_formation("air_patrol") and get_active_air_count("scouts") + 2 <= cap_scout:
+		var entry := get_air_corridor_entry(p_pos, 40.0, 65.0)
+		spawn_air_patrol(entry["position"], entry["heading"])
+		continuous_air_budget -= 8.0
+		return true
+
+	# Formation Fallback: Infantry Squad (2 clusters)
+	if continuous_ground_budget >= 25.0 and can_spawn_formation("infantry_squad"):
+		var s_pos := get_frustum_safe_spawn_pos(p_pos, 35.0, 55.0)
+		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
+		var off := Vector3(randf_range(-5.0, 5.0), 0.0, randf_range(-5.0, 5.0))
+		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos + off)
+		continuous_ground_budget -= 25.0
+		_record_formation("infantry_squad")
+		return true
+
+	return false
+
+func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
+	var current_living := get_living_enemy_count()
+	var target_count := get_target_active_count()
+	var cap := get_active_population_cap()
+	if current_living >= cap:
+		return
+
+	# Minimum budget guarantee when below target count to prevent starving
+	if current_living < target_count:
+		continuous_ground_budget = maxf(continuous_ground_budget, 15.0)
+		if continuous_air_budget < 4.0 and stage >= 1:
+			continuous_air_budget = maxf(continuous_air_budget, 4.0)
+
+	# Ground stream
+	if continuous_ground_budget >= 15.0:
+		if stage >= 3 and continuous_ground_budget >= 40.0 and randf() > 0.6:
+			_spawn_continuous_enemy(_scene_sam, p_pos, 0.0)
+			continuous_ground_budget -= 40.0
+		elif stage >= 2 and continuous_ground_budget >= 28.0 and randf() > 0.45:
+			_spawn_continuous_enemy(_scene_tank, p_pos, 0.0)
+			continuous_ground_budget -= 28.0
+		elif continuous_ground_budget >= 20.0 and randf() > 0.5:
+			_spawn_continuous_enemy(_scene_turret, p_pos, 0.0)
+			continuous_ground_budget -= 20.0
+		else:
+			_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0)
+			continuous_ground_budget -= 15.0
+
+	# Air stream
+	var p_y := clampf(_get_player_altitude(), 11.0, 17.0)
+	if stage >= 3 and continuous_air_budget >= 9.0 and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.5:
+		_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
+		continuous_air_budget -= 9.0
+	elif stage >= 2 and continuous_air_budget >= 6.0 and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.4:
+		_spawn_continuous_enemy(_scene_air_raider, p_pos, p_y + 2.0)
+		continuous_air_budget -= 6.0
+	elif continuous_air_budget >= 4.0 and get_active_air_count("scouts") < cap_scout:
+		_spawn_continuous_enemy(_scene_air_scout, p_pos, p_y)
+		continuous_air_budget -= 4.0
+
+func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: float, forced_pos: Vector3 = Vector3.INF) -> Node3D:
+	if not scene:
+		return null
+	var enemy: Node3D = scene.instantiate() as Node3D
+	if not enemy:
+		return null
+
+	var spawn_pos: Vector3 = forced_pos
+	if spawn_pos == Vector3.INF:
+		spawn_pos = get_frustum_safe_spawn_pos(player_pos, 32.0, 68.0)
+
+	enemy.transform.origin = Vector3(spawn_pos.x, altitude, spawn_pos.z)
+
+	if elapsed_survival_time > 180.0 and randf() < clampf(0.12 + (elapsed_survival_time - 180.0) / 600.0 * 0.25, 0.12, 0.35):
+		apply_elite_modifier(enemy)
+
+	var parent := _get_spawn_parent()
+	parent.add_child.call_deferred(enemy)
+	_register_spawned_node(enemy)
+	return enemy
+
+func _register_spawned_node(enemy: Node3D) -> void:
+	if not is_instance_valid(enemy):
+		return
+	if not _wave_enemies.has(enemy):
+		_wave_enemies.append(enemy)
+	total_enemies_spawned += 1
+
+	var is_air := enemy.is_in_group("air_enemies") or ("archetype" in enemy) or (enemy is HunterHelicopter) or (enemy is BossArchon) or enemy.name.begins_with("Air") or enemy.name.begins_with("Hunter")
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.register_enemy(enemy, is_air)
+
+	enemy.tree_entered.connect(func() -> void:
+		if is_instance_valid(enemy) and EnemyRegistry.instance:
+			if enemy.is_in_group("air_enemies") and not EnemyRegistry.instance.air_enemies.has(enemy):
+				EnemyRegistry.instance.ground_enemies.erase(enemy)
+				if not EnemyRegistry.instance.air_enemies.has(enemy):
+					EnemyRegistry.instance.air_enemies.append(enemy)
+				EnemyRegistry.instance._enemy_air_status[enemy] = true
+	, CONNECT_ONE_SHOT)
+
+	if not enemy.tree_exited.is_connected(_on_spawned_enemy_tree_exited):
+		enemy.tree_exited.connect(_on_spawned_enemy_tree_exited.bind(enemy))
+
+	var wm := get_tree().get_first_node_in_group("wave_manager")
+	if wm and wm.has_method("register_spawned_enemy"):
+		wm.register_spawned_enemy(enemy)
+
+func _on_spawned_enemy_tree_exited(enemy: Node3D) -> void:
+	_wave_enemies.erase(enemy)
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.unregister_enemy(enemy)
+	_notify_progress()
+
+func get_active_air_count(tag: String) -> int:
+	var count: int = 0
+	for e in _wave_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			if e.is_in_group(tag):
+				count += 1
+	return count
+
+func can_spawn_formation(formation_id: String) -> bool:
+	if formation_history.size() > 0 and formation_history[-1] == formation_id:
+		return false
+	if formation_history.size() >= 2 and formation_history[-2] == formation_id:
+		return false
+	return true
+
+func _record_formation(formation_id: String) -> void:
+	formation_history.append(formation_id)
+	if formation_history.size() > 6:
+		formation_history.pop_front()
+
+func _get_spawn_parent() -> Node:
+	if is_inside_tree() and get_tree():
+		return get_tree().current_scene if get_tree().current_scene else get_tree().root
+	return self
+
+func _get_player() -> Node3D:
+	if is_inside_tree() and get_tree():
+		return get_tree().get_first_node_in_group("player") as Node3D
+	return null
+
+func _get_player_altitude() -> float:
+	var player := _get_player()
+	return player.global_position.y if player else 14.0
+
+func _spend_budget(config: Dictionary) -> void:
+	var g_budget: int = config["ground_budget"]
+	var a_budget: int = config["air_budget"]
+	var allowed: Array = config["enemies"]
+
+	var player := _get_player()
+	var p_pos: Vector3 = player.global_position if player else Vector3.ZERO
+
+	# --- 1. Procedural Combined Arms Formations ---
+	if (allowed.has("gunship") or allowed.has("raider")) and allowed.has("tank") and g_budget >= 45 and a_budget >= 25 and randf() > 0.45:
+		var entry := get_air_corridor_entry(p_pos, 48.0, 75.0)
+		spawn_combined_arms_formation(entry["position"], entry["heading"])
+		g_budget -= 40
+		a_budget -= 25
+
+	# --- 2. Ground Tactical Formations ---
+	if allowed.has("sam") and g_budget >= 80 and randf() > 0.4:
+		var sam_pos := get_frustum_safe_spawn_pos(p_pos, 45.0, 72.0)
+		spawn_sam_nest(sam_pos, false)
+		g_budget -= 80
+
+	if allowed.has("tank") and g_budget >= 60 and randf() > 0.35:
+		var col_pos := get_frustum_safe_spawn_pos(p_pos, 45.0, 72.0)
+		var approach := (p_pos - col_pos)
+		approach.y = 0.0
+		spawn_road_column(col_pos, approach.normalized(), 3)
+		g_budget -= 60
+
+	# --- 3. Remainder Ground Units ---
+	while g_budget >= 15:
+		if allowed.has("tank") and g_budget >= 30 and randf() > 0.5:
+			_spawn_enemy(_scene_tank, p_pos, 0.0)
+			g_budget -= 30
+		elif allowed.has("sam") and g_budget >= 40 and randf() > 0.6:
+			_spawn_enemy(_scene_sam, p_pos, 0.0)
+			g_budget -= 40
+		elif allowed.has("turret") and g_budget >= 20 and randf() > 0.5:
+			_spawn_enemy(_scene_turret, p_pos, 0.0)
+			g_budget -= 20
+		elif allowed.has("infantry"):
+			_spawn_enemy(_scene_infantry, p_pos, 0.0)
+			g_budget -= 15
+		else:
+			break
+
+	# --- 4. Remainder Air Units ---
+	var p_y: float = _get_player_altitude()
+	while a_budget >= 4:
+		if allowed.has("gunship") and a_budget >= 9 and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.5:
+			_spawn_enemy(_scene_air_gunship, p_pos, clampf(p_y, 13.0, 18.0))
+			a_budget -= 9
+		elif allowed.has("raider") and a_budget >= 6 and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.5:
+			_spawn_enemy(_scene_air_raider, p_pos, clampf(p_y, 15.0, 21.0))
+			a_budget -= 6
+		elif allowed.has("scout") and a_budget >= 4 and get_active_air_count("scouts") < cap_scout:
+			_spawn_enemy(_scene_air_scout, p_pos, clampf(p_y, 10.0, 15.0))
+			a_budget -= 4
+		elif allowed.has("hunter") and a_budget >= 30:
+			_spawn_enemy(_scene_hunter, p_pos, p_y)
+			a_budget -= 30
+		else:
+			break
+
+func is_position_frustum_safe(pos: Vector3) -> bool:
+	var cam := get_viewport().get_camera_3d() if get_viewport() else null
+	if not cam:
+		return true
+	if cam.is_position_behind(pos):
+		return true
+	return not cam.is_position_in_frustum(pos)
+
+## Validates that a spawn position is within arena, not inside buildings, and not directly on the player
+func is_spawn_position_clear(pos: Vector3, is_air: bool = false) -> bool:
+	var margin := 10.0
+	if absf(pos.x) > (arena_half_extents - margin) or absf(pos.z) > (arena_half_extents - margin):
+		return false
+
+	var player := _get_player()
+	if player:
+		var flat_offset := Vector2(pos.x - player.global_position.x, pos.z - player.global_position.z)
+		var flat_dist := flat_offset.length()
+		if flat_dist < 24.0:
+			return false
+
+		# Reject directly in player's forward arc if close
+		var p_fwd := -player.global_transform.basis.z
+		var p_fwd_2d := Vector2(p_fwd.x, p_fwd.z).normalized()
+		if p_fwd_2d.length_squared() > 0.1 and flat_offset.length_squared() > 0.1:
+			if p_fwd_2d.dot(flat_offset.normalized()) > 0.82 and flat_dist < 38.0:
+				return false
+
+	# 3D physics collision check to avoid spawning inside buildings / roadblocks
+	if is_inside_tree() and get_viewport() and get_viewport().find_world_3d():
+		var space: PhysicsDirectSpaceState3D = get_viewport().find_world_3d().direct_space_state
+		if space:
+			var shape_query := PhysicsShapeQueryParameters3D.new()
+			var sphere := SphereShape3D.new()
+			sphere.radius = 2.0 if not is_air else 3.2
+			shape_query.shape = sphere
+			shape_query.transform = Transform3D(Basis(), pos + Vector3(0, 1.2 if not is_air else 0.0, 0))
+			shape_query.collision_mask = 1 # World geometry / Buildings
+			var hits: Array[Dictionary] = space.intersect_shape(shape_query, 1)
+			if not hits.is_empty():
+				return false
+
+	return true
+
+func _get_next_spawn_sector() -> int:
+	var candidates: Array[int] = []
+	for i in range(8):
+		if not _recent_spawn_sectors.has(i):
+			candidates.append(i)
+	if candidates.is_empty():
+		_recent_spawn_sectors.clear()
+		return randi() % 8
+	return candidates.pick_random()
+
+func _record_spawn_sector(sector: int) -> void:
+	_recent_spawn_sectors.append(sector)
+	if _recent_spawn_sectors.size() > 4:
+		_recent_spawn_sectors.pop_front()
+
+func _get_safe_perimeter_fallback(player_pos: Vector3) -> Vector3:
+	var best_pt := Vector3(0.0, 0.0, 70.0)
+	var best_dist := -1.0
+	for pt in _safe_road_points:
+		var d := player_pos.distance_to(pt)
+		if d >= 28.0 and d <= 75.0:
+			return pt
+		elif d > best_dist:
+			best_dist = d
+			best_pt = pt
+	return best_pt
+
+func _get_sector_spawn_position(player_pos: Vector3, sector: int, min_dist: float, max_dist: float, is_air: bool) -> Vector3:
+	var base_angle := float(sector) * (TAU / 8.0)
+	for attempt in range(6):
+		var angle := base_angle + randf_range(-PI / 6.0, PI / 6.0)
+		var dist := randf_range(min_dist, max_dist)
+		var cand := Vector3(
+			clampf(player_pos.x + cos(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0),
+			0.0,
+			clampf(player_pos.z + sin(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0)
+		)
+		if is_spawn_position_clear(cand, is_air):
+			_record_spawn_sector(sector)
+			return cand
+
+	return _get_safe_perimeter_fallback(player_pos)
+
+func get_frustum_safe_spawn_pos(center_ref: Vector3, min_dist: float = 32.0, max_dist: float = 68.0) -> Vector3:
+	var cam := get_viewport().get_camera_3d() if get_viewport() else null
+
+	# 1. First priority: Check authored GroundSpawnZones Marker3D nodes
+	var g_nodes := get_ground_spawn_nodes()
+	if not g_nodes.is_empty():
+		var candidates := g_nodes.duplicate()
+		candidates.shuffle()
+		for marker in candidates:
+			var pos: Vector3 = marker.global_position
+			var dist := center_ref.distance_to(pos)
+			if dist >= min_dist and dist <= (max_dist + 15.0):
+				if is_spawn_position_clear(pos, false):
+					if not cam or cam.is_position_behind(pos) or not cam.is_position_in_frustum(pos):
+						last_spawn_source = marker.name
+						return pos
+		# Secondary pass on authored nodes: relax frustum check if needed
+		for marker in candidates:
+			var pos: Vector3 = marker.global_position
+			var dist := center_ref.distance_to(pos)
+			if dist >= min_dist and dist <= (max_dist + 20.0):
+				if is_spawn_position_clear(pos, false):
+					last_spawn_source = marker.name + " (Frustum Override)"
+					return pos
+
+	# 2. Second priority: Directional sector rotation
+	var preferred_sector := _get_next_spawn_sector()
+	for attempt in range(12):
+		var base_angle := float(preferred_sector) * (TAU / 8.0)
+		var angle_offset := randf_range(-PI / 4.0, PI / 4.0) if attempt < 6 else randf_range(-PI, PI)
+		var angle := base_angle + angle_offset
+		var dist := randf_range(min_dist, max_dist)
+		var candidate := Vector3(
+			clampf(center_ref.x + cos(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0),
+			0.0,
+			clampf(center_ref.z + sin(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0)
+		)
+
+		if not is_spawn_position_clear(candidate, false):
+			continue
+
+		if cam:
+			var is_offscreen := cam.is_position_behind(candidate) or not cam.is_position_in_frustum(candidate)
+			if is_offscreen or attempt > 8:
+				_record_spawn_sector(preferred_sector)
+				last_spawn_source = "Sector_%d" % preferred_sector
+				return candidate
+		else:
+			_record_spawn_sector(preferred_sector)
+			last_spawn_source = "Sector_%d" % preferred_sector
+			return candidate
+
+	# 3. Third priority: Safe perimeter fallback
+	failed_spawn_attempts += 1
+	last_spawn_source = "Safe Perimeter Fallback"
+	return _get_safe_perimeter_fallback(center_ref)
+
+func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 45.0, max_dist: float = 75.0) -> Dictionary:
+	var cam := get_viewport().get_camera_3d() if get_viewport() else null
+
+	# 1. First priority: Check authored AirSpawnZones Marker3D nodes
+	var a_nodes := get_air_spawn_nodes()
+	if not a_nodes.is_empty():
+		var candidates := a_nodes.duplicate()
+		candidates.shuffle()
+		for marker in candidates:
+			var pos: Vector3 = marker.global_position
+			var dist := player_pos.distance_to(pos)
+			if dist >= min_dist:
+				if is_spawn_position_clear(pos, true):
+					if not cam or cam.is_position_behind(pos) or not cam.is_position_in_frustum(pos):
+						var heading := (player_pos - pos)
+						heading.y = 0.0
+						last_spawn_source = marker.name
+						return { "position": pos, "heading": heading.normalized() }
+		# Secondary pass on air corridors
+		for marker in candidates:
+			var pos: Vector3 = marker.global_position
+			if is_spawn_position_clear(pos, true):
+				var heading := (player_pos - pos)
+				heading.y = 0.0
+				last_spawn_source = marker.name + " (Air Fallback)"
+				return { "position": pos, "heading": heading.normalized() }
+
+	# 2. Second priority: Perimeter corridor candidates
+	var perimeter_candidates: Array[Vector3] = [
+		Vector3(0.0, 0.0, -arena_half_extents + 15.0), # North
+		Vector3(0.0, 0.0, arena_half_extents - 15.0),  # South
+		Vector3(arena_half_extents - 15.0, 0.0, 0.0),  # East
+		Vector3(-arena_half_extents + 15.0, 0.0, 0.0), # West
+		Vector3(arena_half_extents - 20.0, 0.0, -arena_half_extents + 20.0), # NE
+		Vector3(-arena_half_extents + 20.0, 0.0, -arena_half_extents + 20.0), # NW
+		Vector3(arena_half_extents - 20.0, 0.0, arena_half_extents - 20.0), # SE
+		Vector3(-arena_half_extents + 20.0, 0.0, arena_half_extents - 20.0), # SW
+	]
+	perimeter_candidates.shuffle()
+
+	for candidate in perimeter_candidates:
+		var dist := player_pos.distance_to(candidate)
+		if dist >= min_dist:
+			if not cam or cam.is_position_behind(candidate) or not cam.is_position_in_frustum(candidate):
+				var heading := (player_pos - candidate)
+				heading.y = 0.0
+				last_spawn_source = "Perimeter Air"
+				return { "position": candidate, "heading": heading.normalized() }
+
+	# 3. Third priority: Fallback to safe ground position
+	failed_spawn_attempts += 1
+	var fb_pos := get_frustum_safe_spawn_pos(player_pos, min_dist, max_dist)
+	var fb_heading := (player_pos - fb_pos)
+	fb_heading.y = 0.0
+	last_spawn_source = "Ground Fallback Air"
+	return { "position": fb_pos, "heading": fb_heading.normalized() }
+
+# --- FORMATION SPAWNING IMPLEMENTATIONS ---
+
+func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("scouts") + 2 > cap_scout:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+	var alt := clampf(_get_player_altitude(), 10.0, 15.0)
+
+	var s1 := _scene_air_scout.instantiate() as Node3D
+	if s1:
+		s1.add_to_group("scouts")
+		s1.add_to_group("air_enemies")
+		s1.add_to_group("enemies")
+		s1.transform.origin = Vector3(spawn_origin.x, alt, spawn_origin.z)
+		parent.add_child.call_deferred(s1)
+		_register_spawned_node(s1)
+		spawned.append(s1)
+
+	var s2 := _scene_air_scout.instantiate() as Node3D
+	if s2:
+		s2.add_to_group("scouts")
+		s2.add_to_group("air_enemies")
+		s2.add_to_group("enemies")
+		var pos2 := spawn_origin + (perp * 10.0) - (dir * 9.0)
+		s2.transform.origin = Vector3(
+			clampf(pos2.x, -arena_half_extents, arena_half_extents),
+			alt + 1.0,
+			clampf(pos2.z, -arena_half_extents, arena_half_extents)
+		)
+		parent.add_child.call_deferred(s2)
+		_register_spawned_node(s2)
+		spawned.append(s2)
+
+	_record_formation("air_patrol")
+	return spawned
+
+func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("rocket_raiders") + 1 > cap_raider or get_active_air_count("scouts") + 2 > cap_scout:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+	var p_y: float = _get_player_altitude()
+
+	var raider := _scene_air_raider.instantiate() as Node3D
+	if raider:
+		raider.add_to_group("rocket_raiders")
+		raider.add_to_group("air_enemies")
+		raider.add_to_group("enemies")
+		raider.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 15.0, 21.0), spawn_origin.z)
+		parent.add_child.call_deferred(raider)
+		_register_spawned_node(raider)
+		spawned.append(raider)
+
+	var offsets: Array[Vector3] = [
+		-perp * 12.0 - dir * 10.0,
+		perp * 12.0 - dir * 10.0
+	]
+	for off in offsets:
+		var scout := _scene_air_scout.instantiate() as Node3D
+		if scout:
+			scout.add_to_group("scouts")
+			scout.add_to_group("air_enemies")
+			scout.add_to_group("enemies")
+			var spos := spawn_origin + off
+			scout.transform.origin = Vector3(
+				clampf(spos.x, -arena_half_extents, arena_half_extents),
+				clampf(p_y, 11.0, 15.0),
+				clampf(spos.z, -arena_half_extents, arena_half_extents)
+			)
+			parent.add_child.call_deferred(scout)
+			_register_spawned_node(scout)
+			spawned.append(scout)
+
+	_record_formation("harassment_group")
+	return spawned
+
+func spawn_reinforcement_drop(spawn_origin: Vector3, heading: Vector3, with_escort: bool = true) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("transports") + 1 > cap_transport:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+
+	var player := _get_player()
+	var p_pos: Vector3 = player.global_position if player else Vector3.ZERO
+	var lz_pos := spawn_origin.lerp(p_pos, 0.6)
+	lz_pos.x = clampf(lz_pos.x, -arena_half_extents + 20.0, arena_half_extents - 20.0)
+	lz_pos.z = clampf(lz_pos.z, -arena_half_extents + 20.0, arena_half_extents - 20.0)
+	lz_pos.y = 0.0
+
+	var transport := _scene_air_transport.instantiate() as Node3D
+	if transport:
+		transport.add_to_group("transports")
+		transport.add_to_group("air_enemies")
+		transport.add_to_group("enemies")
+		transport.transform.origin = Vector3(spawn_origin.x, 14.0, spawn_origin.z)
+		transport.set("drop_target_position", lz_pos)
+		parent.add_child.call_deferred(transport)
+		_register_spawned_node(transport)
+		spawned.append(transport)
+
+	if with_escort and get_active_air_count("scouts") + 1 <= cap_scout:
+		var scout := _scene_air_scout.instantiate() as Node3D
+		if scout:
+			scout.add_to_group("scouts")
+			scout.add_to_group("air_enemies")
+			scout.add_to_group("enemies")
+			var spos := spawn_origin + perp * 12.0 - dir * 8.0
+			scout.transform.origin = Vector3(
+				clampf(spos.x, -arena_half_extents, arena_half_extents),
+				15.0,
+				clampf(spos.z, -arena_half_extents, arena_half_extents)
+			)
+			parent.add_child.call_deferred(scout)
+			_register_spawned_node(scout)
+			spawned.append(scout)
+
+	_record_formation("reinforcement_drop")
+	return spawned
+
+func spawn_air_intercept(spawn_origin: Vector3, heading: Vector3, scout_count: int = 1) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("attack_gunships") + 1 > cap_gunship:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+	var p_y: float = _get_player_altitude()
+
+	var gunship := _scene_air_gunship.instantiate() as Node3D
+	if gunship:
+		gunship.add_to_group("attack_gunships")
+		gunship.add_to_group("air_enemies")
+		gunship.add_to_group("enemies")
+		gunship.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 13.0, 18.0), spawn_origin.z)
+		parent.add_child.call_deferred(gunship)
+		_register_spawned_node(gunship)
+		spawned.append(gunship)
+
+	var count: int = mini(scout_count, cap_scout - get_active_air_count("scouts"))
+	for i in range(count):
+		var scout := _scene_air_scout.instantiate() as Node3D
+		if scout:
+			scout.add_to_group("scouts")
+			scout.add_to_group("air_enemies")
+			scout.add_to_group("enemies")
+			var side_mult: float = 1.0 if i % 2 == 0 else -1.0
+			var spos := spawn_origin + (perp * 12.0 * side_mult) - (dir * 10.0)
+			scout.transform.origin = Vector3(
+				clampf(spos.x, -arena_half_extents, arena_half_extents),
+				clampf(p_y, 11.0, 15.0),
+				clampf(spos.z, -arena_half_extents, arena_half_extents)
+			)
+			parent.add_child.call_deferred(scout)
+			_register_spawned_node(scout)
+			spawned.append(scout)
+
+	_record_formation("air_intercept")
+	return spawned
+
+func spawn_electronic_strike_group(spawn_origin: Vector3, heading: Vector3, with_scout: bool = false) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("jammers") + 1 > cap_jammer or get_active_air_count("attack_gunships") + 1 > cap_gunship:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+	var p_y: float = _get_player_altitude()
+
+	var gunship := _scene_air_gunship.instantiate() as Node3D
+	if gunship:
+		gunship.add_to_group("attack_gunships")
+		gunship.add_to_group("air_enemies")
+		gunship.add_to_group("enemies")
+		gunship.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 13.0, 17.0), spawn_origin.z)
+		parent.add_child.call_deferred(gunship)
+		_register_spawned_node(gunship)
+		spawned.append(gunship)
+
+	var jammer := _scene_air_jammer.instantiate() as Node3D
+	if jammer:
+		jammer.add_to_group("jammers")
+		jammer.add_to_group("air_enemies")
+		jammer.add_to_group("enemies")
+		var jpos := spawn_origin - (dir * 16.0) + (perp * 8.0)
+		jammer.transform.origin = Vector3(
+			clampf(jpos.x, -arena_half_extents, arena_half_extents),
+			clampf(p_y + 4.0, 19.0, 24.0),
+			clampf(jpos.z, -arena_half_extents, arena_half_extents)
+		)
+		parent.add_child.call_deferred(jammer)
+		_register_spawned_node(jammer)
+		spawned.append(jammer)
+
+	if with_scout and get_active_air_count("scouts") + 1 <= cap_scout:
+		var scout := _scene_air_scout.instantiate() as Node3D
+		if scout:
+			scout.add_to_group("scouts")
+			scout.add_to_group("air_enemies")
+			scout.add_to_group("enemies")
+			var spos := spawn_origin - (dir * 14.0) - (perp * 8.0)
+			scout.transform.origin = Vector3(
+				clampf(spos.x, -arena_half_extents, arena_half_extents),
+				clampf(p_y, 11.0, 15.0),
+				clampf(spos.z, -arena_half_extents, arena_half_extents)
+			)
+			parent.add_child.call_deferred(scout)
+			_register_spawned_node(scout)
+			spawned.append(scout)
+
+	_record_formation("electronic_strike")
+	return spawned
+
+func spawn_elite_air_encounter(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if get_active_air_count("ace_gunships") + 1 > cap_ace:
+		return spawned
+
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+	var p_y: float = _get_player_altitude()
+
+	var ace := _scene_air_ace.instantiate() as Node3D
+	if ace:
+		ace.add_to_group("ace_gunships")
+		ace.add_to_group("elites")
+		ace.add_to_group("air_enemies")
+		ace.add_to_group("enemies")
+		ace.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 14.0, 19.0), spawn_origin.z)
+		parent.add_child.call_deferred(ace)
+		_register_spawned_node(ace)
+		spawned.append(ace)
+
+	var offsets: Array[Vector3] = [
+		-perp * 14.0 - dir * 12.0,
+		perp * 14.0 - dir * 12.0
+	]
+	for off in offsets:
+		if get_active_air_count("scouts") + 1 <= cap_scout:
+			var scout := _scene_air_scout.instantiate() as Node3D
+			if scout:
+				scout.add_to_group("scouts")
+				scout.add_to_group("air_enemies")
+				scout.add_to_group("enemies")
+				var spos := spawn_origin + off
+				scout.transform.origin = Vector3(
+					clampf(spos.x, -arena_half_extents, arena_half_extents),
+					clampf(p_y, 11.0, 15.0),
+					clampf(spos.z, -arena_half_extents, arena_half_extents)
+				)
+				parent.add_child.call_deferred(scout)
+				_register_spawned_node(scout)
+				spawned.append(scout)
+
+	_record_formation("elite_encounter")
+	return spawned
+
+func spawn_combined_arms_formation(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	var parent := _get_spawn_parent()
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+
+	var p_y: float = _get_player_altitude()
+	if get_active_air_count("attack_gunships") + 1 <= cap_gunship:
+		var gunship := _scene_air_gunship.instantiate() as Node3D
+		if gunship:
+			gunship.add_to_group("attack_gunships")
+			gunship.add_to_group("air_enemies")
+			gunship.add_to_group("enemies")
+			gunship.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 13.0, 18.0), spawn_origin.z)
+			parent.add_child.call_deferred(gunship)
+			_register_spawned_node(gunship)
+			spawned.append(gunship)
+	elif get_active_air_count("rocket_raiders") + 1 <= cap_raider:
+		var raider := _scene_air_raider.instantiate() as Node3D
+		if raider:
+			raider.add_to_group("rocket_raiders")
+			raider.add_to_group("air_enemies")
+			raider.add_to_group("enemies")
+			raider.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 15.0, 20.0), spawn_origin.z)
+			parent.add_child.call_deferred(raider)
+			_register_spawned_node(raider)
+			spawned.append(raider)
+
+	var g_pos := Vector3(spawn_origin.x, 0.0, spawn_origin.z) + dir * 18.0
+	g_pos.x = clampf(g_pos.x, -arena_half_extents, arena_half_extents)
+	g_pos.z = clampf(g_pos.z, -arena_half_extents, arena_half_extents)
+
+	var tank := _scene_tank.instantiate() as Node3D
+	if tank:
+		tank.transform.origin = g_pos
+		parent.add_child.call_deferred(tank)
+		_register_spawned_node(tank)
+		spawned.append(tank)
+
+	var sam := _scene_sam.instantiate() as Node3D
+	if sam:
+		var sam_pos := g_pos - dir * 12.0
+		sam.transform.origin = Vector3(
+			clampf(sam_pos.x, -arena_half_extents, arena_half_extents),
+			0.0,
+			clampf(sam_pos.z, -arena_half_extents, arena_half_extents)
+		)
+		parent.add_child.call_deferred(sam)
+		_register_spawned_node(sam)
+		spawned.append(sam)
+
+	_record_formation("combined_arms")
+	return spawned
+
+func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count: int = 3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	var parent := _get_spawn_parent()
+	var dir := approach_direction.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+
+	var lead_tank: Tank = null
+
+	for i in range(count):
+		var offset_dist: float = float(i) * 14.0
+		var pos := spawn_origin - dir * offset_dist
+		pos.x = clampf(pos.x, -arena_half_extents, arena_half_extents)
+		pos.z = clampf(pos.z, -arena_half_extents, arena_half_extents)
+
+		var tank := _scene_tank.instantiate() as Tank
+		if tank:
+			tank.transform.origin = Vector3(pos.x, 0.0, pos.z)
+			if i == 0:
+				tank.is_command_unit = true
+				lead_tank = tank
+			else:
+				if lead_tank:
+					lead_tank.register_escort(tank)
+			parent.add_child.call_deferred(tank)
+			_register_spawned_node(tank)
+			spawned.append(tank)
+
+	return spawned
+
+func spawn_sam_nest(center_pos: Vector3, with_radar: bool = false) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	var parent := _get_spawn_parent()
+
+	var sam_offsets: Array[Vector3] = [
+		Vector3(-16.0, 0.0, 0.0),
+		Vector3(16.0, 0.0, 0.0)
+	]
+
+	for off in sam_offsets:
+		var s := _scene_sam.instantiate() as Node3D
+		if s:
+			s.transform.origin = Vector3(
+				clampf(center_pos.x + off.x, -arena_half_extents, arena_half_extents),
+				0.0,
+				clampf(center_pos.z + off.z, -arena_half_extents, arena_half_extents)
+			)
+			parent.add_child.call_deferred(s)
+			_register_spawned_node(s)
+			spawned.append(s)
+
+	var support_pos := Vector3(
+		clampf(center_pos.x, -arena_half_extents, arena_half_extents),
+		0.0,
+		clampf(center_pos.z - 14.0, -arena_half_extents, arena_half_extents)
+	)
+	var support_scene := _scene_radar if with_radar else _scene_turret
+	var support := support_scene.instantiate() as Node3D
+	if support:
+		support.transform.origin = support_pos
+		parent.add_child.call_deferred(support)
+		_register_spawned_node(support)
+		spawned.append(support)
+
+	return spawned
+
+func spawn_two_direction_pincer(center_target: Vector3, distance: float = 65.0) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	var parent := _get_spawn_parent()
+
+	var angle_a := randf() * TAU
+	var angle_b := wrapf(angle_a + PI, 0.0, TAU)
+
+	var g_pos := Vector3(
+		clampf(center_target.x + cos(angle_a) * distance, -arena_half_extents, arena_half_extents),
+		0.0,
+		clampf(center_target.z + sin(angle_a) * distance, -arena_half_extents, arena_half_extents)
+	)
+	var tank := _scene_tank.instantiate() as Node3D
+	if tank:
+		tank.transform.origin = g_pos
+		parent.add_child.call_deferred(tank)
+		_register_spawned_node(tank)
+		spawned.append(tank)
+
+	var player := _get_player()
+	var p_y := player.global_position.y if player else 14.0
+	var a_pos := Vector3(
+		clampf(center_target.x + cos(angle_b) * distance, -arena_half_extents, arena_half_extents),
+		p_y,
+		clampf(center_target.z + sin(angle_b) * distance, -arena_half_extents, arena_half_extents)
+	)
+	var hunter := _scene_hunter.instantiate() as Node3D
+	if hunter:
+		hunter.transform.origin = a_pos
+		parent.add_child.call_deferred(hunter)
+		_register_spawned_node(hunter)
+		spawned.append(hunter)
+
+	return spawned
+
+func spawn_interceptor_pair(spawn_pos: Vector3, heading: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	var parent := _get_spawn_parent()
+
+	var dir := heading.normalized()
+	if dir.length_squared() < 0.01:
+		dir = Vector3.FORWARD
+
+	var perp := Vector3(-dir.z, 0.0, dir.x)
+
+	var lead := _scene_hunter.instantiate() as Node3D
+	if lead:
+		lead.transform.origin = spawn_pos
+		parent.add_child.call_deferred(lead)
+		_register_spawned_node(lead)
+		spawned.append(lead)
+
+	var wingman := _scene_hunter.instantiate() as Node3D
+	if wingman:
+		var wing_pos := spawn_pos + (perp * 14.0) - (dir * 12.0)
+		wing_pos.x = clampf(wing_pos.x, -arena_half_extents, arena_half_extents)
+		wing_pos.z = clampf(wing_pos.z, -arena_half_extents, arena_half_extents)
+		wingman.transform.origin = wing_pos
+		parent.add_child.call_deferred(wingman)
+		_register_spawned_node(wingman)
+		spawned.append(wingman)
+
+	return spawned
+
+func _spawn_enemy(scene: PackedScene, player_pos: Vector3, altitude: float) -> void:
+	if not scene:
+		return
+	var enemy: Node3D = scene.instantiate() as Node3D
+	if not enemy:
+		return
+
+	var spawn_pos := get_frustum_safe_spawn_pos(player_pos, 32.0, 68.0)
+	enemy.transform.origin = Vector3(spawn_pos.x, altitude, spawn_pos.z)
+	var parent := _get_spawn_parent()
+	parent.add_child.call_deferred(enemy)
+	_register_spawned_node(enemy)
+
+func _spawn_radar_objective() -> void:
+	var radar: Node3D = _scene_radar.instantiate() as Node3D
+	if radar:
+		radar.transform.origin = Vector3(25.0, 0.0, -40.0)
+		var parent := _get_spawn_parent()
+		parent.add_child.call_deferred(radar)
+		_register_spawned_node(radar)
+
+func _spawn_archon_boss() -> void:
+	var boss: Node3D = _scene_archon.instantiate() as Node3D
+	if boss:
+		var player := _get_player()
+		var p_y := player.global_position.y if player else 14.0
+		boss.transform.origin = Vector3(0.0, p_y, -70.0)
+		var parent := _get_spawn_parent()
+		parent.add_child.call_deferred(boss)
+		_register_spawned_node(boss)
+
+func _on_enemy_destroyed(enemy: Node3D, _points: int) -> void:
+	_wave_enemies.erase(enemy)
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.unregister_enemy(enemy)
+	total_enemies_killed += 1
+	_notify_progress()
+
+	if not is_continuous_mode and is_wave_active and _wave_enemies.size() == 0:
+		_complete_wave()
+
+func _notify_progress() -> void:
+	if EventBus:
+		var living := get_living_enemy_count()
+		EventBus.wave_progress_updated.emit(living, maxi(living, _total_wave_enemies))
+
+func _complete_wave() -> void:
+	is_wave_active = false
+	if EventBus:
+		EventBus.wave_completed.emit(current_wave)
+
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_method("add_salvage"):
+		var mult: float = 2.0 if current_wave > 10 else 1.0
+		gm.add_salvage(int(current_wave * 40 * mult))
+
+	if current_wave == 10:
+		pass
+	elif current_wave > 10:
+		_recovery_timer = recovery_pause_duration
+		if EventBus:
+			EventBus.extraction_decision_requested.emit(gm.run_salvage if gm else 0)
+	else:
+		_recovery_timer = recovery_pause_duration

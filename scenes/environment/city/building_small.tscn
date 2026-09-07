@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://ccdd05o0ekmwc"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gin6d"]
+size = Vector3(14, 8, 12)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pr6ck"]
+albedo_color = Color(0.38, 0.35, 0.32, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_yjh8d"]
+material = SubResource("StandardMaterial3D_pr6ck")
+size = Vector3(14, 8, 12)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_exl2k"]
+albedo_color = Color(0.18, 0.22, 0.25, 1)
+metallic = 0.4
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_7e0gr"]
+material = SubResource("StandardMaterial3D_exl2k")
+size = Vector3(14.2, 2.4, 12.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j4ug2"]
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+metallic = 0.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_wljr7"]
+material = SubResource("StandardMaterial3D_j4ug2")
+size = Vector3(2.2, 1.2, 1.8)
+
+[node name="BuildingSmall" type="StaticBody3D" unique_id=993975150]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=667688662]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+shape = SubResource("BoxShape3D_gin6d")
+
+[node name="FacadeMesh" type="MeshInstance3D" parent="." unique_id=1252598694]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("BoxMesh_yjh8d")
+
+[node name="StorefrontTrim" type="MeshInstance3D" parent="." unique_id=743982585]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+mesh = SubResource("BoxMesh_7e0gr")
+
+[node name="RooftopAC" type="MeshInstance3D" parent="." unique_id=813763371]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 8.6, -1.5)
+mesh = SubResource("BoxMesh_wljr7")

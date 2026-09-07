@@ -1,0 +1,89 @@
+[gd_scene format=3 uid="uid://df7k2v4m1w9r8"]
+
+[ext_resource type="Script" path="res://scripts/vfx/player_death_fx.gd" id="1_fx"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Fire"]
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 8.0
+initial_velocity_max = 20.0
+gravity = Vector3(0, -4.0, 0)
+scale_min = 0.3
+scale_max = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Fire"]
+shading_mode = 0
+albedo_color = Color(1, 0.45, 0.1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Fire"]
+material = SubResource("StandardMaterial3D_Fire")
+size = Vector3(0.4, 0.4, 0.4)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Sparks"]
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 12.0
+initial_velocity_max = 26.0
+gravity = Vector3(0, -18.0, 0)
+scale_min = 0.15
+scale_max = 0.35
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Sparks"]
+shading_mode = 0
+albedo_color = Color(1, 0.9, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Sparks"]
+material = SubResource("StandardMaterial3D_Sparks")
+size = Vector3(0.18, 0.18, 0.18)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Smoke"]
+direction = Vector3(0, 1, 0)
+spread = 120.0
+initial_velocity_min = 3.0
+initial_velocity_max = 8.0
+gravity = Vector3(0, 3.0, 0)
+scale_min = 0.5
+scale_max = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Smoke"]
+shading_mode = 0
+albedo_color = Color(0.2, 0.2, 0.22, 0.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Smoke"]
+material = SubResource("StandardMaterial3D_Smoke")
+size = Vector3(0.6, 0.6, 0.6)
+
+[node name="PlayerDeathFX" type="Node3D"]
+script = ExtResource("1_fx")
+
+[node name="FireParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 45
+lifetime = 0.85
+one_shot = true
+explosiveness = 0.95
+process_material = SubResource("ParticleProcessMaterial_Fire")
+draw_pass_1 = SubResource("BoxMesh_Fire")
+
+[node name="DebrisSparks" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 35
+lifetime = 1.2
+one_shot = true
+explosiveness = 0.9
+process_material = SubResource("ParticleProcessMaterial_Sparks")
+draw_pass_1 = SubResource("BoxMesh_Sparks")
+
+[node name="SmokeParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 30
+lifetime = 1.8
+one_shot = true
+explosiveness = 0.75
+process_material = SubResource("ParticleProcessMaterial_Smoke")
+draw_pass_1 = SubResource("BoxMesh_Smoke")
+
+[node name="FlashLight" type="OmniLight3D" parent="."]
+light_color = Color(1, 0.7, 0.3, 1)
+light_energy = 4.0
+omni_range = 18.0

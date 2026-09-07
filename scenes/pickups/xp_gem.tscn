@@ -1,0 +1,33 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/pickups/xp_gem.gd" id="1_xp"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_m8kyv"]
+radius = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_q6eup"]
+shading_mode = 0
+albedo_color = Color(0.2, 0.95, 0.75, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_70g25"]
+material = SubResource("StandardMaterial3D_q6eup")
+size = Vector3(0.35, 0.35, 0.35)
+
+[node name="XPGem" type="Area3D" unique_id=877425044 groups=["pickups", "xp_gems"]]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+script = ExtResource("1_xp")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1854688735]
+shape = SubResource("SphereShape3D_m8kyv")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=83417719]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("BoxMesh_70g25")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=717068306]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+light_color = Color(0.25, 0.9, 0.7, 1)
+light_energy = 1.5
+omni_range = 3.0

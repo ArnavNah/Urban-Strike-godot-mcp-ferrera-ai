@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://d1caauf53ra5n"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_6glap"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="2_kahdd"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_o1bko"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="3_sejpv"]
+[ext_resource type="PackedScene" uid="uid://c6j2m8b4r1v5p" path="res://scenes/enemies/ground_turret.tscn" id="4_tyld2"]
+
+[sub_resource type="Resource" id="Resource_yxaij"]
+script = ExtResource("1_6glap")
+enemy_scene = ExtResource("2_kahdd")
+spawn_weight = 2.0
+spawn_cost = 2
+minimum_wave = 5
+category = 1
+
+[sub_resource type="Resource" id="Resource_k0bhu"]
+script = ExtResource("1_6glap")
+enemy_scene = ExtResource("3_sejpv")
+spawn_weight = 1.5
+minimum_wave = 5
+
+[sub_resource type="Resource" id="Resource_pvmpk"]
+script = ExtResource("1_6glap")
+enemy_scene = ExtResource("4_tyld2")
+minimum_wave = 5
+
+[resource]
+script = ExtResource("2_o1bko")
+wave_number = 5
+spawn_interval = 2.2
+spawn_budget = 14
+maximum_alive = 9
+enemy_entries = Array[ExtResource("1_6glap")]([SubResource("Resource_yxaij"), SubResource("Resource_k0bhu"), SubResource("Resource_pvmpk")])
+announcement = "WAVE 5 // COMBINED GROUND OFFENSIVE"
+ground_attack_slots = 3

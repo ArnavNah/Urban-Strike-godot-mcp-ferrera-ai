@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://dcvwdf754343h"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_e4b6i"]
+size = Vector3(32, 11, 22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8bve3"]
+albedo_color = Color(0.32, 0.36, 0.38, 1)
+metallic = 0.4
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_v61ox"]
+material = SubResource("StandardMaterial3D_8bve3")
+size = Vector3(32, 11, 22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6sl3h"]
+albedo_color = Color(0.18, 0.2, 0.22, 1)
+metallic = 0.6
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_45yik"]
+material = SubResource("StandardMaterial3D_6sl3h")
+size = Vector3(5, 4.5, 0.2)
+
+[node name="Warehouse" type="StaticBody3D" unique_id=1421401752]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1584923406]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.5, 0)
+shape = SubResource("BoxShape3D_e4b6i")
+
+[node name="WarehouseMesh" type="MeshInstance3D" parent="." unique_id=847106435]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.5, 0)
+mesh = SubResource("BoxMesh_v61ox")
+
+[node name="BayDoor1" type="MeshInstance3D" parent="." unique_id=1169105980]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2.25, 11.1)
+mesh = SubResource("BoxMesh_45yik")
+
+[node name="BayDoor2" type="MeshInstance3D" parent="." unique_id=285249973]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.25, 11.1)
+mesh = SubResource("BoxMesh_45yik")
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=900175808]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 11.5, 0)

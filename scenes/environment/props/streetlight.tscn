@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://dcg68b3fc75bj"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_scohh"]
+albedo_color = Color(0.22, 0.25, 0.28, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_61qsq"]
+material = SubResource("StandardMaterial3D_scohh")
+top_radius = 0.1
+bottom_radius = 0.16
+height = 7.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_uk32l"]
+material = SubResource("StandardMaterial3D_scohh")
+size = Vector3(2.4, 0.12, 0.15)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wd013"]
+albedo_color = Color(0.95, 0.92, 0.75, 1)
+emission_enabled = true
+emission = Color(0.9, 0.85, 0.6, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="BoxMesh" id="BoxMesh_17r2t"]
+material = SubResource("StandardMaterial3D_wd013")
+size = Vector3(0.6, 0.2, 0.35)
+
+[node name="Streetlight" type="Node3D" unique_id=1425482352]
+
+[node name="PoleMesh" type="MeshInstance3D" parent="." unique_id=464989259]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0)
+mesh = SubResource("CylinderMesh_61qsq")
+
+[node name="ArmMesh" type="MeshInstance3D" parent="." unique_id=1646767565]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 6.8, 0)
+mesh = SubResource("BoxMesh_uk32l")
+
+[node name="LampMesh" type="MeshInstance3D" parent="." unique_id=565422964]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 6.65, 0)
+mesh = SubResource("BoxMesh_17r2t")

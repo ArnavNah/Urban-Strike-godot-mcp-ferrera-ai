@@ -1,0 +1,190 @@
+[gd_scene format=3 uid="uid://sgu660fhujxv"]
+
+[ext_resource type="Script" uid="uid://b5qk3waa2wo3w" path="res://scripts/environment/playable_area.gd" id="1_nla4w"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_i5yqo"]
+size = Vector3(250, 80, 250)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_roibc"]
+size = Vector3(290, 80, 290)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_022os"]
+size = Vector3(320, 80, 10)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wh6cj"]
+size = Vector3(10, 80, 320)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5hwd6"]
+shading_mode = 0
+albedo_color = Color(0.12, 0.15, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_yd06q"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(27.99928, 61.697716, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4ixk4"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(22.064795, 63.905197, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7jocv"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(32.012344, 83.16811, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_idpec"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(34.025787, 71.8625, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_shd8a"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(20.861534, 52.959953, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ugl56"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(24.292688, 83.64879, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5fi4f"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(27.584871, 61.61004, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7bxvb"]
+material = SubResource("StandardMaterial3D_5hwd6")
+size = Vector3(23.719454, 72.276794, 20)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vif0y"]
+shading_mode = 0
+albedo_color = Color(0.18, 0.22, 0.18, 1)
+
+[sub_resource type="PrismMesh" id="PrismMesh_16nol"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 58.157215, 40)
+
+[sub_resource type="PrismMesh" id="PrismMesh_1v30o"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 47.184635, 40)
+
+[sub_resource type="PrismMesh" id="PrismMesh_fvejo"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 56.64549, 40)
+
+[sub_resource type="PrismMesh" id="PrismMesh_82nb0"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 54.419907, 40)
+
+[sub_resource type="PrismMesh" id="PrismMesh_8d7cb"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 51.52161, 40)
+
+[sub_resource type="PrismMesh" id="PrismMesh_t0xdg"]
+material = SubResource("StandardMaterial3D_vif0y")
+size = Vector3(60, 67.76401, 40)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dcgay"]
+albedo_color = Color(0.08, 0.14, 0.18, 1)
+metallic = 0.8
+roughness = 0.2
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ygqgh"]
+material = SubResource("StandardMaterial3D_dcgay")
+size = Vector2(200, 450)
+
+[node name="PlayableArea" type="Node3D" unique_id=100984454]
+script = ExtResource("1_nla4w")
+
+[node name="InnerSafeArea" type="Area3D" parent="." unique_id=69941321]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InnerSafeArea" unique_id=1919028066]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+shape = SubResource("BoxShape3D_i5yqo")
+
+[node name="WarningBorder" type="Area3D" parent="." unique_id=460421800]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WarningBorder" unique_id=1137913381]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+shape = SubResource("BoxShape3D_roibc")
+
+[node name="HardBoundary" type="StaticBody3D" parent="." unique_id=172620904]
+collision_mask = 0
+
+[node name="WallNorth" type="CollisionShape3D" parent="HardBoundary" unique_id=1771137829]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, -149)
+shape = SubResource("BoxShape3D_022os")
+
+[node name="WallSouth" type="CollisionShape3D" parent="HardBoundary" unique_id=668983455]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 149)
+shape = SubResource("BoxShape3D_022os")
+
+[node name="WallWest" type="CollisionShape3D" parent="HardBoundary" unique_id=1333618008]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -149, 40, 0)
+shape = SubResource("BoxShape3D_wh6cj")
+
+[node name="WallEast" type="CollisionShape3D" parent="HardBoundary" unique_id=1339733975]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 149, 40, 0)
+shape = SubResource("BoxShape3D_wh6cj")
+
+[node name="DistantBackdrop" type="Node3D" parent="." unique_id=336606385]
+
+[node name="Skyline_0" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1943005818]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 30.848858, -200)
+mesh = SubResource("BoxMesh_yd06q")
+
+[node name="Skyline_1" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1249217446]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -100, 31.952599, -200)
+mesh = SubResource("BoxMesh_4ixk4")
+
+[node name="Skyline_2" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1189250394]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 41.584057, -200)
+mesh = SubResource("BoxMesh_7jocv")
+
+[node name="Skyline_3" type="MeshInstance3D" parent="DistantBackdrop" unique_id=2026846721]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 35.93125, -200)
+mesh = SubResource("BoxMesh_idpec")
+
+[node name="Skyline_4" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1093794258]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 26.479977, -200)
+mesh = SubResource("BoxMesh_shd8a")
+
+[node name="Skyline_5" type="MeshInstance3D" parent="DistantBackdrop" unique_id=629674396]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 41.824394, -200)
+mesh = SubResource("BoxMesh_ugl56")
+
+[node name="Skyline_6" type="MeshInstance3D" parent="DistantBackdrop" unique_id=680165449]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 30.80502, -200)
+mesh = SubResource("BoxMesh_5fi4f")
+
+[node name="Skyline_7" type="MeshInstance3D" parent="DistantBackdrop" unique_id=812044878]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 36.138397, -200)
+mesh = SubResource("BoxMesh_7bxvb")
+
+[node name="Hill_0" type="MeshInstance3D" parent="DistantBackdrop" unique_id=73347538]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 29.078608, -120)
+mesh = SubResource("PrismMesh_16nol")
+
+[node name="Hill_1" type="MeshInstance3D" parent="DistantBackdrop" unique_id=604305575]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 23.592318, -70)
+mesh = SubResource("PrismMesh_1v30o")
+
+[node name="Hill_2" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1044954538]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 28.322744, -20)
+mesh = SubResource("PrismMesh_fvejo")
+
+[node name="Hill_3" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1999729494]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 27.209953, 30)
+mesh = SubResource("PrismMesh_82nb0")
+
+[node name="Hill_4" type="MeshInstance3D" parent="DistantBackdrop" unique_id=1752287640]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 25.760805, 80)
+mesh = SubResource("PrismMesh_8d7cb")
+
+[node name="Hill_5" type="MeshInstance3D" parent="DistantBackdrop" unique_id=888591011]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 33.882004, 130)
+mesh = SubResource("PrismMesh_t0xdg")
+
+[node name="CoastalWater" type="MeshInstance3D" parent="DistantBackdrop" unique_id=74622512]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250, -0.2, 0)
+mesh = SubResource("PlaneMesh_ygqgh")

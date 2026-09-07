@@ -1,0 +1,56 @@
+[gd_scene format=3 uid="uid://bgfbv1p3teyxh"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hvjxr"]
+size = Vector3(24, 36, 24)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2bieb"]
+albedo_color = Color(0.16, 0.22, 0.28, 1)
+metallic = 0.7
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_01p8v"]
+material = SubResource("StandardMaterial3D_2bieb")
+size = Vector3(24, 36, 24)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1xj2n"]
+albedo_color = Color(0.85, 0.75, 0.2, 1)
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_vexum"]
+material = SubResource("StandardMaterial3D_1xj2n")
+top_radius = 8.0
+bottom_radius = 8.0
+height = 0.1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_50hk2"]
+albedo_color = Color(0.8, 0.2, 0.15, 1)
+emission_enabled = true
+emission = Color(0.9, 0.2, 0.1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_80ul4"]
+material = SubResource("StandardMaterial3D_50hk2")
+top_radius = 0.1
+bottom_radius = 0.35
+height = 8.0
+
+[node name="BuildingLarge" type="StaticBody3D" unique_id=1364757742]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=927658787]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 18, 0)
+shape = SubResource("BoxShape3D_hvjxr")
+
+[node name="TowerFacade" type="MeshInstance3D" parent="." unique_id=400049394]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 18, 0)
+mesh = SubResource("BoxMesh_01p8v")
+
+[node name="Helipad" type="MeshInstance3D" parent="." unique_id=997649706]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 36.05, 0)
+mesh = SubResource("CylinderMesh_vexum")
+
+[node name="Spire" type="MeshInstance3D" parent="." unique_id=1750087243]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 40, -8)
+mesh = SubResource("CylinderMesh_80ul4")
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=326283924]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 36.5, 0)

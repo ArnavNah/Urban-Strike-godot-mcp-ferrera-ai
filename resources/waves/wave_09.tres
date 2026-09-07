@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://b5bjpx67sdao0"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_mcsmm"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_ccivq"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="2_k6vhh"]
+[ext_resource type="PackedScene" uid="uid://df4m8v2k7xar1" path="res://scenes/enemies/sam_site.tscn" id="3_rxx50"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="4_u6wvj"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="5_dnnv1"]
+
+[sub_resource type="Resource" id="Resource_it88p"]
+script = ExtResource("1_mcsmm")
+enemy_scene = ExtResource("2_k6vhh")
+spawn_weight = 2.0
+spawn_cost = 2
+minimum_wave = 9
+category = 3
+
+[sub_resource type="Resource" id="Resource_4e8hm"]
+script = ExtResource("1_mcsmm")
+enemy_scene = ExtResource("3_rxx50")
+spawn_weight = 2.0
+spawn_cost = 2
+minimum_wave = 9
+category = 2
+
+[sub_resource type="Resource" id="Resource_rhsv8"]
+script = ExtResource("1_mcsmm")
+enemy_scene = ExtResource("4_u6wvj")
+spawn_weight = 2.0
+spawn_cost = 2
+minimum_wave = 9
+category = 1
+
+[sub_resource type="Resource" id="Resource_ra3yl"]
+script = ExtResource("1_mcsmm")
+enemy_scene = ExtResource("5_dnnv1")
+minimum_wave = 9
+
+[resource]
+script = ExtResource("2_ccivq")
+wave_number = 9
+spawn_interval = 1.55
+spawn_budget = 26
+maximum_alive = 14
+enemy_entries = Array[ExtResource("1_mcsmm")]([SubResource("Resource_it88p"), SubResource("Resource_4e8hm"), SubResource("Resource_rhsv8"), SubResource("Resource_ra3yl")])
+announcement = "WAVE 9 // MAXIMUM SATURATION COMBINED ARMS"
+ground_attack_slots = 4
+air_attack_slots = 2

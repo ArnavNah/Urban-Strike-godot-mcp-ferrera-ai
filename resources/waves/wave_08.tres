@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="WaveDefinition" format=3 uid="uid://coopn0pivxvqw"]
+
+[ext_resource type="Script" uid="uid://dytuvq6r8jr2u" path="res://scripts/resources/wave_enemy_entry.gd" id="1_rna4w"]
+[ext_resource type="Script" uid="uid://cum4t21j8h2w7" path="res://scripts/resources/wave_definition.gd" id="2_523lx"]
+[ext_resource type="PackedScene" uid="uid://cm3w8k2r5wap1" path="res://scenes/enemies/hunter_helicopter.tscn" id="2_ok4o6"]
+[ext_resource type="PackedScene" uid="uid://df4m8v2k7xar1" path="res://scenes/enemies/sam_site.tscn" id="3_odo6b"]
+[ext_resource type="PackedScene" uid="uid://c2xam4v8k1r5q" path="res://scenes/enemies/tank.tscn" id="4_p362k"]
+[ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="5_vgy1o"]
+
+[sub_resource type="Resource" id="Resource_v33dg"]
+script = ExtResource("1_rna4w")
+enemy_scene = ExtResource("2_ok4o6")
+spawn_weight = 2.0
+spawn_cost = 2
+minimum_wave = 8
+category = 3
+
+[sub_resource type="Resource" id="Resource_ov815"]
+script = ExtResource("1_rna4w")
+enemy_scene = ExtResource("3_odo6b")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 8
+category = 2
+
+[sub_resource type="Resource" id="Resource_nj8kh"]
+script = ExtResource("1_rna4w")
+enemy_scene = ExtResource("4_p362k")
+spawn_weight = 1.5
+spawn_cost = 2
+minimum_wave = 8
+category = 1
+
+[sub_resource type="Resource" id="Resource_rl7s7"]
+script = ExtResource("1_rna4w")
+enemy_scene = ExtResource("5_vgy1o")
+minimum_wave = 8
+
+[resource]
+script = ExtResource("2_523lx")
+wave_number = 8
+spawn_interval = 1.7
+spawn_budget = 22
+maximum_alive = 12
+enemy_entries = Array[ExtResource("1_rna4w")]([SubResource("Resource_v33dg"), SubResource("Resource_ov815"), SubResource("Resource_nj8kh"), SubResource("Resource_rl7s7")])
+announcement = "WAVE 8 // AIR DEFENSE & HEAVY STRIKE FORCE"
+ground_attack_slots = 4
+air_attack_slots = 2

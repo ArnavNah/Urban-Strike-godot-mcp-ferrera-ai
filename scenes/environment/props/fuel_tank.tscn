@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://d3ebdh0splvq3"]
+
+[ext_resource type="Script" uid="uid://7kfsiermsqv4" path="res://scripts/environment/fuel_tank.gd" id="1_12qvc"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_52auj"]
+height = 6.0
+radius = 2.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_54lvf"]
+albedo_color = Color(0.82, 0.85, 0.88, 1)
+metallic = 0.5
+roughness = 0.35
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qajqk"]
+material = SubResource("StandardMaterial3D_54lvf")
+top_radius = 2.6
+bottom_radius = 2.6
+height = 6.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_874b5"]
+albedo_color = Color(0.85, 0.2, 0.15, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_6a883"]
+material = SubResource("StandardMaterial3D_874b5")
+top_radius = 2.65
+bottom_radius = 2.65
+height = 0.8
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_7tebb"]
+direction = Vector3(0, 1, 0)
+spread = 25.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+gravity = Vector3(0, 1, 0)
+scale_min = 0.6
+scale_max = 1.4
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_acywg"]
+transparency = 1
+albedo_color = Color(0.2, 0.2, 0.2, 0.5)
+
+[sub_resource type="SphereMesh" id="SphereMesh_es5dp"]
+material = SubResource("StandardMaterial3D_acywg")
+radius = 0.4
+height = 0.8
+
+[node name="FuelTank" type="StaticBody3D" unique_id=1501044442]
+collision_layer = 4
+script = ExtResource("1_12qvc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1811530995]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+shape = SubResource("CylinderShape3D_52auj")
+
+[node name="TankMesh" type="MeshInstance3D" parent="." unique_id=1019176333]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+mesh = SubResource("CylinderMesh_qajqk")
+
+[node name="HazardStripe" type="MeshInstance3D" parent="." unique_id=934167838]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
+mesh = SubResource("CylinderMesh_6a883")
+
+[node name="SmokeParticles" type="GPUParticles3D" parent="." unique_id=1689918443]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8, 0)
+emitting = false
+amount = 16
+lifetime = 1.2
+process_material = SubResource("ParticleProcessMaterial_7tebb")
+draw_pass_1 = SubResource("SphereMesh_es5dp")

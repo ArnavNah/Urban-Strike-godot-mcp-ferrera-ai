@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://c8n3w5m7k2x4v"]
+
+[ext_resource type="Script" path="res://scripts/weapons/projectile_pool.gd" id="1_pool"]
+[ext_resource type="PackedScene" uid="uid://b7h4k1p9x3w6e" path="res://scenes/weapons/projectile.tscn" id="2_proj"]
+
+[node name="ProjectilePool" type="Node3D"]
+script = ExtResource("1_pool")
+projectile_scene = ExtResource("2_proj")

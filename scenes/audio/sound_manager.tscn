@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://c4n8m2v5k7w1q"]
+
+[ext_resource type="Script" path="res://scripts/audio/sound_manager.gd" id="1_sound"]
+
+[node name="SoundManager" type="Node"]
+script = ExtResource("1_sound")
+
+[node name="ChaingunPlayer" type="AudioStreamPlayer" parent="."]
+
+[node name="AlertPlayer" type="AudioStreamPlayer" parent="."]
+
+[node name="ExplosionPlayer" type="AudioStreamPlayer" parent="."]

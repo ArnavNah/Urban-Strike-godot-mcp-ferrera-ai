@@ -1,0 +1,64 @@
+[gd_scene format=3 uid="uid://df4m8v2k7xar1"]
+
+[ext_resource type="Script" path="res://scripts/enemies/sam_site.gd" id="1_sam"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_SAM"]
+height = 2.4
+radius = 1.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_SAM"]
+albedo_color = Color(0.22, 0.28, 0.32, 1)
+metallic = 0.7
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="Mesh_Base"]
+material = SubResource("Mat_SAM")
+size = Vector3(3.0, 0.8, 3.0)
+
+[sub_resource type="CylinderMesh" id="Mesh_Dish"]
+material = SubResource("Mat_SAM")
+top_radius = 0.8
+bottom_radius = 0.1
+height = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_Tubes"]
+albedo_color = Color(0.85, 0.3, 0.15, 1)
+metallic = 0.5
+
+[sub_resource type="BoxMesh" id="Mesh_Launcher"]
+material = SubResource("Mat_Tubes")
+size = Vector3(1.4, 0.6, 2.2)
+
+[node name="SAMSite" type="StaticBody3D" groups=["enemies"]]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_sam")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+shape = SubResource("CylinderShape3D_SAM")
+
+[node name="BaseMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("Mesh_Base")
+
+[node name="TurretMount" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+
+[node name="Dish" type="MeshInstance3D" parent="TurretMount"]
+transform = Transform3D(1, 0, 0, 0, 0.866025, -0.5, 0, 0.5, 0.866025, 0.9, 1.0, 0.4)
+mesh = SubResource("Mesh_Dish")
+
+[node name="Launcher" type="Node3D" parent="TurretMount"]
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, -0.4, 0.5, 0)
+
+[node name="LauncherMesh" type="MeshInstance3D" parent="TurretMount/Launcher"]
+mesh = SubResource("Mesh_Launcher")
+
+[node name="Muzzle" type="Marker3D" parent="TurretMount/Launcher"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.2)
+
+[node name="LOSRayCast" type="RayCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
+target_position = Vector3(0, 0, -55)
+collision_mask = 1
