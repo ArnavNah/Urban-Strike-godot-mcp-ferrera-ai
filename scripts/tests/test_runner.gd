@@ -2562,6 +2562,28 @@ func test_mini_helicopter_support_and_upgrades(logs: Array[String]) -> bool:
 		root_node.queue_free()
 		return false
 
+	# Verify companions do not stack on player or each other (Points 8)
+	var p_dist1 := drone1.global_position.distance_to(player.global_position)
+	var p_dist2 := drone2.global_position.distance_to(player.global_position)
+	if p_dist1 < 2.5 or p_dist2 < 2.5:
+		append_log("FAIL: Mini helicopter stacked too close to player (dist1=%.2f, dist2=%.2f)" % [p_dist1, p_dist2], logs)
+		root_node.queue_free()
+		return false
+
+	var drone_gap := drone1.global_position.distance_to(drone2.global_position)
+	if drone_gap < 3.0:
+		append_log("FAIL: Mini helicopters stacked too close together (gap=%.2f)" % drone_gap, logs)
+		root_node.queue_free()
+		return false
+
+	# Verify damage to enemy (Point 7)
+	var prev_enemy_hp := dummy_enemy.current_health
+	dummy_enemy.take_damage(drone1.get_effective_damage())
+	if dummy_enemy.current_health >= prev_enemy_hp:
+		append_log("FAIL: Companion light chaingun damage not applied to enemy", logs)
+		root_node.queue_free()
+		return false
+
 	# 5. Test Core Catalog Upgrades
 	var gun: Chaingun = player.chaingun
 	var pod: MissilePod = player.missile_pod

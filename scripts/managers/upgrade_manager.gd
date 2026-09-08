@@ -17,6 +17,13 @@ var _offered_ids: Array[String] = []
 var has_guaranteed_mini_heli_offered: bool = false
 var guarantee_mini_heli_on_first_offer: bool = true
 
+# Companion progression hooks for future ranks (Step 5A Section 9)
+var mini_heli_rank: int = 1
+var mini_heli_damage_mult: float = 1.0
+var mini_heli_fire_rate_mult: float = 1.0
+var mini_heli_range_mult: float = 1.0
+var mini_heli_has_rockets: bool = false
+
 signal requisition_awarded(current_points: int)
 
 # Upgrade catalog with definitions, build synergies, and evolutions
@@ -239,6 +246,11 @@ func reset_run() -> void:
 	is_choice_active = false
 	_offered_ids.clear()
 	has_guaranteed_mini_heli_offered = false
+	mini_heli_rank = 1
+	mini_heli_damage_mult = 1.0
+	mini_heli_fire_rate_mult = 1.0
+	mini_heli_range_mult = 1.0
+	mini_heli_has_rockets = false
 	_notify_xp()
 
 func add_xp(amount: int) -> void:
@@ -390,6 +402,7 @@ func apply_upgrade(upgrade_id: String) -> bool:
 				if drone:
 					drone.player_target = player
 					drone.formation_offset = offset
+					drone.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
 					spawn_parent.add_child(drone)
 					var start_pos := player.global_position + (player.global_transform.basis * offset)
 					drone.global_position = start_pos
