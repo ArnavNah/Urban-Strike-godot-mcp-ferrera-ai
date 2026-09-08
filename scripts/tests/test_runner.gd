@@ -74,6 +74,8 @@ func _ready() -> void:
 	success = test_ground_enemy_grounding_and_gravity(log_lines) and success
 	append_log("Running test 27 (mini helicopter support & upgrades)...", log_lines)
 	success = test_mini_helicopter_support_and_upgrades(log_lines) and success
+	append_log("Running test 28 (limited missile ammo & supply pickups)...", log_lines)
+	success = test_limited_missile_ammo_and_pickups(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2607,10 +2609,17 @@ func test_mini_helicopter_support_and_upgrades(logs: Array[String]) -> bool:
 		root_node.queue_free()
 		return false
 
-	var prev_ml := pod.multi_launch_count
+	var prev_cap := pod.max_missiles
 	var applied_mc := mgr.apply_upgrade("missile_capacity")
-	if not applied_mc or pod.multi_launch_count != prev_ml + 2:
-		append_log("FAIL: missile_capacity upgrade failed to increase multi_launch_count", logs)
+	if not applied_mc or pod.max_missiles != prev_cap + 2:
+		append_log("FAIL: missile_capacity upgrade failed to increase max_missiles (got %d, expected %d)" % [pod.max_missiles, prev_cap + 2], logs)
+		root_node.queue_free()
+		return false
+
+	var prev_ml := pod.multi_launch_count
+	var applied_ml := mgr.apply_upgrade("multi_launch")
+	if not applied_ml or pod.multi_launch_count != prev_ml + 2:
+		append_log("FAIL: multi_launch upgrade failed to increase multi_launch_count", logs)
 		root_node.queue_free()
 		return false
 
@@ -2644,4 +2653,250 @@ func test_mini_helicopter_support_and_upgrades(logs: Array[String]) -> bool:
 	dummy_enemy.queue_free()
 	root_node.queue_free()
 	append_log("  -> Mini Helicopter escort drones, first-level guarantee, targeting, and upgrade catalog verified.", logs)
+	return true
+
+func test_limited_missile_ammo_and_pickups(logs: Array[String]) -> bool:
+	logs.append("[TEST 28] Limited Missile Ammo, Ammo Crate Pickups, Upgrade Integration & HUD...")
+	var root_node := Node3D.new()
+	root_node.name = "TestMissileAmmoRoot"
+	add_child(root_node)
+
+	# Clean up any leftover pickups or players in groups
+	for p in get_tree().get_nodes_in_group("missile_pickups"):
+		if is_instance_valid(p):
+			(p as Node).queue_free()
+	for pl in get_tree().get_nodes_in_group("player"):
+		if is_instance_valid(pl):
+			(pl as Node).remove_from_group("player")
+
+	# 1. Test MissilePod ammo properties and starting ammo
+	var pod_scene := load("res://scenes/weapons/missile_pod.tscn") as PackedScene
+	var pod: MissilePod = pod_scene.instantiate() as MissilePod
+	root_node.add_child(pod)
+
+	if pod.max_missiles != 6 or pod.current_missiles != 6:
+		append_log("FAIL: MissilePod starting ammo is not 6/6 (max=%d, cur=%d)" % [pod.max_missiles, pod.current_missiles], logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Test Ammo Consumption on fire
+	pod._cooldown_timer = 0.0
+	var fired_1 := pod.try_fire()
+	if not fired_1 or pod.current_missiles != 5:
+		append_log("FAIL: First missile fire failed to consume ammo or return true (ammo=%d)" % pod.current_missiles, logs)
+		root_node.queue_free()
+		return false
+
+	# Fire remaining 5 missiles
+	for i in range(5):
+		pod._cooldown_timer = 0.0
+		pod.try_fire()
+
+	if pod.current_missiles != 0:
+		append_log("FAIL: Missile ammo did not reach 0 after 6 fires (cur=%d)" % pod.current_missiles, logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Test Firing on Empty (current_missiles == 0)
+	var warn_received := [false]
+	var no_ammo_received := [false]
+	var cb_warn = func() -> void: warn_received[0] = true
+	var cb_ammo = func() -> void: no_ammo_received[0] = true
+
+	if EventBus:
+		EventBus.no_missiles_warning.connect(cb_warn)
+	pod.no_ammo.connect(cb_ammo)
+
+	pod._cooldown_timer = 0.0
+	var fired_empty := pod.try_fire()
+	if EventBus and EventBus.no_missiles_warning.is_connected(cb_warn):
+		EventBus.no_missiles_warning.disconnect(cb_warn)
+
+	if fired_empty:
+		append_log("FAIL: MissilePod fired when current_missiles == 0", logs)
+		root_node.queue_free()
+		return false
+
+	if not no_ammo_received[0] or not warn_received[0]:
+		append_log("FAIL: MissilePod failed to emit no_ammo or EventBus.no_missiles_warning on empty fire", logs)
+		root_node.queue_free()
+		return false
+
+	# 4. Verify No Automatic Ammo Regeneration
+	pod._process(1.5)
+	if pod.current_missiles != 0:
+		append_log("FAIL: Missile ammo automatically regenerated over time without pickups", logs)
+		root_node.queue_free()
+		return false
+
+	# 5. Test replenish_ammo() and reset_ammo()
+	var gained := pod.replenish_ammo(3)
+	if gained != 3 or pod.current_missiles != 3:
+		append_log("FAIL: replenish_ammo(3) did not restore 3 missiles (cur=%d)" % pod.current_missiles, logs)
+		root_node.queue_free()
+		return false
+
+	pod.reset_ammo()
+	if pod.current_missiles != 6:
+		append_log("FAIL: reset_ammo() did not reset ammo to 6 (cur=%d)" % pod.current_missiles, logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Test Upgrade Integration: Missile Capacity vs Multi-Launch
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr: UpgradeManager = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+
+	var p_pod: MissilePod = player.missile_pod as MissilePod
+	if not p_pod:
+		append_log("FAIL: PlayerHelicopter missing missile_pod", logs)
+		root_node.queue_free()
+		return false
+
+	var base_cap := p_pod.max_missiles
+	var base_salvo := p_pod.multi_launch_count
+
+	# Apply missile_capacity
+	var cap_applied := mgr.apply_upgrade("missile_capacity")
+	if not cap_applied:
+		append_log("FAIL: Failed to apply missile_capacity upgrade", logs)
+		root_node.queue_free()
+		return false
+
+	if p_pod.max_missiles != base_cap + 2:
+		append_log("FAIL: missile_capacity did not increase max_missiles by 2 (got %d, expected %d)" % [p_pod.max_missiles, base_cap + 2], logs)
+		root_node.queue_free()
+		return false
+
+	if p_pod.multi_launch_count != base_salvo:
+		append_log("FAIL: missile_capacity altered multi_launch_count (salvo should be separate)", logs)
+		root_node.queue_free()
+		return false
+
+	# Apply multi_launch
+	var ml_applied := mgr.apply_upgrade("multi_launch")
+	if not ml_applied or p_pod.multi_launch_count != base_salvo + 2:
+		append_log("FAIL: multi_launch upgrade failed to increase salvo count separately", logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Test MissileAmmoPickup Scene & Logic
+	var pickup_scene := load("res://scenes/pickups/missile_ammo_pickup.tscn") as PackedScene
+	if not pickup_scene:
+		append_log("FAIL: scenes/pickups/missile_ammo_pickup.tscn failed to load", logs)
+		root_node.queue_free()
+		return false
+
+	var pickup: MissileAmmoPickup = pickup_scene.instantiate() as MissileAmmoPickup
+	root_node.add_child(pickup)
+
+	if not pickup.is_in_group("missile_pickups") or not pickup.is_in_group("pickups"):
+		append_log("FAIL: MissileAmmoPickup not in groups missile_pickups and pickups", logs)
+		root_node.queue_free()
+		return false
+
+	if pickup.refill_amount != 2:
+		append_log("FAIL: MissileAmmoPickup refill_amount is not 2 (got %d)" % pickup.refill_amount, logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Test Full Capacity Rule: Pickup NOT consumed when player ammo is full
+	p_pod.reset_ammo()
+	var collected_full := pickup._try_collect(player)
+	if collected_full or pickup.is_queued_for_deletion():
+		append_log("FAIL: Missile ammo pickup was consumed when player ammo was already full!", logs)
+		root_node.queue_free()
+		return false
+
+	# 9. Test Deficit Collection: Pickup consumed when current_missiles < max_missiles
+	p_pod.current_missiles = p_pod.max_missiles - 2 # 6 / 8
+	var collected_deficit := pickup._try_collect(player)
+	if not collected_deficit or p_pod.current_missiles != p_pod.max_missiles:
+		append_log("FAIL: Missile ammo pickup was not collected or did not replenish ammo when low (cur=%d, max=%d)" % [p_pod.current_missiles, p_pod.max_missiles], logs)
+		root_node.queue_free()
+		return false
+
+	if not pickup.is_queued_for_deletion():
+		append_log("FAIL: Missile ammo pickup was not queued for deletion after valid collection", logs)
+		root_node.queue_free()
+		return false
+
+	# 10. Test Authored Spawning via SpawnDirector
+	var spawner := SpawnDirector.new()
+	spawner.name = "TestSpawnDirector"
+	spawner.autostart_wave = false
+	root_node.add_child(spawner)
+
+	var p_locations := Node3D.new()
+	p_locations.name = "PickupLocations"
+	root_node.add_child(p_locations)
+	var sp1 := Marker3D.new()
+	sp1.name = "SupplyPoint_01"
+	sp1.position = Vector3(35.0, 0.3, 50.0)
+	p_locations.add_child(sp1)
+	var sp2 := Marker3D.new()
+	sp2.name = "SupplyPoint_02"
+	sp2.position = Vector3(-24.0, 0.3, 24.0)
+	p_locations.add_child(sp2)
+
+	spawner.pickup_locations_node = p_locations
+
+	var p1 := spawner.spawn_authored_missile_pickup()
+	if not p1 or not is_instance_valid(p1):
+		append_log("FAIL: spawner.spawn_authored_missile_pickup() failed to spawn first crate", logs)
+		root_node.queue_free()
+		return false
+
+	var p2 := spawner.spawn_authored_missile_pickup()
+	if not p2 or not is_instance_valid(p2):
+		append_log("FAIL: spawner.spawn_authored_missile_pickup() failed to spawn second crate", logs)
+		root_node.queue_free()
+		return false
+
+	var p3 := spawner.spawn_authored_missile_pickup()
+	if p3 != null:
+		append_log("FAIL: spawner spawned more than max 2 simultaneous missile crates", logs)
+		root_node.queue_free()
+		return false
+
+	# Clear on reset
+	spawner.clear_missile_pickups()
+	var active_left := 0
+	for p_check in get_tree().get_nodes_in_group("missile_pickups"):
+		if is_instance_valid(p_check) and not (p_check as Node).is_queued_for_deletion():
+			active_left += 1
+	if active_left > 0:
+		append_log("FAIL: clear_missile_pickups() failed to remove active missile crates", logs)
+		root_node.queue_free()
+		return false
+
+	# 11. Test HUD Missile Display & Warning State
+	var hud_scene := load("res://scenes/ui/hud.tscn") as PackedScene
+	var hud: HUD = hud_scene.instantiate() as HUD
+	root_node.add_child(hud)
+
+	hud._on_missile_ammo_changed(4, 6)
+	if not hud.missile_status.text.contains("MISSILES  4 / 6"):
+		append_log("FAIL: HUD missile status label did not display MISSILES  4 / 6 (got '%s')" % hud.missile_status.text, logs)
+		root_node.queue_free()
+		return false
+
+	hud._on_missile_ammo_changed(0, 6)
+	if not hud.missile_status.text.contains("MISSILES  0 / 6") or not hud.missile_status.text.contains("EMPTY"):
+		append_log("FAIL: HUD missile status label did not display EMPTY state (got '%s')" % hud.missile_status.text, logs)
+		root_node.queue_free()
+		return false
+
+	hud._on_no_missiles_warning()
+	if not hud.missile_status.text.contains("NO MISSILES"):
+		append_log("FAIL: HUD missile status label did not show NO MISSILES warning (got '%s')" % hud.missile_status.text, logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Limited missile ammo, supply pickups, upgrade capacity, and HUD warnings verified.", logs)
 	return true

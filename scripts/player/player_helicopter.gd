@@ -116,6 +116,8 @@ func _ready() -> void:
 
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
+		if missile_pod:
+			EventBus.missile_ammo_changed.emit(missile_pod.current_missiles, missile_pod.max_missiles)
 	if chaingun and chaingun.has_signal("fired"):
 		chaingun.fired.connect(_on_chaingun_fired)
 
@@ -140,7 +142,9 @@ func _on_xp_magnet_area_entered(area: Area3D) -> void:
 func _on_xp_collect_area_entered(area: Area3D) -> void:
 	if not is_instance_valid(area):
 		return
-	if area.has_method("_collect"):
+	if area.has_method("_try_collect"):
+		area.call("_try_collect", self)
+	elif area.has_method("_collect"):
 		area._collect()
 
 func _apply_hangar_upgrades() -> void:

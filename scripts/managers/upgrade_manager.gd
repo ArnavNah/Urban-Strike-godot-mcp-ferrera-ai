@@ -73,8 +73,8 @@ var upgrade_database: Dictionary = {
 		"id": "missile_capacity",
 		"name": "Expanded Missile Racks",
 		"category": "Secondary",
-		"benefit": "+2 Missiles per Salvo",
-		"tradeoff": "+20% Reload Cooldown",
+		"benefit": "+2 Max Missile Ammo Capacity",
+		"tradeoff": "Requires battlefield ammo crate replenishment",
 		"is_evolution": false
 	},
 	"xp_magnet_range": {
@@ -251,6 +251,9 @@ func reset_run() -> void:
 	mini_heli_fire_rate_mult = 1.0
 	mini_heli_range_mult = 1.0
 	mini_heli_has_rockets = false
+	var player := get_tree().get_first_node_in_group("player") as PlayerHelicopter
+	if is_instance_valid(player) and player.missile_pod and player.missile_pod.has_method("reset_ammo"):
+		player.missile_pod.reset_ammo()
 	_notify_xp()
 
 func add_xp(amount: int) -> void:
@@ -424,8 +427,11 @@ func apply_upgrade(upgrade_id: String) -> bool:
 		"missile_capacity":
 			if not pod:
 				return false
-			pod.multi_launch_count += 2
-			pod.fire_cooldown *= 1.2
+			pod.max_missiles += 2
+			pod.current_missiles = mini(pod.max_missiles, pod.current_missiles + 2)
+			pod.ammo_changed.emit(pod.current_missiles, pod.max_missiles)
+			if EventBus and EventBus.has_signal("missile_ammo_changed"):
+				EventBus.missile_ammo_changed.emit(pod.current_missiles, pod.max_missiles)
 		"xp_magnet_range":
 			player.magnet_radius *= 1.6
 			if player.xp_magnet_area:

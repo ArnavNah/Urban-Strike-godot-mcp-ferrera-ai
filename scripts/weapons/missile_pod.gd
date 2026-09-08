@@ -22,9 +22,41 @@ var _cooldown_timer: float = 0.0
 
 var _fire_left_next: bool = true
 
+@export var max_missiles: int = 6
+@export var current_missiles: int = 6
+
+signal ammo_changed(current: int, maximum: int)
+signal no_ammo()
+
+func replenish_ammo(amount: int) -> int:
+	var old_ammo := current_missiles
+	current_missiles = mini(max_missiles, current_missiles + amount)
+	var gained := current_missiles - old_ammo
+	if gained > 0:
+		emit_signal("ammo_changed", current_missiles, max_missiles)
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("missile_ammo_changed"):
+			eb.emit_signal("missile_ammo_changed", current_missiles, max_missiles)
+	return gained
+
+func reset_ammo() -> void:
+	current_missiles = max_missiles
+	emit_signal("ammo_changed", current_missiles, max_missiles)
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("missile_ammo_changed"):
+		eb.emit_signal("missile_ammo_changed", current_missiles, max_missiles)
+
 func _ready() -> void:
 	if not missile_scene:
 		missile_scene = preload("res://scenes/weapons/guided_missile.tscn")
+	current_missiles = max_missiles
+	emit_signal("ammo_changed", current_missiles, max_missiles)
+	_notify_ammo_deferred.call_deferred()
+
+func _notify_ammo_deferred() -> void:
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("missile_ammo_changed"):
+		eb.emit_signal("missile_ammo_changed", current_missiles, max_missiles)
 
 func _process(delta: float) -> void:
 	if _cooldown_timer > 0.0:
@@ -100,6 +132,19 @@ func _configure_missile(missile: Node3D) -> void:
 func try_fire() -> bool:
 	if _cooldown_timer > 0.0:
 		return false
+
+	if current_missiles <= 0:
+		emit_signal("no_ammo")
+		var eb_warn: Node = get_node_or_null("/root/EventBus")
+		if eb_warn and eb_warn.has_signal("no_missiles_warning"):
+			eb_warn.emit_signal("no_missiles_warning")
+		return false
+
+	current_missiles = maxi(0, current_missiles - 1)
+	emit_signal("ammo_changed", current_missiles, max_missiles)
+	var eb_ammo: Node = get_node_or_null("/root/EventBus")
+	if eb_ammo and eb_ammo.has_signal("missile_ammo_changed"):
+		eb_ammo.emit_signal("missile_ammo_changed", current_missiles, max_missiles)
 
 	_cooldown_timer = fire_cooldown
 	var parent := get_tree().current_scene if get_tree().current_scene else get_tree().root

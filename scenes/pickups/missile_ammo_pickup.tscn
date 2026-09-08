@@ -1,0 +1,65 @@
+[gd_scene format=3 uid="uid://bn322xxbnva5v"]
+
+[ext_resource type="Script" uid="uid://dopd2q6moie47" path="res://scripts/pickups/missile_ammo_pickup.gd" id="1_fr7ih"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_12uyy"]
+height = 10.0
+radius = 3.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j10dp"]
+albedo_color = Color(0.24, 0.34, 0.2, 1)
+metallic = 0.65
+roughness = 0.45
+
+[sub_resource type="BoxMesh" id="BoxMesh_qlkio"]
+material = SubResource("StandardMaterial3D_j10dp")
+size = Vector3(1.3, 0.65, 0.85)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ggp20"]
+albedo_color = Color(0.16, 0.22, 0.14, 1)
+metallic = 0.85
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="BoxMesh_ty2vv"]
+material = SubResource("StandardMaterial3D_ggp20")
+size = Vector3(1.35, 0.12, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_638fj"]
+albedo_color = Color(1, 0.75, 0.1, 1)
+emission_enabled = true
+emission = Color(1, 0.7, 0.05, 1)
+emission_energy_multiplier = 2.4
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_iww5q"]
+material = SubResource("StandardMaterial3D_638fj")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 0.95
+
+[node name="MissileAmmoPickup" type="Area3D" unique_id=1958841402]
+collision_layer = 16
+collision_mask = 2
+script = ExtResource("1_fr7ih")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=238356681]
+shape = SubResource("CylinderShape3D_12uyy")
+
+[node name="VisualRoot" type="Node3D" parent="." unique_id=1304944347]
+
+[node name="CrateBase" type="MeshInstance3D" parent="VisualRoot" unique_id=1742836052]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.32, 0)
+mesh = SubResource("BoxMesh_qlkio")
+
+[node name="CrateLid" type="MeshInstance3D" parent="VisualRoot" unique_id=34551660]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, 0)
+mesh = SubResource("BoxMesh_ty2vv")
+
+[node name="MissileStripe" type="MeshInstance3D" parent="VisualRoot" unique_id=1484600511]
+transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0, 0.73, 0)
+mesh = SubResource("CylinderMesh_iww5q")
+
+[node name="BeaconLight" type="OmniLight3D" parent="VisualRoot" unique_id=297457086]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+light_color = Color(1, 0.75, 0.2, 1)
+light_energy = 2.2
+omni_range = 6.5

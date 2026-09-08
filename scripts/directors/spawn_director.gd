@@ -77,6 +77,12 @@ var _pickup_spawn_timer: float = 12.0
 var _pickup_spawn_interval: float = 38.0
 var _rooftop_check_timer: float = 8.0
 var _scene_crate: PackedScene = preload("res://scenes/pickups/salvage_crate.tscn")
+var _scene_missile_pickup: PackedScene = preload("res://scenes/pickups/missile_ammo_pickup.tscn")
+var _active_missile_pickups: Array[Node3D] = []
+var _missile_pickup_timer: float = 12.0
+var _missile_pickup_interval_min: float = 20.0
+var _missile_pickup_interval_max: float = 40.0
+var max_active_missile_pickups: int = 2
 
 # Known open road points guaranteed free of building collisions
 var _safe_road_points: Array[Vector3] = [
@@ -463,6 +469,11 @@ func _process(delta: float) -> void:
 func start_wave(wave_num: int) -> void:
 	current_wave = wave_num
 	is_wave_active = true
+	if wave_num == 1:
+		clear_missile_pickups()
+		var p := _get_player()
+		if is_instance_valid(p) and p.missile_pod and p.missile_pod.has_method("reset_ammo"):
+			p.missile_pod.reset_ammo()
 
 	var config: Dictionary
 	if wave_num > 10:
@@ -1745,6 +1756,73 @@ func _process_pickup_spawning(delta: float) -> void:
 	if _pickup_spawn_timer <= 0.0:
 		_pickup_spawn_timer = _pickup_spawn_interval + randf_range(-5.0, 7.0)
 		_try_spawn_authored_pickup()
+
+	_missile_pickup_timer -= delta
+	if _missile_pickup_timer <= 0.0:
+		_missile_pickup_timer = randf_range(_missile_pickup_interval_min, _missile_pickup_interval_max)
+		spawn_authored_missile_pickup()
+
+func spawn_authored_missile_pickup() -> Node3D:
+	var active_pickups: Array[Node3D] = []
+	for p in _active_missile_pickups:
+		if is_instance_valid(p) and not p.is_queued_for_deletion():
+			active_pickups.append(p)
+	if is_inside_tree():
+		for p in get_tree().get_nodes_in_group("missile_pickups"):
+			if p is Node3D and is_instance_valid(p) and not p.is_queued_for_deletion() and not active_pickups.has(p):
+				active_pickups.append(p as Node3D)
+	_active_missile_pickups = active_pickups
+
+	if _active_missile_pickups.size() >= max_active_missile_pickups:
+		return null # Maximum 1-2 active missile crates simultaneously
+
+	var markers := get_pickup_spawn_nodes()
+	if markers.is_empty():
+		return null
+
+	var free_markers: Array[Marker3D] = []
+	for marker in markers:
+		var m_pos := marker.global_position if marker.is_inside_tree() else marker.position
+		var has_pickup_nearby := false
+		for p in _active_missile_pickups + _active_authored_pickups:
+			if is_instance_valid(p):
+				var p_pos := p.global_position if p.is_inside_tree() else p.position
+				if m_pos.distance_to(p_pos) < 6.0:
+					has_pickup_nearby = true
+					break
+		if not has_pickup_nearby:
+			free_markers.append(marker)
+
+	if free_markers.is_empty():
+		return null
+
+	var chosen: Marker3D = free_markers.pick_random()
+	if not _scene_missile_pickup:
+		_scene_missile_pickup = load("res://scenes/pickups/missile_ammo_pickup.tscn") as PackedScene
+	if not _scene_missile_pickup:
+		return null
+
+	var pickup := _scene_missile_pickup.instantiate() as Node3D
+	if not pickup:
+		return null
+
+	pickup.transform.origin = chosen.global_position if chosen.is_inside_tree() else chosen.position
+	var parent := _get_spawn_parent()
+	parent.add_child.call_deferred(pickup)
+
+	_active_missile_pickups.append(pickup)
+	pickup.tree_exited.connect(func() -> void:
+		_active_missile_pickups.erase(pickup)
+	)
+
+	return pickup
+
+func clear_missile_pickups() -> void:
+	if is_inside_tree():
+		for p in get_tree().get_nodes_in_group("missile_pickups"):
+			if is_instance_valid(p) and not p.is_queued_for_deletion():
+				p.queue_free()
+	_active_missile_pickups.clear()
 
 func _try_spawn_authored_pickup() -> Node3D:
 	var active_pickups: Array[Node3D] = []

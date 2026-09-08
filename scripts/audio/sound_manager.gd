@@ -25,6 +25,10 @@ func _ready() -> void:
 		EventBus.boss_spawned.connect(_on_boss_spawned)
 		EventBus.wave_started.connect(_on_wave_started)
 		EventBus.player_died.connect(_on_player_died)
+		if EventBus.has_signal("no_missiles_warning"):
+			EventBus.no_missiles_warning.connect(_on_no_missiles_warning)
+		if EventBus.has_signal("missile_pickup_collected"):
+			EventBus.missile_pickup_collected.connect(_on_missile_pickup_collected)
 
 func _on_heat_changed(_current_heat: float, _max_heat: float, is_overheated: bool) -> void:
 	if is_overheated and not _prev_overheated:
@@ -68,6 +72,12 @@ func _on_wave_started(wave_num: int, _announcement: String) -> void:
 
 func _on_player_died() -> void:
 	_play_tone(explosion_player, 65.0, 1.0) # Heavy destruction blast
+
+func _on_no_missiles_warning() -> void:
+	_play_tone(alert_player, 160.0, 0.12) # Low dry click/buzz for empty missiles
+
+func _on_missile_pickup_collected(_amount: int) -> void:
+	_play_tone(chaingun_player, 880.0, 0.18) # Crisp ammo pickup chime
 
 func _play_tone(player: AudioStreamPlayer, freq: float, duration: float) -> void:
 	if not player:

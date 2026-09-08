@@ -94,6 +94,11 @@ func _on_wave_started(wave_num: int, _total: int) -> void:
 	if current_state == State.PREPARING:
 		current_state = State.PLAYING
 		emit_signal("run_started")
+		if is_instance_valid(player) and player.missile_pod and player.missile_pod.has_method("reset_ammo"):
+			player.missile_pod.reset_ammo()
+		var spawner := get_tree().get_first_node_in_group("spawn_director")
+		if spawner and spawner.has_method("clear_missile_pickups"):
+			spawner.clear_missile_pickups()
 
 func _on_enemy_destroyed(_enemy: Node, _points: int) -> void:
 	if current_state == State.PLAYING or current_state == State.PREPARING:

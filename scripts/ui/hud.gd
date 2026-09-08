@@ -40,6 +40,11 @@ var _banner_timer: float = 0.0
 var _prev_health: float = 100.0
 var _health_tween: Tween = null
 var _vignette_tween: Tween = null
+var _missile_ammo: int = 6
+var _max_missiles: int = 6
+var _missile_warning_timer: float = 0.0
+var _last_lock_progress: float = 0.0
+var _is_missile_locked: bool = false
 
 func _ready() -> void:
 	_player = get_tree().get_first_node_in_group("player") as Node3D
@@ -71,6 +76,10 @@ func _ready() -> void:
 			eb.manual_aim_state_changed.connect(_on_manual_aim_changed)
 		if eb.has_signal("missile_lock_updated"):
 			eb.missile_lock_updated.connect(_on_missile_lock_updated)
+		if eb.has_signal("missile_ammo_changed"):
+			eb.missile_ammo_changed.connect(_on_missile_ammo_changed)
+		if eb.has_signal("no_missiles_warning"):
+			eb.no_missiles_warning.connect(_on_no_missiles_warning)
 		if eb.has_signal("flares_updated"):
 			eb.flares_updated.connect(_on_flares_updated)
 		if eb.has_signal("incoming_missile_warning"):
@@ -94,10 +103,23 @@ func _ready() -> void:
 		if eb.has_signal("border_warning_changed"):
 			eb.border_warning_changed.connect(_on_border_warning_changed)
 
+	if _player and "missile_pod" in _player and _player.missile_pod:
+		var pod: Node = _player.missile_pod
+		if "current_missiles" in pod and "max_missiles" in pod:
+			_missile_ammo = int(pod.current_missiles)
+			_max_missiles = int(pod.max_missiles)
+	_update_missile_status_display()
+
 func _process(delta: float) -> void:
 	if not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player") as Node3D
 		return
+
+	# Missile warning flash timer
+	if _missile_warning_timer > 0.0:
+		_missile_warning_timer -= delta
+		if _missile_warning_timer <= 0.0:
+			_update_missile_status_display()
 
 	# Speed and altitude telemetry
 	var speed_kph: float = _player.velocity.length() * 3.6
@@ -237,19 +259,52 @@ func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> vo
 	if overheat_warning:
 		overheat_warning.visible = is_overheated
 
+func _update_missile_status_display() -> void:
+	if not missile_status:
+		return
+
+	if _missile_warning_timer > 0.0:
+		missile_status.text = "MISSILES  %d / %d  [ ⚠ NO MISSILES ⚠ ]" % [_missile_ammo, _max_missiles]
+		missile_status.modulate = Color(1.0, 0.2, 0.2, 1.0)
+		return
+
+	if _missile_ammo <= 0:
+		missile_status.text = "MISSILES  0 / %d  [ EMPTY ]" % _max_missiles
+		missile_status.modulate = Color(0.85, 0.25, 0.25, 0.75) # Dim red
+		return
+
+	var jam_suffix := " [EW JAMMED]" if _is_jammed else ""
+	if _is_missile_locked:
+		missile_status.text = "MISSILES  %d / %d  [ LOCKED - RMB ]" % [_missile_ammo, _max_missiles]
+		missile_status.modulate = Color(0.2, 1.0, 0.3, 1.0)
+	elif _last_lock_progress > 0.05:
+		missile_status.text = "MISSILES  %d / %d  [ LOCKING %d%%%s ]" % [_missile_ammo, _max_missiles, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.modulate = Color(1.0, 0.4, 0.2) if _is_jammed else Color(1.0, 0.8, 0.2)
+	else:
+		missile_status.text = "MISSILES  %d / %d  [ READY%s ]" % [_missile_ammo, _max_missiles, jam_suffix]
+		missile_status.modulate = Color(1.0, 0.5, 0.1) if _is_jammed else Color(0.85, 0.9, 0.95)
+
+func _on_missile_ammo_changed(current: int, maximum: int) -> void:
+	_missile_ammo = current
+	_max_missiles = maximum
+	_update_missile_status_display()
+
+func _on_no_missiles_warning() -> void:
+	_missile_warning_timer = 1.2
+	_update_missile_status_display()
+
+func reset_missile_display(current: int = 6, maximum: int = 6) -> void:
+	_missile_ammo = current
+	_max_missiles = maximum
+	_missile_warning_timer = 0.0
+	_update_missile_status_display()
+
 func _on_missile_lock_updated(progress: float, _target: Node3D, is_locked: bool) -> void:
+	_last_lock_progress = progress
+	_is_missile_locked = is_locked
 	if missile_bar:
 		missile_bar.value = progress * 100.0
-	if missile_status:
-		if is_locked:
-			missile_status.text = "MISSILE [ LOCKED - PRESS F ]"
-			missile_status.modulate = Color(0.2, 1.0, 0.3)
-		elif progress > 0.05:
-			missile_status.text = "ACQUIRING LOCK (%d%%) [EW JAMMED]" % int(progress * 100.0) if _is_jammed else ("ACQUIRING LOCK (%d%%)" % int(progress * 100.0))
-			missile_status.modulate = Color(1.0, 0.4, 0.2) if _is_jammed else Color(1.0, 0.8, 0.2)
-		else:
-			missile_status.text = "MISSILE [ READY - EW JAMMED ]" if _is_jammed else "MISSILE [ READY / UNLOCKED ]"
-			missile_status.modulate = Color(1.0, 0.5, 0.1) if _is_jammed else Color(0.7, 0.7, 0.7)
+	_update_missile_status_display()
 
 func _on_jammer_status_changed(is_jammed: bool, _count: int) -> void:
 	_is_jammed = is_jammed
