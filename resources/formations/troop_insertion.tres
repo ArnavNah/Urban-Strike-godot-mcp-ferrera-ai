@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="FormationDefinition" format=3 uid="uid://v30vpa4wf40b"]
+
+[ext_resource type="Script" uid="uid://ct5774t8nk80a" path="res://scripts/resources/formation_definition.gd" id="1_cp6vs"]
+
+[resource]
+script = ExtResource("1_cp6vs")
+formation_id = "troop_insertion"
+display_name = "Troop Insertion"
+category = 3
+min_elapsed_time = 120.0
+ground_budget_cost = 34.0
+preferred_districts = Array[String](["Commercial", "Residential"])
+units = Array[Dictionary]([{
+"cap_tag": "transport",
+"count": 1,
+"is_air": false,
+"offset": Vector3(0, 0, 0),
+"scene_path": "res://scenes/enemies/ground_troop_carrier_apc.tscn"
+}, {
+"cap_tag": "buggy",
+"count": 1,
+"is_air": false,
+"offset": Vector3(4, 0, -2),
+"scene_path": "res://scenes/enemies/ground_scout_buggy.tscn"
+}])
+required_caps = {
+"transport": 1
+}

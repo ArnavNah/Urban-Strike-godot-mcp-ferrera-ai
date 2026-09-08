@@ -68,6 +68,8 @@ func _ready() -> void:
 	success = test_environment_gameplay_integration(log_lines) and success
 	append_log("Running test 24 (ground and air ai)...", log_lines)
 	success = test_ground_and_air_ai(log_lines) and success
+	append_log("Running test 25 (enemy roster & formations)...", log_lines)
+	success = test_enemy_roster_and_procedural_formations(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2118,4 +2120,189 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 
 	root_node.queue_free()
 	append_log("  -> Ground approach, fire loops, turret/SAM timings, air approach/break-away/separation verified.", logs)
+	return true
+
+func test_enemy_roster_and_procedural_formations(logs: Array[String]) -> bool:
+	append_log("[TEST 25] Starting Enemy Roster + Procedural Formations tests...", logs)
+
+	var root_node := Node3D.new()
+	root_node.name = "TestRosterRoot"
+	add_child(root_node)
+
+	# 1. Test Ground Enemy Roster Scenes & Archetypes
+	var ground_roster := [
+		{"path": "res://scenes/enemies/ground_scout_buggy.tscn", "cost": 2, "wtype": GroundEnemyArchetype.WeaponType.RAPID_MG, "hp": 25.0},
+		{"path": "res://scenes/enemies/ground_rocket_technical.tscn", "cost": 3, "wtype": GroundEnemyArchetype.WeaponType.ROCKET_BURST, "hp": 35.0},
+		{"path": "res://scenes/enemies/ground_assault_ifv.tscn", "cost": 5, "wtype": GroundEnemyArchetype.WeaponType.RAPID_MG, "hp": 50.0},
+		{"path": "res://scenes/enemies/ground_troop_carrier_apc.tscn", "cost": 5, "wtype": GroundEnemyArchetype.WeaponType.TROOP_DEPLOY, "hp": 55.0},
+		{"path": "res://scenes/enemies/ground_mortar_carrier.tscn", "cost": 6, "wtype": GroundEnemyArchetype.WeaponType.MORTAR_SHELL, "hp": 45.0},
+		{"path": "res://scenes/enemies/ground_jammer_vehicle.tscn", "cost": 7, "wtype": GroundEnemyArchetype.WeaponType.JAMMER_ECM, "hp": 45.0}
+	]
+
+	for entry in ground_roster:
+		var sc := load(entry["path"]) as PackedScene
+		if not sc:
+			append_log("FAIL: Ground scene missing: %s" % entry["path"], logs)
+			root_node.queue_free()
+			return false
+		var inst: Node3D = sc.instantiate() as Node3D
+		root_node.add_child(inst)
+		var arch: GroundEnemyArchetype = inst.get("archetype") as GroundEnemyArchetype
+		if not arch:
+			append_log("FAIL: Vehicle %s missing GroundEnemyArchetype" % entry["path"], logs)
+			root_node.queue_free()
+			return false
+		if arch.threat_cost != entry["cost"]:
+			append_log("FAIL: Vehicle %s threat_cost mismatch (expected %d, got %d)" % [entry["path"], entry["cost"], arch.threat_cost], logs)
+			root_node.queue_free()
+			return false
+		if arch.weapon_type != entry["wtype"]:
+			append_log("FAIL: Vehicle %s weapon_type mismatch" % entry["path"], logs)
+			root_node.queue_free()
+			return false
+		if inst.current_health != entry["hp"]:
+			append_log("FAIL: Vehicle %s health mismatch (expected %.1f, got %.1f)" % [entry["path"], entry["hp"], inst.current_health], logs)
+			root_node.queue_free()
+			return false
+		if entry["wtype"] == GroundEnemyArchetype.WeaponType.JAMMER_ECM and not inst.is_in_group("jammers"):
+			append_log("FAIL: Jammer vehicle not registered in 'jammers' group", logs)
+			root_node.queue_free()
+			return false
+		inst.queue_free()
+
+	# 2. Test Air Enemy Roster Threat Costs
+	var air_roster := [
+		{"path": "res://scenes/enemies/air_scout_helicopter.tscn", "cost": 4},
+		{"path": "res://scenes/enemies/air_rocket_raider.tscn", "cost": 6},
+		{"path": "res://scenes/enemies/air_attack_gunship.tscn", "cost": 9},
+		{"path": "res://scenes/enemies/air_transport_helicopter.tscn", "cost": 7},
+		{"path": "res://scenes/enemies/air_jammer_helicopter.tscn", "cost": 8}
+	]
+	for a_entry in air_roster:
+		var a_sc := load(a_entry["path"]) as PackedScene
+		var a_inst: Node3D = a_sc.instantiate() as Node3D
+		root_node.add_child(a_inst)
+		var a_arch: AirEnemyArchetype = a_inst.get("archetype") as AirEnemyArchetype
+		if not a_arch or a_arch.threat_cost != a_entry["cost"]:
+			append_log("FAIL: Air vehicle %s threat cost mismatch" % a_entry["path"], logs)
+			root_node.queue_free()
+			return false
+		a_inst.queue_free()
+
+	# 3. Test APC Troop Deployment
+	var apc_scene := load("res://scenes/enemies/ground_troop_carrier_apc.tscn") as PackedScene
+	var apc: Node3D = apc_scene.instantiate() as Node3D
+	root_node.add_child(apc)
+	apc.call("_deploy_troops")
+	if not bool(apc.get("_troops_deployed")):
+		append_log("FAIL: APC failed to flag _troops_deployed", logs)
+		root_node.queue_free()
+		return false
+	apc.queue_free()
+
+	# 4. Test Procedural Formation Resources & Composition
+	var sd := SpawnDirector.new()
+	sd.name = "TestSpawnDirector"
+	root_node.add_child(sd)
+	sd.call("_load_procedural_formations")
+	var forms: Array = sd.get("procedural_formations")
+	if forms.size() < 12:
+		append_log("FAIL: Expected 12 procedural formations, got %d" % forms.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Test light_patrol composition
+	var light_patrol := load("res://resources/formations/light_patrol.tres") as FormationDefinition
+	if not light_patrol or light_patrol.units.size() != 2:
+		append_log("FAIL: light_patrol units mismatch", logs)
+		root_node.queue_free()
+		return false
+
+	# Test combined_arms composition
+	var combined_arms := load("res://resources/formations/combined_arms.tres") as FormationDefinition
+	if not combined_arms or combined_arms.units.size() != 3:
+		append_log("FAIL: combined_arms units mismatch", logs)
+		root_node.queue_free()
+		return false
+
+	# 5. Test Elapsed Time Unlock Tiers
+	sd.set("continuous_ground_budget", 100.0)
+	sd.set("continuous_air_budget", 100.0)
+
+	# At t = 30s (Tier 1: 0-2 min), only 0-min formations eligible
+	sd.set("elapsed_survival_time", 30.0)
+	for i in range(5):
+		var picked: FormationDefinition = sd.call("select_procedural_formation", Vector3.ZERO) as FormationDefinition
+		if picked and picked.min_elapsed_time > 30.0:
+			append_log("FAIL: Formation unlocked too early: %s (min_time: %.1f at elapsed 30s)" % [picked.formation_id, picked.min_elapsed_time], logs)
+			root_node.queue_free()
+			return false
+
+	# At t = 180s (Tier 2: 2-5 min), 120s formations become eligible
+	sd.set("elapsed_survival_time", 180.0)
+	var armored_patrol := load("res://resources/formations/armored_patrol.tres") as FormationDefinition
+	if armored_patrol.min_elapsed_time != 120.0:
+		append_log("FAIL: armored_patrol min_elapsed_time should be 120s", logs)
+		root_node.queue_free()
+		return false
+
+	# At t = 360s (Tier 3: 5-8 min), 300s formations become eligible
+	sd.set("elapsed_survival_time", 360.0)
+	var armored_push := load("res://resources/formations/armored_push.tres") as FormationDefinition
+	if armored_push.min_elapsed_time != 300.0:
+		append_log("FAIL: armored_push min_elapsed_time should be 300s", logs)
+		root_node.queue_free()
+		return false
+
+	# At t = 540s (Tier 4: 8+ min), 480s formations become eligible
+	sd.set("elapsed_survival_time", 540.0)
+	var gunship_escort := load("res://resources/formations/gunship_escort.tres") as FormationDefinition
+	if gunship_escort.min_elapsed_time != 480.0:
+		append_log("FAIL: gunship_escort min_elapsed_time should be 480s", logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Test Variety Rules: Anti-Repetition
+	var history: Array = sd.get("formation_history")
+	history.clear()
+	sd.call("_record_formation", "light_patrol")
+	if sd.call("can_spawn_formation", "light_patrol"):
+		append_log("FAIL: can_spawn_formation allowed exact repeat of last formation", logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Test Tactical Caps Enforcement
+	for existing_sam in get_tree().get_nodes_in_group("sam_sites"):
+		existing_sam.remove_from_group("sam_sites")
+
+	sd.set("cap_sam", 3)
+	var sam1 := Node3D.new()
+	sam1.add_to_group("sam_sites")
+	var sam2 := Node3D.new()
+	sam2.add_to_group("sam_sites")
+	var sam3 := Node3D.new()
+	sam3.add_to_group("sam_sites")
+	root_node.add_child(sam1)
+	root_node.add_child(sam2)
+	root_node.add_child(sam3)
+
+	var active_sams: int = sd.call("get_active_unit_count", "sam")
+	if active_sams != 3:
+		append_log("FAIL: Expected 3 active SAMs, got %d" % active_sams, logs)
+		root_node.queue_free()
+		return false
+
+	# Now check SAM defense formation selection when cap is reached
+	var sam_defense := load("res://resources/formations/sam_defense.tres") as FormationDefinition
+	var forms_list: Array[FormationDefinition] = [sam_defense]
+	sd.set("procedural_formations", forms_list)
+	history.clear()
+	var sam_pick: FormationDefinition = sd.call("select_procedural_formation", Vector3.ZERO) as FormationDefinition
+	if sam_pick != null:
+		append_log("FAIL: Director selected SAM Defense despite SAM active cap reached", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Ground/air roster, APC troop deploy, procedural formations, variety rules, elapsed unlock tiers, and tactical caps verified.", logs)
 	return true

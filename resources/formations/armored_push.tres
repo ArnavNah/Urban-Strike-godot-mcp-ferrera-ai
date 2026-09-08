@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="FormationDefinition" format=3 uid="uid://caa84ljjo3psy"]
+
+[ext_resource type="Script" uid="uid://ct5774t8nk80a" path="res://scripts/resources/formation_definition.gd" id="1_3g267"]
+
+[resource]
+script = ExtResource("1_3g267")
+formation_id = "armored_push"
+display_name = "Armored Push"
+category = 1
+min_elapsed_time = 300.0
+ground_budget_cost = 52.0
+preferred_districts = Array[String](["Military", "Industrial"])
+units = Array[Dictionary]([{
+"cap_tag": "tank",
+"count": 1,
+"is_air": false,
+"offset": Vector3(0, 0, 0),
+"scene_path": "res://scenes/enemies/tank.tscn"
+}, {
+"cap_tag": "ifv",
+"count": 1,
+"is_air": false,
+"offset": Vector3(-4.5, 0, 2),
+"scene_path": "res://scenes/enemies/ground_assault_ifv.tscn"
+}, {
+"cap_tag": "buggy",
+"count": 1,
+"is_air": false,
+"offset": Vector3(4.5, 0, -2),
+"scene_path": "res://scenes/enemies/ground_scout_buggy.tscn"
+}])

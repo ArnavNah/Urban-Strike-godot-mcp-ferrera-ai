@@ -1,0 +1,84 @@
+[gd_scene format=3 uid="uid://dvrrvoi8xolyt"]
+
+[ext_resource type="Script" uid="uid://crce8ribxgcrl" path="res://scripts/enemies/tank.gd" id="1_6x3ff"]
+[ext_resource type="Script" uid="uid://mu6bykq1xcym" path="res://scripts/resources/ground_enemy_archetype.gd" id="2_02b4t"]
+
+[sub_resource type="Resource" id="Resource_ijyey"]
+script = ExtResource("2_02b4t")
+archetype_name = "Troop Carrier APC"
+threat_cost = 5
+threat_score = 0.65
+formation_tags = Array[String](["apcs", "transports", "ground_support"])
+max_health = 55.0
+salvage_reward = 55
+xp_reward = 55
+move_speed = 8.0
+preferred_range = 28.0
+threat_range = 44.0
+aim_prep_time = 0.3
+charge_time = 0.2
+reload_time = 1.6
+burst_count = 3
+weapon_type = 4
+damage_per_shot = 2.5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_nc6gl"]
+size = Vector3(3, 1.8, 4.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1cquj"]
+albedo_color = Color(0.32, 0.34, 0.32, 1)
+metallic = 0.4
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_j74v3"]
+material = SubResource("StandardMaterial3D_1cquj")
+size = Vector3(2.8, 1.2, 4.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_at3vt"]
+material = SubResource("StandardMaterial3D_1cquj")
+size = Vector3(0.9, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8poie"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_gebvn"]
+material = SubResource("StandardMaterial3D_8poie")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 1.0
+
+[node name="GroundTroopCarrierAPC" type="CharacterBody3D" unique_id=461438121]
+collision_layer = 4
+script = ExtResource("1_6x3ff")
+archetype = SubResource("Resource_ijyey")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=401951949]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("BoxShape3D_nc6gl")
+
+[node name="ChassisMesh" type="MeshInstance3D" parent="." unique_id=2055788549]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+mesh = SubResource("BoxMesh_j74v3")
+
+[node name="Turret" type="Node3D" parent="." unique_id=1108624981]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -0.6)
+
+[node name="TurretMesh" type="MeshInstance3D" parent="Turret" unique_id=988263727]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+mesh = SubResource("BoxMesh_at3vt")
+
+[node name="Barrel" type="Node3D" parent="Turret" unique_id=1316515618]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.5)
+
+[node name="BarrelMesh" type="MeshInstance3D" parent="Turret/Barrel" unique_id=453659726]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.5)
+mesh = SubResource("CylinderMesh_gebvn")
+
+[node name="Muzzle" type="Marker3D" parent="Turret/Barrel" unique_id=494719686]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+
+[node name="ChargeLight" type="OmniLight3D" parent="Turret/Barrel" unique_id=1215882861]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+visible = false
+light_color = Color(0.4, 0.8, 1, 1)
+omni_range = 3.0

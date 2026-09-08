@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="FormationDefinition" format=3 uid="uid://bspsdss53kkqy"]
+
+[ext_resource type="Script" uid="uid://ct5774t8nk80a" path="res://scripts/resources/formation_definition.gd" id="1_s4mqd"]
+
+[resource]
+script = ExtResource("1_s4mqd")
+formation_id = "air_harassment"
+display_name = "Air Harassment"
+category = 2
+min_elapsed_time = 120.0
+ground_budget_cost = 0.0
+air_budget_cost = 20.0
+preferred_districts = Array[String](["Industrial", "Military", "Commercial"])
+units = Array[Dictionary]([{
+"cap_tag": "raider",
+"count": 1,
+"is_air": true,
+"offset": Vector3(0, 0, 0),
+"scene_path": "res://scenes/enemies/air_rocket_raider.tscn"
+}, {
+"cap_tag": "scout",
+"count": 1,
+"is_air": true,
+"offset": Vector3(10, 2, -4),
+"scene_path": "res://scenes/enemies/air_scout_helicopter.tscn"
+}])
+required_caps = {
+"raider": 1,
+"scout": 1
+}

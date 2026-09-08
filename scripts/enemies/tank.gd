@@ -14,6 +14,7 @@ enum State {
 	RELOADING
 }
 
+@export var archetype: GroundEnemyArchetype = null
 @export var max_health: float = 75.0
 @export var threat_range: float = 55.0
 @export var preferred_range: float = 36.0
@@ -29,6 +30,7 @@ var current_health: float = 75.0
 var current_state: State = State.REPOSITIONING
 var is_alive: bool = true
 var is_scattered: bool = false
+var _troops_deployed: bool = false
 
 var _state_timer: float = 0.0
 var _reposition_dir: Vector3 = Vector3.FORWARD
@@ -47,7 +49,26 @@ var _los_timer: float = 0.0
 @onready var charge_light: OmniLight3D = get_node_or_null("Turret/Barrel/ChargeLight")
 
 func _ready() -> void:
-	add_to_group("armored_enemies")
+	if archetype:
+		max_health = archetype.max_health
+		threat_range = archetype.threat_range
+		preferred_range = archetype.preferred_range
+		cannon_damage = archetype.damage_per_shot
+		aim_prep_time = archetype.aim_prep_time
+		charge_time = archetype.charge_time
+		reload_time = archetype.reload_time
+		move_speed = archetype.move_speed
+		is_command_unit = archetype.is_command_unit
+		if archetype.is_armored:
+			add_to_group("armored_enemies")
+		for tag in archetype.formation_tags:
+			if not is_in_group(tag):
+				add_to_group(tag)
+		if archetype.weapon_type == GroundEnemyArchetype.WeaponType.JAMMER_ECM:
+			add_to_group("jammers")
+	else:
+		add_to_group("armored_enemies")
+
 	add_to_group("enemies")
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
@@ -61,6 +82,8 @@ func _exit_tree() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 	_release_slot()
+	if is_in_group("jammers"):
+		remove_from_group("jammers")
 
 func register_escort(escort: Tank) -> void:
 	if escort and not _escorts.has(escort):
@@ -183,6 +206,8 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 	# Check for transition into combat engagement
 	if not is_scattered and dist <= preferred_range and has_los:
 		velocity = Vector3.ZERO
+		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
+			_deploy_troops()
 		_transition_to(State.ACQUIRE)
 		return
 
@@ -193,6 +218,8 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
 			_state_timer = 1.0
 		elif dist <= threat_range and has_los:
+			if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
+				_deploy_troops()
 			_transition_to(State.ACQUIRE)
 		else:
 			_start_new_reposition()
@@ -245,7 +272,23 @@ func _tick_firing() -> void:
 	velocity = Vector3.ZERO
 	if charge_light:
 		charge_light.visible = false
-	_fire_cannon()
+
+	if archetype:
+		match archetype.weapon_type:
+			GroundEnemyArchetype.WeaponType.CANNON:
+				_fire_cannon()
+			GroundEnemyArchetype.WeaponType.RAPID_MG, GroundEnemyArchetype.WeaponType.JAMMER_ECM:
+				_fire_rapid_mg()
+			GroundEnemyArchetype.WeaponType.ROCKET_BURST:
+				_fire_rocket_burst()
+			GroundEnemyArchetype.WeaponType.MORTAR_SHELL:
+				_fire_mortar_shell()
+			GroundEnemyArchetype.WeaponType.TROOP_DEPLOY:
+				_deploy_troops()
+				_fire_rapid_mg()
+	else:
+		_fire_cannon()
+
 	_release_slot()
 	_transition_to(State.RELOADING)
 
@@ -397,6 +440,105 @@ func _fire_cannon() -> void:
 			flash.scale = Vector3(2.0, 2.0, 2.0)
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(flash)
+
+func _fire_rapid_mg() -> void:
+	var count: int = archetype.burst_count if archetype else 4
+	var interval: float = archetype.burst_interval if archetype else 0.11
+	var dmg: float = archetype.damage_per_shot if archetype else 2.5
+	for i in range(count):
+		if not is_instance_valid(self) or not is_alive:
+			return
+		_spawn_single_bullet(dmg)
+		if i < count - 1:
+			await get_tree().create_timer(interval).timeout
+
+func _spawn_single_bullet(dmg: float) -> void:
+	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else (turret.global_position if turret else global_position + Vector3.UP)
+	var fire_dir := -barrel.global_transform.basis.z if barrel else -global_transform.basis.z
+	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
+	if not pool and ProjectilePool.instance:
+		pool = ProjectilePool.instance
+	if pool:
+		pool.spawn_projectile(muzzle_pos, fire_dir, false, dmg)
+	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
+	if flash_scene:
+		var flash := flash_scene.instantiate() as Node3D
+		if flash:
+			flash.transform.origin = muzzle_pos
+			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+			p.add_child.call_deferred(flash)
+
+func _fire_rocket_burst() -> void:
+	var rocket_scene := preload("res://scenes/weapons/unguided_rocket.tscn")
+	var count: int = archetype.burst_count if archetype else 3
+	for i in range(count):
+		if not is_instance_valid(self) or not is_alive or not is_instance_valid(_player):
+			return
+		var muzzle_pos: Vector3 = muzzle.global_position if muzzle else (turret.global_position if turret else global_position + Vector3.UP)
+		var fire_dir := (_player.global_position - muzzle_pos).normalized()
+		var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
+		fire_dir = (fire_dir + spread).normalized()
+		var rocket: UnguidedRocket = rocket_scene.instantiate() as UnguidedRocket
+		if rocket:
+			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+			p.add_child.call_deferred(rocket)
+			rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
+		if i < count - 1:
+			await get_tree().create_timer(0.18).timeout
+
+func _fire_mortar_shell() -> void:
+	if not is_instance_valid(_player):
+		return
+	var target_pos := _player.global_position
+	target_pos.y = 0.05
+
+	var warning_node := Node3D.new()
+	var mesh_inst := MeshInstance3D.new()
+	var cylinder := CylinderMesh.new()
+	cylinder.top_radius = 5.5
+	cylinder.bottom_radius = 5.5
+	cylinder.height = 0.1
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.15, 0.15, 0.55)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh_inst.mesh = cylinder
+	mesh_inst.material_override = mat
+	warning_node.add_child(mesh_inst)
+	warning_node.global_position = target_pos
+
+	var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+	p.add_child(warning_node)
+
+	get_tree().create_timer(1.6).timeout.connect(func():
+		if is_instance_valid(warning_node):
+			warning_node.queue_free()
+		var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
+		if flash_scene:
+			var flash := flash_scene.instantiate() as Node3D
+			if flash:
+				flash.transform.origin = target_pos + Vector3.UP * 0.5
+				flash.scale = Vector3(5.0, 5.0, 5.0)
+				p.add_child.call_deferred(flash)
+		var pl := get_tree().get_first_node_in_group("player")
+		if is_instance_valid(pl):
+			var flat_dist := Vector2(pl.global_position.x - target_pos.x, pl.global_position.z - target_pos.z).length()
+			if flat_dist <= 6.5:
+				if pl.has_method("take_damage"):
+					pl.take_damage(20.0, self)
+	)
+
+func _deploy_troops() -> void:
+	if not _troops_deployed:
+		_troops_deployed = true
+		var inf_scene := preload("res://scenes/enemies/infantry_cluster.tscn")
+		if inf_scene:
+			var squad := inf_scene.instantiate() as Node3D
+			if squad:
+				squad.global_position = global_position + (-global_transform.basis.z * 3.5)
+				squad.global_position.y = 0.0
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(squad)
 
 func _check_los() -> bool:
 	if not is_instance_valid(_player):

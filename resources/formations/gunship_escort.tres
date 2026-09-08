@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="FormationDefinition" format=3 uid="uid://0y7fp0fabb5b"]
+
+[ext_resource type="Script" uid="uid://ct5774t8nk80a" path="res://scripts/resources/formation_definition.gd" id="1_vvo2k"]
+
+[resource]
+script = ExtResource("1_vvo2k")
+formation_id = "gunship_escort"
+display_name = "Gunship Escort"
+category = 2
+min_elapsed_time = 480.0
+ground_budget_cost = 0.0
+air_budget_cost = 32.0
+preferred_districts = Array[String](["Military", "Industrial"])
+units = Array[Dictionary]([{
+"cap_tag": "gunship",
+"count": 1,
+"is_air": true,
+"offset": Vector3(0, 0, 0),
+"scene_path": "res://scenes/enemies/air_attack_gunship.tscn"
+}, {
+"cap_tag": "scout",
+"count": 1,
+"is_air": true,
+"offset": Vector3(9, 2, -4),
+"scene_path": "res://scenes/enemies/air_scout_helicopter.tscn"
+}])
+required_caps = {
+"gunship": 1,
+"scout": 1
+}

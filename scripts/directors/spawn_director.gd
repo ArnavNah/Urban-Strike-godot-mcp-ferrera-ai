@@ -18,6 +18,11 @@ extends Node
 @export var cap_ace: int = 1
 @export var max_active_rooftop_threats: int = 3
 
+@export_group("Ground Enemy Tactical Caps")
+@export var cap_sam: int = 3
+@export var cap_mortar: int = 2
+@export var cap_support: int = 1
+
 @export_group("Continuous Survival Tuning")
 @export var is_continuous_mode: bool = true
 @export var base_ground_budget_rate: float = 18.0
@@ -101,6 +106,17 @@ var _scene_air_transport: PackedScene = preload("res://scenes/enemies/air_transp
 var _scene_air_gunship: PackedScene = preload("res://scenes/enemies/air_attack_gunship.tscn")
 var _scene_air_jammer: PackedScene = preload("res://scenes/enemies/air_jammer_helicopter.tscn")
 var _scene_air_ace: PackedScene = preload("res://scenes/enemies/air_ace_gunship.tscn")
+
+# Modular Ground Vehicle scenes
+var _scene_buggy: PackedScene = preload("res://scenes/enemies/ground_scout_buggy.tscn")
+var _scene_technical: PackedScene = preload("res://scenes/enemies/ground_rocket_technical.tscn")
+var _scene_ifv: PackedScene = preload("res://scenes/enemies/ground_assault_ifv.tscn")
+var _scene_apc: PackedScene = preload("res://scenes/enemies/ground_troop_carrier_apc.tscn")
+var _scene_mortar: PackedScene = preload("res://scenes/enemies/ground_mortar_carrier.tscn")
+var _scene_ground_jammer: PackedScene = preload("res://scenes/enemies/ground_jammer_vehicle.tscn")
+
+var procedural_formations: Array[FormationDefinition] = []
+var formation_category_history: Array[int] = []
 
 # GDD Section 11.2 & 12.2 wave table (Preserved for compatibility and tests)
 var wave_table: Array[Dictionary] = [
@@ -275,6 +291,8 @@ func _setup_spawn_nodes_and_timers() -> void:
 			add_child(surge_timer)
 	if surge_timer and not surge_timer.timeout.is_connected(_on_surge_timer_timeout):
 		surge_timer.timeout.connect(_on_surge_timer_timeout)
+
+	_load_procedural_formations()
 
 func get_ground_spawn_nodes() -> Array[Marker3D]:
 	var result: Array[Marker3D] = []
@@ -791,6 +809,12 @@ func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
 	return false
 
 func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
+	# 1. Evaluate procedural formation cards first
+	var proc_form := select_procedural_formation(p_pos)
+	if proc_form:
+		var spawned := spawn_procedural_formation(proc_form, p_pos)
+		if not spawned.is_empty():
+			return true
 
 	if stage >= 4 and continuous_air_budget >= 20.0 and can_spawn_formation("elite_encounter") and get_active_air_count("ace_gunships") < cap_ace and randf() > 0.4:
 		var entry := get_air_corridor_entry(p_pos, 45.0, 75.0)
@@ -863,38 +887,60 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		if continuous_air_budget < 4.0 and stage >= 1:
 			continuous_air_budget = maxf(continuous_air_budget, 4.0)
 
-	# Ground stream
+	# Ground stream with time-based unlocks and tactical caps
 	if continuous_ground_budget >= 15.0:
-		if stage >= 3 and continuous_ground_budget >= 40.0 and randf() > 0.6:
-			_spawn_continuous_enemy(_scene_sam, p_pos, 0.0)
-			continuous_ground_budget -= 40.0
-		elif stage >= 2 and continuous_ground_budget >= 28.0 and randf() > 0.45:
-			_spawn_continuous_enemy(_scene_tank, p_pos, 0.0)
-			continuous_ground_budget -= 28.0
-		elif continuous_ground_budget >= 20.0 and randf() > 0.5:
-			if get_active_rooftop_count() < max_active_rooftop_threats and randf() > 0.35:
-				var rt := spawn_rooftop_threat(stage, p_pos)
-				if rt:
-					continuous_ground_budget -= 20.0
-				else:
-					_spawn_continuous_enemy(_scene_turret, p_pos, 0.0)
-					continuous_ground_budget -= 20.0
-			else:
-				_spawn_continuous_enemy(_scene_turret, p_pos, 0.0)
-				continuous_ground_budget -= 20.0
-		else:
-			_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0)
-			continuous_ground_budget -= 15.0
+		var chosen_scene: PackedScene = _scene_infantry
+		var cost: float = 15.0
 
-	# Air stream
+		if elapsed_survival_time >= 300.0 and continuous_ground_budget >= 40.0 and get_active_unit_count("sam") < cap_sam and randf() > 0.7:
+			chosen_scene = _scene_sam
+			cost = 40.0
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 34.0 and get_active_unit_count("mortar") < cap_mortar and randf() > 0.65:
+			chosen_scene = _scene_mortar
+			cost = 34.0
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 35.0 and get_active_unit_count("jammer") < cap_support and randf() > 0.7:
+			chosen_scene = _scene_ground_jammer
+			cost = 35.0
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 28.0 and randf() > 0.5:
+			chosen_scene = _scene_tank
+			cost = 28.0
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 28.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
+			chosen_scene = _scene_apc
+			cost = 28.0
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 26.0 and randf() > 0.55:
+			chosen_scene = _scene_ifv
+			cost = 26.0
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 20.0 and randf() > 0.5:
+			chosen_scene = _scene_turret
+			cost = 20.0
+		elif continuous_ground_budget >= 22.0 and randf() > 0.5:
+			chosen_scene = _scene_technical
+			cost = 22.0
+		elif continuous_ground_budget >= 18.0 and randf() > 0.4:
+			chosen_scene = _scene_buggy
+			cost = 18.0
+		else:
+			chosen_scene = _scene_infantry
+			cost = 15.0
+
+		_spawn_continuous_enemy(chosen_scene, p_pos, 0.0)
+		continuous_ground_budget -= cost
+
+	# Air stream with time-based unlocks and tactical caps
 	var p_y := clampf(_get_player_altitude(), 11.0, 17.0)
-	if stage >= 3 and continuous_air_budget >= 9.0 and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.5:
+	if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and randf() > 0.45:
 		_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
 		continuous_air_budget -= 9.0
-	elif stage >= 2 and continuous_air_budget >= 6.0 and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.4:
+	elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and randf() > 0.6:
+		_spawn_continuous_enemy(_scene_air_jammer, p_pos, p_y + 3.0)
+		continuous_air_budget -= 8.0
+	elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
+		_spawn_continuous_enemy(_scene_air_transport, p_pos, p_y)
+		continuous_air_budget -= 7.0
+	elif elapsed_survival_time >= 120.0 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and randf() > 0.4:
 		_spawn_continuous_enemy(_scene_air_raider, p_pos, p_y + 2.0)
 		continuous_air_budget -= 6.0
-	elif continuous_air_budget >= 4.0 and get_active_air_count("scouts") < cap_scout:
+	elif continuous_air_budget >= 4.0 and get_active_unit_count("scout") < cap_scout:
 		_spawn_continuous_enemy(_scene_air_scout, p_pos, p_y)
 		continuous_air_budget -= 4.0
 
@@ -975,15 +1021,209 @@ func _on_spawned_enemy_tree_exited(enemy: Node3D) -> void:
 		EnemyRegistry.instance.unregister_enemy(enemy)
 	_notify_progress()
 
-func get_active_air_count(tag: String) -> int:
+func get_active_unit_count(tag: String) -> int:
 	var count: int = 0
+	var group_name := tag
+	match tag:
+		"sam": group_name = "sam_sites"
+		"mortar": group_name = "mortars"
+		"gunship": group_name = "attack_gunships"
+		"jammer": group_name = "jammers"
+		"transport": group_name = "transports"
+		"scout": group_name = "scouts"
+		"raider": group_name = "rocket_raiders"
+		"ace": group_name = "ace_gunships"
+		"buggy": group_name = "buggies"
+		"technical": group_name = "technicals"
+		"ifv": group_name = "ifvs"
+		"tank": group_name = "tanks"
+
+	if is_inside_tree() and get_tree():
+		for e in get_tree().get_nodes_in_group(group_name):
+			if is_instance_valid(e) and not e.is_queued_for_deletion():
+				if "is_alive" in e and not e.is_alive:
+					continue
+				count += 1
+		if count == 0 and group_name != tag:
+			for e in get_tree().get_nodes_in_group(tag):
+				if is_instance_valid(e) and not e.is_queued_for_deletion():
+					if "is_alive" in e and not e.is_alive:
+						continue
+					count += 1
+		return count
+
 	for e in _wave_enemies:
 		if is_instance_valid(e) and not e.is_queued_for_deletion():
 			if "is_alive" in e and not e.is_alive:
 				continue
-			if e.is_in_group(tag):
+			if e.is_in_group(group_name) or e.is_in_group(tag):
 				count += 1
 	return count
+
+func get_active_air_count(tag: String) -> int:
+	return get_active_unit_count(tag)
+
+func _load_procedural_formations() -> void:
+	procedural_formations.clear()
+	var form_ids := [
+		"light_patrol", "technical_raid", "air_patrol",
+		"armored_patrol", "troop_insertion", "air_harassment",
+		"armored_push", "fire_support", "sam_defense",
+		"reinforcement_drop", "gunship_escort", "combined_arms"
+	]
+	for fid in form_ids:
+		var path := "res://resources/formations/%s.tres" % fid
+		if ResourceLoader.exists(path):
+			var res := load(path) as FormationDefinition
+			if res:
+				procedural_formations.append(res)
+
+func get_district_at_position(pos: Vector3) -> String:
+	if pos.x < -20.0:
+		return "Industrial" if pos.z < 20.0 else "Outskirts"
+	elif pos.x > 20.0:
+		return "Military" if pos.z < 20.0 else "Outskirts"
+	else:
+		return "CentralUrban"
+
+func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
+	if procedural_formations.is_empty():
+		_load_procedural_formations()
+
+	var player_district := get_district_at_position(p_pos)
+	var candidates: Array[FormationDefinition] = []
+	var weights: Array[float] = []
+
+	for form in procedural_formations:
+		# 1. Unlock time check
+		if form.min_elapsed_time > elapsed_survival_time:
+			continue
+
+		# 2. Budget check
+		if continuous_ground_budget < form.ground_budget_cost or continuous_air_budget < form.air_budget_cost:
+			continue
+
+		# 3. Tactical Caps check
+		var cap_violated := false
+		for cap_tag in form.required_caps.keys():
+			var req_count: int = int(form.required_caps[cap_tag])
+			var current_count := get_active_unit_count(cap_tag)
+			var max_allowed: int = 99
+			match cap_tag:
+				"sam": max_allowed = cap_sam
+				"mortar": max_allowed = cap_mortar
+				"gunship": max_allowed = cap_gunship
+				"jammer": max_allowed = cap_support
+				"transport": max_allowed = cap_transport
+				"scout": max_allowed = cap_scout
+				"raider": max_allowed = cap_raider
+			if current_count + req_count > max_allowed:
+				cap_violated = true
+				break
+		if cap_violated:
+			continue
+
+		# 4. Variety Rules: Anti-repetition
+		if formation_history.size() > 0 and formation_history[-1] == form.formation_id:
+			continue
+
+		var weight: float = 10.0
+		if formation_history.size() >= 2 and formation_history[-2] == form.formation_id:
+			weight *= 0.25
+		elif formation_history.size() >= 3 and formation_history[-3] == form.formation_id:
+			weight *= 0.5
+
+		if formation_category_history.size() > 0 and formation_category_history[-1] == form.category:
+			weight *= 0.35
+
+		if form.preferred_districts.has(player_district):
+			weight *= 1.75
+
+		candidates.append(form)
+		weights.append(weight)
+
+	if candidates.is_empty():
+		return null
+
+	var total_weight: float = 0.0
+	for w in weights:
+		total_weight += w
+
+	var roll := randf() * total_weight
+	var accum := 0.0
+	for i in range(candidates.size()):
+		accum += weights[i]
+		if roll <= accum:
+			return candidates[i]
+
+	return candidates[-1]
+
+func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3) -> Array[Node3D]:
+	var spawned: Array[Node3D] = []
+	if not form:
+		return spawned
+
+	continuous_ground_budget -= form.ground_budget_cost
+	continuous_air_budget -= form.air_budget_cost
+
+	var g_spawn := get_authored_ground_spawn(form.formation_id, p_pos, 28.0)
+	var a_spawn := get_air_corridor_entry(p_pos, 42.0, 72.0)
+
+	var parent := _get_spawn_parent()
+
+	for unit_spec in form.units:
+		var scene_path: String = unit_spec.get("scene_path", "")
+		if scene_path.is_empty():
+			continue
+		var scene := load(scene_path) as PackedScene
+		if not scene:
+			continue
+
+		var count: int = int(unit_spec.get("count", 1))
+		var is_air: bool = bool(unit_spec.get("is_air", false))
+		var base_offset: Vector3 = unit_spec.get("offset", Vector3.ZERO)
+
+		var base_pos: Vector3 = a_spawn["position"] if is_air else g_spawn["position"]
+		var base_heading: Vector3 = a_spawn["heading"] if is_air else g_spawn["heading"]
+		var dir := base_heading.normalized()
+		var perp := Vector3(-dir.z, 0, dir.x)
+
+		for i in range(count):
+			var enemy := scene.instantiate() as Node3D
+			if not enemy:
+				continue
+
+			var cap_tag: String = unit_spec.get("cap_tag", "")
+			if not cap_tag.is_empty() and not enemy.is_in_group(cap_tag):
+				enemy.add_to_group(cap_tag)
+			if is_air and not enemy.is_in_group("air_enemies"):
+				enemy.add_to_group("air_enemies")
+
+			var side_mult: float = 1.0 if i % 2 == 0 else -1.0
+			var stagger := float(i) * 3.5
+			var spawn_pos: Vector3
+			if is_air:
+				var p_y := clampf(_get_player_altitude(), 12.0, 18.0)
+				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 5.0) * side_mult) - (dir * stagger)
+				spawn_pos.y = clampf(p_y + base_offset.y, 11.0, 22.0)
+			else:
+				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 2.5) * side_mult) - (dir * stagger)
+				spawn_pos.y = 0.0
+
+			spawn_pos.x = clampf(spawn_pos.x, -arena_half_extents, arena_half_extents)
+			spawn_pos.z = clampf(spawn_pos.z, -arena_half_extents, arena_half_extents)
+			enemy.transform.origin = spawn_pos
+
+			parent.add_child.call_deferred(enemy)
+			_register_spawned_node(enemy)
+			spawned.append(enemy)
+
+	_record_formation(form.formation_id)
+	formation_category_history.append(form.category)
+	if formation_category_history.size() > 6:
+		formation_category_history.pop_front()
+	last_formation_name = form.display_name
+	return spawned
 
 func can_spawn_formation(formation_id: String) -> bool:
 	if formation_history.size() > 0 and formation_history[-1] == formation_id:

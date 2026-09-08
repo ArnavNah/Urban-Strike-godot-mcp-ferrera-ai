@@ -1,0 +1,90 @@
+[gd_scene format=3 uid="uid://cvhvb4lmvp5ak"]
+
+[ext_resource type="Script" uid="uid://crce8ribxgcrl" path="res://scripts/enemies/tank.gd" id="1_duphv"]
+[ext_resource type="Script" uid="uid://mu6bykq1xcym" path="res://scripts/resources/ground_enemy_archetype.gd" id="2_n7w75"]
+
+[sub_resource type="Resource" id="Resource_dj66w"]
+script = ExtResource("2_n7w75")
+archetype_name = "Jammer Vehicle"
+threat_cost = 7
+threat_score = 1.2
+formation_tags = Array[String](["jammers", "ground_support"])
+max_health = 45.0
+salvage_reward = 75
+xp_reward = 75
+move_speed = 7.0
+preferred_range = 32.0
+threat_range = 48.0
+aim_prep_time = 0.3
+charge_time = 0.2
+burst_count = 2
+burst_interval = 0.15
+weapon_type = 5
+damage_per_shot = 1.5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_t2na0"]
+size = Vector3(2.6, 1.8, 3.8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_isidn"]
+albedo_color = Color(0.2, 0.25, 0.35, 1)
+metallic = 0.6
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_4tkpo"]
+material = SubResource("StandardMaterial3D_isidn")
+size = Vector3(2.4, 1, 3.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dnky8"]
+albedo_color = Color(0.8, 0.85, 0.9, 1)
+metallic = 0.8
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_13f3f"]
+material = SubResource("StandardMaterial3D_dnky8")
+top_radius = 1.1
+bottom_radius = 0.2
+height = 0.4
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_opv77"]
+albedo_color = Color(0.2, 0.6, 1, 1)
+emission_enabled = true
+emission = Color(0.2, 0.6, 1, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_0dgf5"]
+material = SubResource("StandardMaterial3D_opv77")
+radius = 0.35
+height = 0.5
+
+[node name="GroundJammerVehicle" type="CharacterBody3D" unique_id=1758548928]
+collision_layer = 4
+script = ExtResource("1_duphv")
+archetype = SubResource("Resource_dj66w")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=968607422]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("BoxShape3D_t2na0")
+
+[node name="ChassisMesh" type="MeshInstance3D" parent="." unique_id=1469126012]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("BoxMesh_4tkpo")
+
+[node name="Turret" type="Node3D" parent="." unique_id=441382488]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="TurretMesh" type="MeshInstance3D" parent="Turret" unique_id=698348883]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("CylinderMesh_13f3f")
+
+[node name="Barrel" type="Node3D" parent="Turret" unique_id=351978646]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+
+[node name="BarrelMesh" type="MeshInstance3D" parent="Turret/Barrel" unique_id=1399221068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+mesh = SubResource("SphereMesh_0dgf5")
+
+[node name="Muzzle" type="Marker3D" parent="Turret/Barrel" unique_id=1547597542]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -0.6)
+
+[node name="ChargeLight" type="OmniLight3D" parent="Turret/Barrel" unique_id=2052913094]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+light_color = Color(0.2, 0.6, 1, 1)
