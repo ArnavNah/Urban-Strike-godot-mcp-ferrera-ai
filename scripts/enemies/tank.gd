@@ -70,6 +70,13 @@ func _ready() -> void:
 		add_to_group("armored_enemies")
 
 	add_to_group("enemies")
+	floor_snap_length = 0.5
+	floor_stop_on_slope = true
+	floor_max_angle = deg_to_rad(45.0)
+	up_direction = Vector3.UP
+	if global_position.y > 0.0 and global_position.y <= 1.0:
+		global_position.y = 0.0
+
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
 	current_health = max_health
@@ -118,7 +125,7 @@ func scatter(origin_pos: Vector3 = Vector3.ZERO) -> void:
 	_transition_to(State.REPOSITIONING)
 
 func _physics_process(delta: float) -> void:
-	if not is_alive:
+	if not is_alive or not is_inside_tree():
 		return
 
 	if is_scattered:
@@ -127,8 +134,19 @@ func _physics_process(delta: float) -> void:
 			is_scattered = false
 
 	if not is_instance_valid(_player):
-		_player = get_tree().get_first_node_in_group("player")
-		return
+		if is_inside_tree() and get_tree():
+			_player = get_tree().get_first_node_in_group("player")
+		if not is_instance_valid(_player):
+			# Apply gravity and floor snap even if player not yet present
+			if not is_on_floor():
+				velocity.y -= 25.0 * delta
+			else:
+				velocity.y = -1.0
+			move_and_slide()
+			if global_position.y < 0.0:
+				global_position.y = 0.0
+				velocity.y = 0.0
+			return
 
 	var dist := global_position.distance_to(_player.global_position)
 
@@ -177,8 +195,18 @@ func _physics_process(delta: float) -> void:
 	# Ground vehicle separation steering so tanks do not stack
 	_apply_separation()
 
-	velocity.y = 0.0
+	# Apply gravity and floor snapping so vehicles never float or fly
+	if not is_on_floor():
+		velocity.y -= 25.0 * delta
+	else:
+		velocity.y = -1.0 # Downward floor snap velocity
+
 	move_and_slide()
+
+	# Hard floor clamp to ensure ground vehicles never float or fall through ground plane
+	if global_position.y < 0.0:
+		global_position.y = 0.0
+		velocity.y = 0.0
 
 func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 	_state_timer -= delta
@@ -205,14 +233,16 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 
 	# Check for transition into combat engagement
 	if not is_scattered and dist <= preferred_range and has_los:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
 			_deploy_troops()
 		_transition_to(State.ACQUIRE)
 		return
 
 	if _state_timer <= 0.0:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 		if is_scattered:
 			var angle := randf() * TAU
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
@@ -225,7 +255,8 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 			_start_new_reposition()
 
 func _tick_acquire(delta: float, dist: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 	if not has_los or dist > threat_range:
 		_start_new_reposition()
 		return
@@ -239,7 +270,8 @@ func _tick_acquire(delta: float, dist: float, has_los: bool) -> void:
 			_state_timer = 0.25 # Wait for attack slot
 
 func _tick_aiming(delta: float, dist: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 	if not has_los or dist > threat_range:
 		_release_slot()
 		_start_new_reposition()
@@ -251,7 +283,8 @@ func _tick_aiming(delta: float, dist: float, has_los: bool) -> void:
 		_transition_to(State.CHARGING)
 
 func _tick_charging(delta: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 	if not has_los:
 		_release_slot()
 		if charge_light:
@@ -269,7 +302,8 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 		_transition_to(State.FIRING)
 
 func _tick_firing() -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 	if charge_light:
 		charge_light.visible = false
 
@@ -298,13 +332,15 @@ func _tick_reloading(delta: float, dist: float, has_los: bool) -> void:
 		velocity.x = _reposition_dir.x * (move_speed * 0.6)
 		velocity.z = _reposition_dir.z * (move_speed * 0.6)
 	else:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 
 	_track_player(delta * 0.7)
 	_state_timer -= delta
 
 	if _state_timer <= 0.0:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 		if dist <= preferred_range and has_los:
 			_transition_to(State.ACQUIRE)
 		else:
@@ -535,10 +571,16 @@ func _deploy_troops() -> void:
 		if inf_scene:
 			var squad := inf_scene.instantiate() as Node3D
 			if squad:
-				squad.global_position = global_position + (-global_transform.basis.z * 3.5)
-				squad.global_position.y = 0.0
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(squad)
+				var spawn_p: Vector3
+				if is_inside_tree():
+					spawn_p = global_position + (-global_transform.basis.z * 3.5)
+				else:
+					spawn_p = position + Vector3(0.0, 0.0, 3.5)
+				spawn_p.y = 0.0
+				squad.transform.origin = spawn_p
+				var p := get_parent() if get_parent() else (get_tree().current_scene if get_tree() and get_tree().current_scene else (get_tree().root if get_tree() else null))
+				if p:
+					p.add_child.call_deferred(squad)
 
 func _check_los() -> bool:
 	if not is_instance_valid(_player):

@@ -944,6 +944,25 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		_spawn_continuous_enemy(_scene_air_scout, p_pos, p_y)
 		continuous_air_budget -= 4.0
 
+func _is_air_enemy(enemy: Node) -> bool:
+	if not is_instance_valid(enemy):
+		return false
+	# Explicit ground enemy types and resources must NEVER be treated as air
+	if (enemy is Tank) or (enemy is InfantryCluster) or (enemy is GroundTurret) or (enemy is SAMSite):
+		return false
+	if "archetype" in enemy and enemy.archetype is GroundEnemyArchetype:
+		return false
+	if enemy.is_in_group("air_enemies"):
+		return true
+	if (enemy is AirEnemyController) or (enemy is HunterHelicopter) or (enemy is BossArchon):
+		return true
+	if "archetype" in enemy and enemy.archetype is AirEnemyArchetype:
+		return true
+	var n: String = enemy.name
+	if n.begins_with("Air") or n.begins_with("Hunter") or n.begins_with("Boss"):
+		return true
+	return false
+
 func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: float, forced_pos: Vector3 = Vector3.INF) -> Node3D:
 	if not scene:
 		return null
@@ -953,14 +972,14 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 
 	var spawn_pos: Vector3 = forced_pos
 	var heading: Vector3 = Vector3.FORWARD
-	var is_air: bool = altitude > 1.0 or enemy.is_in_group("air_enemies") or ("archetype" in enemy)
+	var is_air: bool = _is_air_enemy(enemy)
 
 	if spawn_pos == Vector3.INF:
 		if is_air:
 			var air_entry := get_air_corridor_entry(player_pos)
 			spawn_pos = air_entry["position"]
 			heading = air_entry["heading"]
-			altitude = spawn_pos.y
+			altitude = clampf(spawn_pos.y, 11.0, 22.0)
 		else:
 			var tag := "infantry"
 			if enemy is Tank:
@@ -972,7 +991,11 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 			var ground_entry := get_authored_ground_spawn(tag, player_pos)
 			spawn_pos = ground_entry["position"]
 			heading = ground_entry["heading"]
-			altitude = spawn_pos.y
+			altitude = 0.0
+
+	# Ground units must strictly stay on ground level (y = 0.0)
+	if not is_air:
+		altitude = 0.0
 
 	enemy.transform.origin = Vector3(spawn_pos.x, altitude, spawn_pos.z)
 
@@ -995,25 +1018,32 @@ func _register_spawned_node(enemy: Node3D) -> void:
 		_wave_enemies.append(enemy)
 	total_enemies_spawned += 1
 
-	var is_air := enemy.is_in_group("air_enemies") or ("archetype" in enemy) or (enemy is HunterHelicopter) or (enemy is BossArchon) or enemy.name.begins_with("Air") or enemy.name.begins_with("Hunter")
+	var is_air := _is_air_enemy(enemy)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(enemy, is_air)
 
 	enemy.tree_entered.connect(func() -> void:
 		if is_instance_valid(enemy) and EnemyRegistry.instance:
-			if enemy.is_in_group("air_enemies") and not EnemyRegistry.instance.air_enemies.has(enemy):
+			var air_check := _is_air_enemy(enemy)
+			if air_check and not EnemyRegistry.instance.air_enemies.has(enemy):
 				EnemyRegistry.instance.ground_enemies.erase(enemy)
 				if not EnemyRegistry.instance.air_enemies.has(enemy):
 					EnemyRegistry.instance.air_enemies.append(enemy)
 				EnemyRegistry.instance._enemy_air_status[enemy] = true
+			elif not air_check and not EnemyRegistry.instance.ground_enemies.has(enemy):
+				EnemyRegistry.instance.air_enemies.erase(enemy)
+				if not EnemyRegistry.instance.ground_enemies.has(enemy):
+					EnemyRegistry.instance.ground_enemies.append(enemy)
+				EnemyRegistry.instance._enemy_air_status[enemy] = false
 	, CONNECT_ONE_SHOT)
 
 	if not enemy.tree_exited.is_connected(_on_spawned_enemy_tree_exited):
 		enemy.tree_exited.connect(_on_spawned_enemy_tree_exited.bind(enemy))
 
-	var wm := get_tree().get_first_node_in_group("wave_manager")
-	if wm and wm.has_method("register_spawned_enemy"):
-		wm.register_spawned_enemy(enemy)
+	if is_inside_tree() and get_tree():
+		var wm := get_tree().get_first_node_in_group("wave_manager")
+		if wm and wm.has_method("register_spawned_enemy"):
+			wm.register_spawned_enemy(enemy)
 
 func _on_spawned_enemy_tree_exited(enemy: Node3D) -> void:
 	_wave_enemies.erase(enemy)

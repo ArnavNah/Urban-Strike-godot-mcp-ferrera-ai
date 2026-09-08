@@ -40,6 +40,13 @@ var _los_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("enemies")
+	floor_snap_length = 0.5
+	floor_stop_on_slope = true
+	floor_max_angle = deg_to_rad(45.0)
+	up_direction = Vector3.UP
+	if global_position.y > 0.0 and global_position.y <= 1.0:
+		global_position.y = 0.0
+
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
 	current_health = max_health
@@ -52,12 +59,23 @@ func _exit_tree() -> void:
 	_release_slot()
 
 func _physics_process(delta: float) -> void:
-	if not is_alive:
+	if not is_alive or not is_inside_tree():
 		return
 
 	if not is_instance_valid(_player):
-		_player = get_tree().get_first_node_in_group("player")
-		return
+		if is_inside_tree() and get_tree():
+			_player = get_tree().get_first_node_in_group("player")
+		if not is_instance_valid(_player):
+			# Apply gravity and floor snap even if player not yet present
+			if not is_on_floor():
+				velocity.y -= 25.0 * delta
+			else:
+				velocity.y = -1.0
+			move_and_slide()
+			if global_position.y < 0.0:
+				global_position.y = 0.0
+				velocity.y = 0.0
+			return
 
 	var dist := global_position.distance_to(_player.global_position)
 
@@ -102,9 +120,18 @@ func _physics_process(delta: float) -> void:
 	# Lightweight ground separation steering to prevent clumping
 	_apply_separation()
 
-	# Keep infantry on ground plane
-	velocity.y = 0.0
+	# Apply gravity and floor snap so infantry stays firmly grounded
+	if not is_on_floor():
+		velocity.y -= 25.0 * delta
+	else:
+		velocity.y = -1.0 # Downward floor snap velocity
+
 	move_and_slide()
+
+	# Safety ground clamp: infantry can never fall below ground or float if disconnected
+	if global_position.y < 0.0:
+		global_position.y = 0.0
+		velocity.y = 0.0
 
 func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 	var to_player := (_player.global_position - global_position)
@@ -112,7 +139,8 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 	var dir := to_player.normalized()
 
 	if dist <= preferred_range and has_los:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 		_transition_to(State.ENGAGE)
 		return
 
@@ -127,7 +155,8 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 		rotation.y = lerp_angle(rotation.y, target_yaw, 6.0 * delta)
 
 func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 
 	# Face player smoothly while lining up burst
 	var to_player := (_player.global_position - global_position)
@@ -154,7 +183,8 @@ func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
 			_state_timer = 0.25 # Poll slot again soon
 
 func _tick_attack(delta: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 
 	if not has_los:
 		_release_slot()
@@ -181,14 +211,16 @@ func _tick_reposition(delta: float, dist: float, has_los: bool) -> void:
 		rotation.y = lerp_angle(rotation.y, target_yaw, 5.0 * delta)
 
 	if _state_timer <= 0.0:
-		velocity = Vector3.ZERO
+		velocity.x = 0.0
+		velocity.z = 0.0
 		if dist <= preferred_range and has_los:
 			_transition_to(State.COOLDOWN)
 		else:
 			_transition_to(State.APPROACH)
 
 func _tick_cooldown(delta: float, dist: float, has_los: bool) -> void:
-	velocity = Vector3.ZERO
+	velocity.x = 0.0
+	velocity.z = 0.0
 	_state_timer -= delta
 
 	# Track player during cooldown

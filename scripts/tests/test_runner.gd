@@ -70,6 +70,8 @@ func _ready() -> void:
 	success = test_ground_and_air_ai(log_lines) and success
 	append_log("Running test 25 (enemy roster & formations)...", log_lines)
 	success = test_enemy_roster_and_procedural_formations(log_lines) and success
+	append_log("Running test 26 (ground enemy grounding & gravity)...", log_lines)
+	success = test_ground_enemy_grounding_and_gravity(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2305,4 +2307,115 @@ func test_enemy_roster_and_procedural_formations(logs: Array[String]) -> bool:
 
 	root_node.queue_free()
 	append_log("  -> Ground/air roster, APC troop deploy, procedural formations, variety rules, elapsed unlock tiers, and tactical caps verified.", logs)
+	return true
+
+func test_ground_enemy_grounding_and_gravity(logs: Array[String]) -> bool:
+	var root_node := Node3D.new()
+	root_node.name = "TestGroundingRoot"
+	add_child(root_node)
+
+	# 1. Setup EnemyRegistry if missing
+	var reg := EnemyRegistry.instance
+	if not reg:
+		reg = EnemyRegistry.new()
+		reg.name = "EnemyRegistry"
+		root_node.add_child(reg)
+
+	# 2. Setup SpawnDirector
+	var sd := SpawnDirector.new()
+	sd.name = "TestSpawnDirector"
+	root_node.add_child(sd)
+
+	# 3. Test that all ground enemy archetypes/scenes are correctly identified as ground (not air)
+	var ground_scenes := [
+		{"path": "res://scenes/enemies/tank.tscn", "name": "Tank"},
+		{"path": "res://scenes/enemies/ground_scout_buggy.tscn", "name": "ScoutBuggy"},
+		{"path": "res://scenes/enemies/ground_rocket_technical.tscn", "name": "RocketTechnical"},
+		{"path": "res://scenes/enemies/ground_assault_ifv.tscn", "name": "AssaultIFV"},
+		{"path": "res://scenes/enemies/ground_troop_carrier_apc.tscn", "name": "TroopCarrierAPC"},
+		{"path": "res://scenes/enemies/ground_mortar_carrier.tscn", "name": "MortarCarrier"},
+		{"path": "res://scenes/enemies/ground_jammer_vehicle.tscn", "name": "JammerVehicle"},
+		{"path": "res://scenes/enemies/infantry_cluster.tscn", "name": "InfantryCluster"},
+		{"path": "res://scenes/enemies/ground_turret.tscn", "name": "GroundTurret"}
+	]
+
+	for g_entry in ground_scenes:
+		var sc := load(g_entry["path"]) as PackedScene
+		if not sc:
+			append_log("FAIL: Scene missing: %s" % g_entry["path"], logs)
+			root_node.queue_free()
+			return false
+		var enemy: Node3D = sc.instantiate() as Node3D
+		root_node.add_child(enemy)
+
+		var is_air: bool = bool(sd.call("_is_air_enemy", enemy))
+		if is_air:
+			append_log("FAIL: Ground enemy %s erroneously classified as air" % g_entry["name"], logs)
+			root_node.queue_free()
+			return false
+
+		# Verify EnemyRegistry classification
+		if reg.air_enemies.has(enemy):
+			append_log("FAIL: Ground enemy %s found in EnemyRegistry.air_enemies" % g_entry["name"], logs)
+			root_node.queue_free()
+			return false
+
+		enemy.queue_free()
+
+	# 4. Test Continuous Spawner sets ground altitude = 0.0 for ground enemies
+	for g_entry in ground_scenes:
+		var sc := load(g_entry["path"]) as PackedScene
+		var spawned: Node3D = sd.call("_spawn_continuous_enemy", sc, Vector3.ZERO, 0.0) as Node3D
+		if spawned:
+			if spawned.transform.origin.y > 0.5:
+				append_log("FAIL: Ground enemy %s spawned at altitude %.2f (expected <= 0.5)" % [g_entry["name"], spawned.transform.origin.y], logs)
+				root_node.queue_free()
+				return false
+			spawned.queue_free()
+
+	# 5. Test Gravity and Ground Clamp on Tank & Infantry
+	var tank_scene := load("res://scenes/enemies/ground_scout_buggy.tscn") as PackedScene
+	var test_tank: Tank = tank_scene.instantiate() as Tank
+	root_node.add_child(test_tank)
+	test_tank.position = Vector3(0.0, 10.0, 0.0) # Start in mid-air
+
+	# Simulate 1 physics step while in mid-air: should have downward vertical velocity
+	test_tank._physics_process(0.1)
+	if test_tank.velocity.y >= 0.0:
+		append_log("FAIL: Airborne ground vehicle did not accelerate downward with gravity (vel.y=%.2f)" % test_tank.velocity.y, logs)
+		root_node.queue_free()
+		return false
+
+	# Place at subterranean position to test clamp
+	test_tank.position.y = -5.0
+	test_tank._physics_process(0.1)
+	if test_tank.position.y < 0.0:
+		append_log("FAIL: Ground vehicle fell below ground plane (y=%.2f)" % test_tank.position.y, logs)
+		root_node.queue_free()
+		return false
+
+	test_tank.queue_free()
+
+	# Test Infantry gravity
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var test_inf: InfantryCluster = inf_scene.instantiate() as InfantryCluster
+	root_node.add_child(test_inf)
+	test_inf.position = Vector3(0.0, 8.0, 0.0)
+
+	test_inf._physics_process(0.1)
+	if test_inf.velocity.y >= 0.0:
+		append_log("FAIL: Airborne infantry did not accelerate downward with gravity (vel.y=%.2f)" % test_inf.velocity.y, logs)
+		root_node.queue_free()
+		return false
+
+	test_inf.position.y = -3.0
+	test_inf._physics_process(0.1)
+	if test_inf.position.y < 0.0:
+		append_log("FAIL: Infantry fell below ground plane (y=%.2f)" % test_inf.position.y, logs)
+		root_node.queue_free()
+		return false
+
+	test_inf.queue_free()
+	root_node.queue_free()
+	append_log("  -> Ground classification, continuous spawner ground elevation, gravity, and ground clamping verified.", logs)
 	return true
