@@ -1,48 +1,127 @@
 [gd_scene format=3 uid="uid://ccdd05o0ekmwc"]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_gin6d"]
-size = Vector3(14, 8, 12)
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gin6d"]
+resource_name = "Brick"
+albedo_color = Color(0.54509807, 0.34901962, 0.27450982, 1)
+roughness = 0.92
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pr6ck"]
-albedo_color = Color(0.38, 0.35, 0.32, 1)
-roughness = 0.8
+[sub_resource type="BoxMesh" id="BoxMesh_pr6ck"]
+material = SubResource("StandardMaterial3D_gin6d")
+size = Vector3(14, 6, 12)
 
-[sub_resource type="BoxMesh" id="BoxMesh_yjh8d"]
-material = SubResource("StandardMaterial3D_pr6ck")
-size = Vector3(14, 8, 12)
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yjh8d"]
+resource_name = "Roof"
+albedo_color = Color(0.25490198, 0.29803923, 0.29411766, 1)
+roughness = 0.92
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_exl2k"]
-albedo_color = Color(0.18, 0.22, 0.25, 1)
-metallic = 0.4
-roughness = 0.3
+[sub_resource type="BoxMesh" id="BoxMesh_exl2k"]
+material = SubResource("StandardMaterial3D_yjh8d")
+size = Vector3(14.25, 0.4, 12.25)
 
 [sub_resource type="BoxMesh" id="BoxMesh_7e0gr"]
-material = SubResource("StandardMaterial3D_exl2k")
-size = Vector3(14.2, 2.4, 12.2)
+material = SubResource("StandardMaterial3D_yjh8d")
+size = Vector3(14.15, 0.6, 12.15)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j4ug2"]
-albedo_color = Color(0.5, 0.52, 0.55, 1)
-metallic = 0.5
+resource_name = "Glass"
+albedo_color = Color(0.19215687, 0.28235295, 0.3019608, 1)
+roughness = 0.92
 
 [sub_resource type="BoxMesh" id="BoxMesh_wljr7"]
 material = SubResource("StandardMaterial3D_j4ug2")
-size = Vector3(2.2, 1.2, 1.8)
+size = Vector3(1.6, 1.05, 0.08)
+
+[sub_resource type="MultiMesh" id="MultiMesh_ejai1"]
+transform_format = 1
+instance_count = 28
+mesh = SubResource("BoxMesh_wljr7")
+buffer = PackedFloat32Array(1, 0, 0, -4.9, 0, 1, 0, 1.7, 0, 0, 1, 6.045, 1, 0, 0, -4.9, 0, 1, 0, 1.7, 0, 0, 1, -6.045, 1, 0, 0, -1.4, 0, 1, 0, 1.7, 0, 0, 1, 6.045, 1, 0, 0, -1.4, 0, 1, 0, 1.7, 0, 0, 1, -6.045, 1, 0, 0, 2.1, 0, 1, 0, 1.7, 0, 0, 1, 6.045, 1, 0, 0, 2.1, 0, 1, 0, 1.7, 0, 0, 1, -6.045, 1, 0, 0, 5.6, 0, 1, 0, 1.7, 0, 0, 1, 6.045, 1, 0, 0, 5.6, 0, 1, 0, 1.7, 0, 0, 1, -6.045, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, -4, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, -4, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, -0.5, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, -0.5, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, 3, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 1.7, -1, 0, -4.371139e-08, 3, 1, 0, 0, -4.9, 0, 1, 0, 4.7, 0, 0, 1, 6.045, 1, 0, 0, -4.9, 0, 1, 0, 4.7, 0, 0, 1, -6.045, 1, 0, 0, -1.4, 0, 1, 0, 4.7, 0, 0, 1, 6.045, 1, 0, 0, -1.4, 0, 1, 0, 4.7, 0, 0, 1, -6.045, 1, 0, 0, 2.1, 0, 1, 0, 4.7, 0, 0, 1, 6.045, 1, 0, 0, 2.1, 0, 1, 0, 4.7, 0, 0, 1, -6.045, 1, 0, 0, 5.6, 0, 1, 0, 4.7, 0, 0, 1, 6.045, 1, 0, 0, 5.6, 0, 1, 0, 4.7, 0, 0, 1, -6.045, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, -4, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, -4, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, -0.5, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, -0.5, -4.371139e-08, 0, 1, 7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, 3, -4.371139e-08, 0, 1, -7.045, 0, 1, 0, 4.7, -1, 0, -4.371139e-08, 3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r04dw"]
+resource_name = "Sand"
+albedo_color = Color(0.69803923, 0.6156863, 0.4392157, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="BoxMesh_vg34x"]
+material = SubResource("StandardMaterial3D_r04dw")
+size = Vector3(14.12, 0.14, 12.12)
+
+[sub_resource type="MultiMesh" id="MultiMesh_hbygk"]
+transform_format = 1
+instance_count = 2
+mesh = SubResource("BoxMesh_vg34x")
+buffer = PackedFloat32Array(1, 0, 0, 0, 0, 1, 0, 2.7, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 5.7, 0, 0, 1, 0)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3kth7"]
+material = SubResource("StandardMaterial3D_j4ug2")
+size = Vector3(2.4, 2.6, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6u0kr"]
+material = SubResource("StandardMaterial3D_yjh8d")
+size = Vector3(5, 0.2, 2.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ch5hr"]
+resource_name = "Metal"
+albedo_color = Color(0.39215687, 0.45882353, 0.45882353, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="BoxMesh_tv5jo"]
+material = SubResource("StandardMaterial3D_ch5hr")
+size = Vector3(3, 0.8, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0eec6"]
+size = Vector3(14, 6.4, 12)
 
 [node name="BuildingSmall" type="StaticBody3D" unique_id=993975150]
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=667688662]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
-shape = SubResource("BoxShape3D_gin6d")
+[node name="Intact" type="Node3D" parent="." unique_id=148064481]
 
-[node name="FacadeMesh" type="MeshInstance3D" parent="." unique_id=1252598694]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
-mesh = SubResource("BoxMesh_yjh8d")
+[node name="Facade" type="MeshInstance3D" parent="Intact" unique_id=1902975202]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+mesh = SubResource("BoxMesh_pr6ck")
 
-[node name="StorefrontTrim" type="MeshInstance3D" parent="." unique_id=743982585]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+[node name="RoofCap" type="MeshInstance3D" parent="Intact" unique_id=2124216104]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.2, 0)
+mesh = SubResource("BoxMesh_exl2k")
+
+[node name="Foundation" type="MeshInstance3D" parent="Intact" unique_id=1165256755]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
 mesh = SubResource("BoxMesh_7e0gr")
 
-[node name="RooftopAC" type="MeshInstance3D" parent="." unique_id=813763371]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 8.6, -1.5)
-mesh = SubResource("BoxMesh_wljr7")
+[node name="WindowPanels" type="MultiMeshInstance3D" parent="Intact" unique_id=1871000356]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_ejai1")
+
+[node name="FloorLedges" type="MultiMeshInstance3D" parent="Intact" unique_id=844397091]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_hbygk")
+
+[node name="Entrance" type="MeshInstance3D" parent="Intact" unique_id=90064333]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 6.08)
+mesh = SubResource("BoxMesh_3kth7")
+
+[node name="EntranceCanopy" type="MeshInstance3D" parent="Intact" unique_id=807691787]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 6.9)
+mesh = SubResource("BoxMesh_6u0kr")
+
+[node name="RoofFixtures" type="Node3D" parent="Intact" unique_id=56852286]
+
+[node name="VentilationUnit" type="MeshInstance3D" parent="Intact/RoofFixtures" unique_id=392180597]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 6.8, -3.36)
+mesh = SubResource("BoxMesh_tv5jo")
+
+[node name="StructureCollision" type="CollisionShape3D" parent="." unique_id=184477526]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+shape = SubResource("BoxShape3D_0eec6")
+
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=1714673252]
+
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=1454907810]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.64, 6.42, -3)
+
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=939002276]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.64, 6.42, 3)
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=523973771]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.42, 0)

@@ -1,0 +1,56 @@
+[gd_scene format=3 uid="uid://c3fmnwrt2gb5v"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_li0uw"]
+resource_name = "Dirt"
+albedo_color = Color(0.5058824, 0.44705883, 0.34117648, 1)
+roughness = 0.92
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1njt3"]
+material = SubResource("StandardMaterial3D_li0uw")
+top_radius = 0.35
+bottom_radius = 0.35
+height = 3.0
+radial_segments = 12
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_k4u1e"]
+resource_name = "Tree"
+albedo_color = Color(0.28627452, 0.3647059, 0.2627451, 1)
+roughness = 0.92
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hdxdv"]
+material = SubResource("StandardMaterial3D_k4u1e")
+top_radius = 0.4
+bottom_radius = 2.9
+height = 4.0
+radial_segments = 12
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h4l1a"]
+resource_name = "Grass"
+albedo_color = Color(0.38431373, 0.42745098, 0.29411766, 1)
+roughness = 0.92
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4q2wj"]
+material = SubResource("StandardMaterial3D_h4l1a")
+top_radius = 0.05
+bottom_radius = 2.0
+height = 3.5
+radial_segments = 12
+rings = 1
+
+[node name="TreeCluster" type="Node3D" unique_id=1750774211]
+
+[node name="Intact" type="Node3D" parent="." unique_id=2042369391]
+
+[node name="Trunk" type="MeshInstance3D" parent="Intact" unique_id=496304907]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+mesh = SubResource("CylinderMesh_1njt3")
+
+[node name="LowerCrown" type="MeshInstance3D" parent="Intact" unique_id=1732787338]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("CylinderMesh_hdxdv")
+
+[node name="UpperCrown" type="MeshInstance3D" parent="Intact" unique_id=947142676]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
+mesh = SubResource("CylinderMesh_4q2wj")

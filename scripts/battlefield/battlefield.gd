@@ -40,4 +40,3 @@ func _ready() -> void:
 	# 5. Link WaveManager to SpawnDirector
 	if wave_manager:
 		wave_manager.spawn_director = spawner
-

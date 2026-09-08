@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://udin6n06gwmh"]
+
+[resource]
+resource_name = "Grass"
+albedo_color = Color(0.38431373, 0.42745098, 0.29411766, 1)
+roughness = 0.92

@@ -1739,10 +1739,10 @@ func test_environment_districts_and_playable_boundary(logs: Array[String]) -> bo
 		var n: String = state.get_node_name(i)
 		if n == "PlayableArea": found_pa = true
 		elif n == "Districts": found_districts = true
-		elif n == "District_CityCenter": found_city = true
-		elif n == "District_Industrial": found_ind = true
-		elif n == "District_Military": found_mil = true
-		elif n == "District_Outskirts": found_out = true
+		elif n == "District_CityCenter" or n == "CentralUrban": found_city = true
+		elif n == "District_Industrial" or n == "Industrial": found_ind = true
+		elif n == "District_Military" or n == "Military": found_mil = true
+		elif n == "District_Outskirts" or n == "Outskirts": found_out = true
 
 	if not found_pa or not found_districts:
 		logs.append("FAIL: Battlefield missing PlayableArea or Districts node")

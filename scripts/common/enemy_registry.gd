@@ -107,8 +107,10 @@ func get_enemies_in_radius(origin: Vector3, radius: float) -> Array[Node3D]:
 				continue
 			var list: Array = enemies_in_cell as Array
 			for e_variant in list:
+				if not is_instance_valid(e_variant):
+					continue
 				var enemy: Node3D = e_variant as Node3D
-				if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+				if enemy == null or enemy.is_queued_for_deletion():
 					continue
 				if not enemy.is_inside_tree():
 					continue

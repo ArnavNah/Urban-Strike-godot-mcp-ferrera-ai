@@ -53,17 +53,16 @@ func _physics_process(delta: float) -> void:
 			if EventBus.has_signal("border_warning_changed"):
 				EventBus.border_warning_changed.emit(false, Vector3.ZERO, 0.0)
 
-	# 2. Hard Boundary: Smooth clamp and outward velocity suppression
-	if max_coord >= hard_half_extent:
-		target_player.global_position.x = clampf(target_player.global_position.x, -hard_half_extent, hard_half_extent)
-		target_player.global_position.z = clampf(target_player.global_position.z, -hard_half_extent, hard_half_extent)
-
+	# The authored StaticBody3D walls perform the hard stop through normal
+	# move_and_slide collision. Suppress outward velocity close to a wall,
+	# and smoothly clamp position to hard_half_extent if pushed beyond.
+	if max_coord >= hard_half_extent - 1.5:
 		if "velocity" in target_player and target_player.velocity is Vector3:
-			if target_player.global_position.x >= hard_half_extent - 0.2 and target_player.velocity.x > 0.0:
+			if abs_x >= hard_half_extent - 1.5 and target_player.velocity.x * p_pos.x > 0.0:
 				target_player.velocity.x = 0.0
-			elif target_player.global_position.x <= -hard_half_extent + 0.2 and target_player.velocity.x < 0.0:
-				target_player.velocity.x = 0.0
-			if target_player.global_position.z >= hard_half_extent - 0.2 and target_player.velocity.z > 0.0:
+			if abs_z >= hard_half_extent - 1.5 and target_player.velocity.z * p_pos.z > 0.0:
 				target_player.velocity.z = 0.0
-			elif target_player.global_position.z <= -hard_half_extent + 0.2 and target_player.velocity.z < 0.0:
-				target_player.velocity.z = 0.0
+
+	if max_coord > hard_half_extent:
+		target_player.global_position.x = clampf(p_pos.x, -hard_half_extent, hard_half_extent)
+		target_player.global_position.z = clampf(p_pos.z, -hard_half_extent, hard_half_extent)

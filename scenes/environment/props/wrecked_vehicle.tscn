@@ -1,0 +1,52 @@
+[gd_scene format=3 uid="uid://dtmn3fbenamhh"]
+
+[ext_resource type="Material" uid="uid://ck2jsxjec5j0i" path="res://resources/environment/rust.tres" id="1_c32of"]
+[ext_resource type="Material" uid="uid://dvake1pijcevk" path="res://resources/environment/roof.tres" id="2_lfefa"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_fxsvw"]
+size = Vector3(2.4, 1.4, 4.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8m2ok"]
+material = ExtResource("1_c32of")
+size = Vector3(2.2, 0.75, 4.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_c4ydj"]
+material = ExtResource("1_c32of")
+size = Vector3(1.9, 0.8, 2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_fq7xv"]
+material = ExtResource("2_lfefa")
+size = Vector3(0.35, 0.65, 0.85)
+
+[node name="WreckedVehicle" type="StaticBody3D" unique_id=1045891485]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=381248328]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+shape = SubResource("BoxShape3D_fxsvw")
+
+[node name="WreckModel" type="Node3D" parent="." unique_id=580401350]
+
+[node name="BurnedChassis" type="MeshInstance3D" parent="WreckModel" unique_id=839067718]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+mesh = SubResource("BoxMesh_8m2ok")
+
+[node name="CrumpledCab" type="MeshInstance3D" parent="WreckModel" unique_id=496964163]
+transform = Transform3D(0.9934499, 0.0740413, 0.08703629, -0.06966087, 0.9961969, -0.05233596, -0.090580314, 0.045930125, 0.9948294, 0, 1.35, -0.4)
+mesh = SubResource("BoxMesh_c4ydj")
+
+[node name="BurnedWheel_FL" type="MeshInstance3D" parent="WreckModel" unique_id=1417671546]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 0.45, -1.3)
+mesh = SubResource("BoxMesh_fq7xv")
+
+[node name="BurnedWheel_FR" type="MeshInstance3D" parent="WreckModel" unique_id=1890582161]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.05, 0.45, -1.3)
+mesh = SubResource("BoxMesh_fq7xv")
+
+[node name="BurnedWheel_RL" type="MeshInstance3D" parent="WreckModel" unique_id=1432535876]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 0.45, 1.3)
+mesh = SubResource("BoxMesh_fq7xv")
+
+[node name="BurnedWheel_RR" type="MeshInstance3D" parent="WreckModel" unique_id=1016038175]
+transform = Transform3D(0.9659258, -0.25881904, 0, 0.25881904, 0.9659258, 0, 0, 0, 1, 1.05, 0.45, 1.3)
+mesh = SubResource("BoxMesh_fq7xv")

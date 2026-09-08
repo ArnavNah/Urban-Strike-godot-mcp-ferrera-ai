@@ -1,0 +1,120 @@
+[gd_scene format=3 uid="uid://dyhauyw4f4gmm"]
+
+[ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="1_ssgul"]
+[ext_resource type="PackedScene" uid="uid://b5b3hreu3688i" path="res://scenes/environment/city/building_medium.tscn" id="2_cs3po"]
+[ext_resource type="PackedScene" uid="uid://ccdd05o0ekmwc" path="res://scenes/environment/city/building_small.tscn" id="3_hv8ye"]
+[ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="4_jn80s"]
+[ext_resource type="PackedScene" uid="uid://c3fmnwrt2gb5v" path="res://scenes/environment/props/tree_cluster.tscn" id="5_qnq3g"]
+[ext_resource type="PackedScene" uid="uid://bgfbv1p3teyxh" path="res://scenes/environment/city/building_large.tscn" id="6_131bl"]
+[ext_resource type="PackedScene" uid="uid://tyrvsv6047yt" path="res://scenes/environment/city/parking_lot.tscn" id="7_5d1r5"]
+[ext_resource type="PackedScene" uid="uid://cuve5cme7mhsq" path="res://scenes/environment/props/parked_vehicle.tscn" id="8_1jxbc"]
+[ext_resource type="PackedScene" uid="uid://dcg68b3fc75bj" path="res://scenes/environment/props/streetlight.tscn" id="9_ec40w"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_04s7y"]
+material = ExtResource("1_ssgul")
+size = Vector3(38, 0.12, 38)
+
+[sub_resource type="BoxMesh" id="BoxMesh_eimv7"]
+material = ExtResource("4_jn80s")
+size = Vector3(10, 0.12, 9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wqnoa"]
+material = ExtResource("1_ssgul")
+size = Vector3(38, 0.12, 36)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8xv61"]
+material = ExtResource("4_jn80s")
+size = Vector3(34, 0.12, 34)
+
+[sub_resource type="BoxMesh" id="BoxMesh_a1pdw"]
+material = ExtResource("1_ssgul")
+size = Vector3(34, 0.12, 36)
+
+[node name="CentralUrbanDistrict" type="Node3D" unique_id=1610325910]
+
+[node name="CivicBlock" type="Node3D" parent="." unique_id=359026367]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="CivicBlock" unique_id=1524537078]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 0.06, -35)
+mesh = SubResource("BoxMesh_04s7y")
+
+[node name="CivicOffice" parent="CivicBlock" unique_id=1388805366 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 0, -38)
+
+[node name="CornerShop" parent="CivicBlock" unique_id=993975150 instance=ExtResource("3_hv8ye")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 48, 0, -24)
+
+[node name="PocketSquare" type="MeshInstance3D" parent="CivicBlock" unique_id=730597806]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47, 0.16, -48)
+mesh = SubResource("BoxMesh_eimv7")
+
+[node name="SquareTree" parent="CivicBlock" unique_id=1750774211 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47, 0.22, -48)
+
+[node name="CommunicationsBlock" type="Node3D" parent="." unique_id=409423550]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="CommunicationsBlock" unique_id=552548048]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.06, -94)
+mesh = SubResource("BoxMesh_wqnoa")
+
+[node name="CommunicationsTower" parent="CommunicationsBlock" unique_id=1364757742 instance=ExtResource("6_131bl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 0, -96)
+
+[node name="TowerAnnex" parent="CommunicationsBlock" unique_id=1583645415 instance=ExtResource("3_hv8ye")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 49, 0, -80)
+
+[node name="ResidentialBlock" type="Node3D" parent="." unique_id=733333571]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="ResidentialBlock" unique_id=750581643]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 93, 0.06, -94)
+mesh = SubResource("BoxMesh_8xv61")
+
+[node name="ApartmentsWest" parent="ResidentialBlock" unique_id=234918241 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 86, 0, -98)
+
+[node name="ApartmentsEast" parent="ResidentialBlock" unique_id=759682669 instance=ExtResource("3_hv8ye")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 104, 0, -101)
+
+[node name="NeighbourhoodMarket" parent="ResidentialBlock" unique_id=1530494483 instance=ExtResource("3_hv8ye")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 97, 0, -82)
+
+[node name="MarketAndParking" type="Node3D" parent="." unique_id=1338918809]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="MarketAndParking" unique_id=1884668554]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 95, 0.06, -34)
+mesh = SubResource("BoxMesh_a1pdw")
+
+[node name="MunicipalOffice" parent="MarketAndParking" unique_id=161103206 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 97, 0, -44)
+
+[node name="PublicParking" parent="MarketAndParking" unique_id=1706286126 instance=ExtResource("7_5d1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 94, 0, -22)
+
+[node name="ParkedCar" parent="MarketAndParking" unique_id=1841633813 instance=ExtResource("8_1jxbc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 89, 0.2, -22)
+
+[node name="ServiceVan" parent="MarketAndParking" unique_id=1306971350 instance=ExtResource("8_1jxbc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 99, 0.2, -22)
+
+[node name="StreetFurniture" type="Node3D" parent="." unique_id=1687099922]
+
+[node name="AvenueLampSouth" parent="StreetFurniture" unique_id=1425482352 instance=ExtResource("9_ec40w")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -20)
+
+[node name="AvenueLampNorth" parent="StreetFurniture" unique_id=1798771675 instance=ExtResource("9_ec40w")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -84)
+
+[node name="CrossStreetLamp" parent="StreetFurniture" unique_id=940788029 instance=ExtResource("9_ec40w")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 54, 0, -76)
+
+[node name="MarketLamp" parent="StreetFurniture" unique_id=1676160566 instance=ExtResource("9_ec40w")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 77, 0, -15)
+
+[node name="CivicGreen" parent="StreetFurniture" unique_id=1299132648 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, 0, -39)
+
+[node name="MarketGreen" parent="StreetFurniture" unique_id=801756910 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 78, 0, -43)
+
+[node name="NorthGreen" parent="StreetFurniture" unique_id=1802881413 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 105, 0, -111)

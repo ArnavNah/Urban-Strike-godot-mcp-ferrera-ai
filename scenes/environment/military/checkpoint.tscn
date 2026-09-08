@@ -1,5 +1,7 @@
 [gd_scene format=3 uid="uid://dfkeeo0ntvx68"]
 
+[ext_resource type="PackedScene" uid="uid://diaewkf215q76" path="res://scenes/environment/props/sandbag.tscn" id="1_qqsm0"]
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_y7khv"]
 size = Vector3(4, 4, 5)
 
@@ -65,3 +67,6 @@ mesh = SubResource("BoxMesh_qgi8q")
 
 [node name="CheckpointSpawnPoint" type="Marker3D" parent="." unique_id=1064296533]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 8)
+
+[node name="SandbagEmplacement" parent="." unique_id=1014966009 instance=ExtResource("1_qqsm0")]
+transform = Transform3D(0.9848077, 0, 0.17364818, 0, 1, 0, -0.17364818, 0, 0.9848077, -6.5, 0, 3)

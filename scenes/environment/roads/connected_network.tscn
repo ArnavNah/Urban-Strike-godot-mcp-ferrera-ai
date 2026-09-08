@@ -1,0 +1,290 @@
+[gd_scene format=3 uid="uid://bvtmp3twpe1bj"]
+
+[ext_resource type="PackedScene" uid="uid://c6i3pc56ga0x" path="res://scenes/environment/roads/intersection.tscn" id="1_rmyox"]
+[ext_resource type="PackedScene" uid="uid://jww4yuob3bj7" path="res://scenes/environment/roads/road_straight.tscn" id="2_4md5m"]
+[ext_resource type="PackedScene" uid="uid://cybksfe1lc22v" path="res://scenes/environment/roads/dirt_road.tscn" id="3_mejf7"]
+[ext_resource type="PackedScene" uid="uid://cfisbv4tqybil" path="res://scenes/environment/roads/wide_avenue.tscn" id="4_jlwfh"]
+
+[sub_resource type="Curve3D" id="Curve3D_lst4x"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0.25, -145, 0, 0, 0, 0, 0, 0, 0, 0.25, 145),
+"tilts": PackedFloat32Array(0, 0)
+}
+point_count = 2
+
+[sub_resource type="Curve3D" id="Curve3D_y0wqa"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -145, 0.25, 0, 0, 0, 0, 0, 0, 0, 145, 0.25, 0),
+"tilts": PackedFloat32Array(0, 0)
+}
+point_count = 2
+
+[node name="ConnectedRoadNetwork" type="Node3D" unique_id=456560153]
+
+[node name="Intersections" type="Node3D" parent="." unique_id=153826957]
+
+[node name="Junction_-120_0_-120_0" parent="Intersections" unique_id=329823494 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, 0, -120)
+
+[node name="Junction_-120_0_-66_0" parent="Intersections" unique_id=1465148115 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, 0, -66)
+
+[node name="Junction_-120_0_0_0" parent="Intersections" unique_id=710943223 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, 0, 0)
+
+[node name="Junction_-120_0_66_0" parent="Intersections" unique_id=305163215 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, 0, 66)
+
+[node name="Junction_-120_0_120_0" parent="Intersections" unique_id=874803275 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -120, 0, 120)
+
+[node name="Junction_-66_0_-120_0" parent="Intersections" unique_id=1127637984 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, -120)
+
+[node name="Junction_-66_0_-66_0" parent="Intersections" unique_id=1931533057 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, -66)
+
+[node name="Junction_-66_0_0_0" parent="Intersections" unique_id=638791937 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, 0)
+
+[node name="Junction_-66_0_66_0" parent="Intersections" unique_id=933851696 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, 66)
+
+[node name="Junction_-66_0_120_0" parent="Intersections" unique_id=1189975603 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, 120)
+
+[node name="Junction_0_0_-120_0" parent="Intersections" unique_id=631218027 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -120)
+
+[node name="Junction_0_0_-66_0" parent="Intersections" unique_id=727322209 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -66)
+
+[node name="Junction_0_0_0_0" parent="Intersections" unique_id=599793248 instance=ExtResource("1_rmyox")]
+
+[node name="Junction_0_0_66_0" parent="Intersections" unique_id=1343578917 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 66)
+
+[node name="Junction_0_0_120_0" parent="Intersections" unique_id=358804729 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 120)
+
+[node name="Junction_66_0_-120_0" parent="Intersections" unique_id=30757677 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 0, -120)
+
+[node name="Junction_66_0_-66_0" parent="Intersections" unique_id=562598777 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 0, -66)
+
+[node name="Junction_66_0_0_0" parent="Intersections" unique_id=2112589693 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 0, 0)
+
+[node name="Junction_66_0_66_0" parent="Intersections" unique_id=687307737 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 0, 66)
+
+[node name="Junction_66_0_120_0" parent="Intersections" unique_id=2051348993 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66, 0, 120)
+
+[node name="Junction_120_0_-120_0" parent="Intersections" unique_id=1890879035 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0, -120)
+
+[node name="Junction_120_0_-66_0" parent="Intersections" unique_id=1413978790 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0, -66)
+
+[node name="Junction_120_0_0_0" parent="Intersections" unique_id=1196101627 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0, 0)
+
+[node name="Junction_120_0_66_0" parent="Intersections" unique_id=328177779 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0, 66)
+
+[node name="Junction_120_0_120_0" parent="Intersections" unique_id=192527682 instance=ExtResource("1_rmyox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0, 120)
+
+[node name="NorthSouthRoutes" type="Node3D" parent="." unique_id=749832911]
+
+[node name="NS_-120_0_0" parent="NorthSouthRoutes" unique_id=315113687 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -120, 0, -150)
+
+[node name="NS_-120_0_1" parent="NorthSouthRoutes" unique_id=1989477570 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, -120, 0, -93)
+
+[node name="NS_-120_0_2" parent="NorthSouthRoutes" unique_id=256194319 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, -120, 0, -33)
+
+[node name="NS_-120_0_3" parent="NorthSouthRoutes" unique_id=420750527 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, -120, 0, 33)
+
+[node name="NS_-120_0_4" parent="NorthSouthRoutes" unique_id=2109693185 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, -120, 0, 93)
+
+[node name="NS_-120_0_5" parent="NorthSouthRoutes" unique_id=1121617472 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -120, 0, 150)
+
+[node name="NS_-66_0_0" parent="NorthSouthRoutes" unique_id=1701362997 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -66, 0, -150)
+
+[node name="NS_-66_0_1" parent="NorthSouthRoutes" unique_id=752895211 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, -66, 0, -93)
+
+[node name="NS_-66_0_2" parent="NorthSouthRoutes" unique_id=564499137 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, -66, 0, -33)
+
+[node name="NS_-66_0_3" parent="NorthSouthRoutes" unique_id=1914479104 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, -66, 0, 33)
+
+[node name="NS_-66_0_4" parent="NorthSouthRoutes" unique_id=1195875848 instance=ExtResource("3_mejf7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, -66, 0, 93)
+
+[node name="NS_-66_0_5" parent="NorthSouthRoutes" unique_id=1361447782 instance=ExtResource("3_mejf7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, -66, 0, 150)
+
+[node name="NS_0_0_0" parent="NorthSouthRoutes" unique_id=1542204577 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 0, 0, -150)
+
+[node name="NS_0_0_1" parent="NorthSouthRoutes" unique_id=1784350661 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 0, 0, -93)
+
+[node name="NS_0_0_2" parent="NorthSouthRoutes" unique_id=1128377171 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 0, 0, -33)
+
+[node name="NS_0_0_3" parent="NorthSouthRoutes" unique_id=182272744 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 0, 0, 33)
+
+[node name="NS_0_0_4" parent="NorthSouthRoutes" unique_id=2091240888 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 0, 0, 93)
+
+[node name="NS_0_0_5" parent="NorthSouthRoutes" unique_id=373544824 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 0, 0, 150)
+
+[node name="NS_66_0_0" parent="NorthSouthRoutes" unique_id=639274241 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 66, 0, -150)
+
+[node name="NS_66_0_1" parent="NorthSouthRoutes" unique_id=1281184621 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 66, 0, -93)
+
+[node name="NS_66_0_2" parent="NorthSouthRoutes" unique_id=6638985 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 66, 0, -33)
+
+[node name="NS_66_0_3" parent="NorthSouthRoutes" unique_id=725227796 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 66, 0, 33)
+
+[node name="NS_66_0_4" parent="NorthSouthRoutes" unique_id=796746127 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 66, 0, 93)
+
+[node name="NS_66_0_5" parent="NorthSouthRoutes" unique_id=2033067322 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 66, 0, 150)
+
+[node name="NS_120_0_0" parent="NorthSouthRoutes" unique_id=2019485690 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 120, 0, -150)
+
+[node name="NS_120_0_1" parent="NorthSouthRoutes" unique_id=595121296 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 120, 0, -93)
+
+[node name="NS_120_0_2" parent="NorthSouthRoutes" unique_id=98628384 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 120, 0, -33)
+
+[node name="NS_120_0_3" parent="NorthSouthRoutes" unique_id=1519400741 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.6, 120, 0, 33)
+
+[node name="NS_120_0_4" parent="NorthSouthRoutes" unique_id=1869674587 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.4, 120, 0, 93)
+
+[node name="NS_120_0_5" parent="NorthSouthRoutes" unique_id=1667566037 instance=ExtResource("2_4md5m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 0.5, 120, 0, 150)
+
+[node name="EastWestRoutes" type="Node3D" parent="." unique_id=2058528572]
+
+[node name="EW_-120_0_0" parent="EastWestRoutes" unique_id=1402843213 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, -150, 0, -120)
+
+[node name="EW_-120_0_1" parent="EastWestRoutes" unique_id=2102580467 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, -93, 0, -120)
+
+[node name="EW_-120_0_2" parent="EastWestRoutes" unique_id=992891846 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, -33, 0, -120)
+
+[node name="EW_-120_0_3" parent="EastWestRoutes" unique_id=1826223229 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, 33, 0, -120)
+
+[node name="EW_-120_0_4" parent="EastWestRoutes" unique_id=560741397 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, 93, 0, -120)
+
+[node name="EW_-120_0_5" parent="EastWestRoutes" unique_id=1237535785 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, 150, 0, -120)
+
+[node name="EW_-66_0_0" parent="EastWestRoutes" unique_id=1181513387 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, -150, 0, -66)
+
+[node name="EW_-66_0_1" parent="EastWestRoutes" unique_id=1743429457 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, -93, 0, -66)
+
+[node name="EW_-66_0_2" parent="EastWestRoutes" unique_id=2069549662 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, -33, 0, -66)
+
+[node name="EW_-66_0_3" parent="EastWestRoutes" unique_id=1663828745 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, 33, 0, -66)
+
+[node name="EW_-66_0_4" parent="EastWestRoutes" unique_id=132645858 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, 93, 0, -66)
+
+[node name="EW_-66_0_5" parent="EastWestRoutes" unique_id=680606634 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, 150, 0, -66)
+
+[node name="EW_0_0_0" parent="EastWestRoutes" unique_id=952825171 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, -150, 0, 0)
+
+[node name="EW_0_0_1" parent="EastWestRoutes" unique_id=1684003860 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, -93, 0, 0)
+
+[node name="EW_0_0_2" parent="EastWestRoutes" unique_id=688530079 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, -33, 0, 0)
+
+[node name="EW_0_0_3" parent="EastWestRoutes" unique_id=521573800 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, 33, 0, 0)
+
+[node name="EW_0_0_4" parent="EastWestRoutes" unique_id=795365510 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, 93, 0, 0)
+
+[node name="EW_0_0_5" parent="EastWestRoutes" unique_id=1026831062 instance=ExtResource("4_jlwfh")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, 150, 0, 0)
+
+[node name="EW_66_0_0" parent="EastWestRoutes" unique_id=1076234386 instance=ExtResource("3_mejf7")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, -150, 0, 66)
+
+[node name="EW_66_0_1" parent="EastWestRoutes" unique_id=546583648 instance=ExtResource("3_mejf7")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, -93, 0, 66)
+
+[node name="EW_66_0_2" parent="EastWestRoutes" unique_id=271039563 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, -33, 0, 66)
+
+[node name="EW_66_0_3" parent="EastWestRoutes" unique_id=330880299 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, 33, 0, 66)
+
+[node name="EW_66_0_4" parent="EastWestRoutes" unique_id=287068719 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, 93, 0, 66)
+
+[node name="EW_66_0_5" parent="EastWestRoutes" unique_id=1231543356 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, 150, 0, 66)
+
+[node name="EW_120_0_0" parent="EastWestRoutes" unique_id=62804391 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, -150, 0, 120)
+
+[node name="EW_120_0_1" parent="EastWestRoutes" unique_id=1909808355 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, -93, 0, 120)
+
+[node name="EW_120_0_2" parent="EastWestRoutes" unique_id=837305851 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, -33, 0, 120)
+
+[node name="EW_120_0_3" parent="EastWestRoutes" unique_id=977474982 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.6, 0, 1, 0, -1, 0, -2.6226834e-08, 33, 0, 120)
+
+[node name="EW_120_0_4" parent="EastWestRoutes" unique_id=1965952435 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.4, 0, 1, 0, -1, 0, -1.7484556e-08, 93, 0, 120)
+
+[node name="EW_120_0_5" parent="EastWestRoutes" unique_id=107408642 instance=ExtResource("2_4md5m")]
+transform = Transform3D(-4.371139e-08, 0, 0.5, 0, 1, 0, -1, 0, -2.1855694e-08, 150, 0, 120)
+
+[node name="FutureReinforcementRoutes" type="Node3D" parent="." unique_id=148579985]
+
+[node name="NorthSouthAvenue" type="Path3D" parent="FutureReinforcementRoutes" unique_id=873170894]
+curve = SubResource("Curve3D_lst4x")
+
+[node name="MilitaryToIndustrial" type="Path3D" parent="FutureReinforcementRoutes" unique_id=1266017871]
+curve = SubResource("Curve3D_y0wqa")

@@ -1,54 +1,13 @@
 [gd_scene format=3 uid="uid://c6i3pc56ga0x"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fl52g"]
-albedo_color = Color(0.12, 0.13, 0.14, 1)
-roughness = 0.85
+[ext_resource type="Material" uid="uid://dmqmstpvn8eaj" path="res://resources/environment/asphalt.tres" id="1_6eoja"]
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_6eoja"]
-material = SubResource("StandardMaterial3D_fl52g")
-size = Vector2(16, 16)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uj3cg"]
-albedo_color = Color(0.55, 0.55, 0.52, 1)
-roughness = 0.9
-
-[sub_resource type="BoxMesh" id="BoxMesh_ju4ps"]
-material = SubResource("StandardMaterial3D_uj3cg")
-size = Vector3(2, 0.15, 2)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3owcv"]
-albedo_color = Color(0.88, 0.88, 0.85, 1)
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_8l56d"]
-material = SubResource("StandardMaterial3D_3owcv")
-size = Vector2(0.8, 14)
+[sub_resource type="BoxMesh" id="BoxMesh_6eoja"]
+material = ExtResource("1_6eoja")
+size = Vector3(24, 0.12, 24)
 
 [node name="RoadIntersection" type="Node3D" unique_id=329823494]
 
-[node name="Asphalt" type="MeshInstance3D" parent="." unique_id=225535953]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
-mesh = SubResource("PlaneMesh_6eoja")
-
-[node name="CornerCurb_0" type="MeshInstance3D" parent="." unique_id=1753591237]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.075, -9)
-mesh = SubResource("BoxMesh_ju4ps")
-
-[node name="CornerCurb_1" type="MeshInstance3D" parent="." unique_id=1696895183]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.075, -9)
-mesh = SubResource("BoxMesh_ju4ps")
-
-[node name="CornerCurb_2" type="MeshInstance3D" parent="." unique_id=1436315925]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.075, 9)
-mesh = SubResource("BoxMesh_ju4ps")
-
-[node name="CornerCurb_3" type="MeshInstance3D" parent="." unique_id=1478897289]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.075, 9)
-mesh = SubResource("BoxMesh_ju4ps")
-
-[node name="CrosswalkNorth" type="MeshInstance3D" parent="." unique_id=370043444]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0.02, -7)
-mesh = SubResource("PlaneMesh_8l56d")
-
-[node name="CrosswalkSouth" type="MeshInstance3D" parent="." unique_id=1945675214]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0.02, 7)
-mesh = SubResource("PlaneMesh_8l56d")
+[node name="OpenJunction" type="MeshInstance3D" parent="." unique_id=429711000]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("BoxMesh_6eoja")

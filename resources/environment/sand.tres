@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://dl3wrfrxk82n8"]
+
+[resource]
+resource_name = "Sand"
+albedo_color = Color(0.69803923, 0.6156863, 0.4392157, 1)
+roughness = 0.92

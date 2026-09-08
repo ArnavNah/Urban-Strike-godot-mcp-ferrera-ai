@@ -1,0 +1,131 @@
+[gd_scene format=3 uid="uid://dfdrgb15lroqd"]
+
+[ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="1_nvioq"]
+[ext_resource type="PackedScene" uid="uid://dcvwdf754343h" path="res://scenes/environment/city/warehouse.tscn" id="2_1rkuc"]
+[ext_resource type="PackedScene" uid="uid://cuve5cme7mhsq" path="res://scenes/environment/props/parked_vehicle.tscn" id="3_2n1fc"]
+[ext_resource type="PackedScene" uid="uid://cdsq1pdmth2tl" path="res://scenes/environment/props/crate.tscn" id="4_wy3wq"]
+[ext_resource type="Material" uid="uid://st4ltur1twda" path="res://resources/environment/dirt.tres" id="5_b81xo"]
+[ext_resource type="PackedScene" uid="uid://cssvykcndyt6a" path="res://scenes/environment/industrial/storage_tanks.tscn" id="6_i0jeq"]
+[ext_resource type="PackedScene" uid="uid://d3ebdh0splvq3" path="res://scenes/environment/props/fuel_tank.tscn" id="7_ac1r5"]
+[ext_resource type="PackedScene" uid="uid://cuamvlulyie81" path="res://scenes/environment/industrial/container_stack.tscn" id="8_jegy1"]
+[ext_resource type="Material" uid="uid://dmqmstpvn8eaj" path="res://resources/environment/asphalt.tres" id="9_hxnjg"]
+[ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="10_mcxet"]
+[ext_resource type="Material" uid="uid://ck2jsxjec5j0i" path="res://resources/environment/rust.tres" id="11_7sl2j"]
+[ext_resource type="Material" uid="uid://dvake1pijcevk" path="res://resources/environment/roof.tres" id="12_1cprn"]
+[ext_resource type="PackedScene" uid="uid://dcg68b3fc75bj" path="res://scenes/environment/props/streetlight.tscn" id="13_x5vxh"]
+[ext_resource type="PackedScene" uid="uid://deiyhgkluqg1e" path="res://scenes/environment/props/barrier.tscn" id="14_6tw2u"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_weqt7"]
+material = ExtResource("1_nvioq")
+size = Vector3(38, 0.12, 38)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ijhvc"]
+material = ExtResource("5_b81xo")
+size = Vector3(38, 0.12, 38)
+
+[sub_resource type="BoxMesh" id="BoxMesh_b7hkx"]
+material = ExtResource("1_nvioq")
+size = Vector3(38, 0.12, 36)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ok425"]
+material = ExtResource("9_hxnjg")
+size = Vector3(8, 0.12, 35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_my3i6"]
+material = ExtResource("10_mcxet")
+size = Vector3(36, 0.12, 36)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ea3qc"]
+material = ExtResource("11_7sl2j")
+top_radius = 1.3
+bottom_radius = 1.3
+height = 18.0
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_fi8tn"]
+material = ExtResource("12_1cprn")
+top_radius = 1.5
+bottom_radius = 1.5
+height = 0.8
+radial_segments = 12
+rings = 1
+
+[node name="IndustrialDistrict" type="Node3D" unique_id=2014291378]
+
+[node name="FreightTerminal" type="Node3D" parent="." unique_id=255118104]
+
+[node name="LoadingCourt" type="MeshInstance3D" parent="FreightTerminal" unique_id=1060661909]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.06, 35)
+mesh = SubResource("BoxMesh_weqt7")
+
+[node name="FreightWarehouse" parent="FreightTerminal" unique_id=1421401752 instance=ExtResource("2_1rkuc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 34, 0, 30)
+
+[node name="DeliveryTruck" parent="FreightTerminal" unique_id=1841633813 instance=ExtResource("3_2n1fc")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 25, 0.1, 48)
+
+[node name="Pallets" parent="FreightTerminal" unique_id=1604591116 instance=ExtResource("4_wy3wq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47, 0, 46)
+
+[node name="FuelDepot" type="Node3D" parent="." unique_id=790074398]
+
+[node name="TankCourt" type="MeshInstance3D" parent="FuelDepot" unique_id=1213550515]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 95, 0.06, 34)
+mesh = SubResource("BoxMesh_ijhvc")
+
+[node name="StorageLandmark" parent="FuelDepot" unique_id=1005871085 instance=ExtResource("6_i0jeq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 97, 0, 29)
+
+[node name="FuelSupplyWest" parent="FuelDepot" unique_id=1501044442 instance=ExtResource("7_ac1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0, 49)
+
+[node name="FuelSupplyEast" parent="FuelDepot" unique_id=1488063392 instance=ExtResource("7_ac1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 97, 0, 49)
+
+[node name="ContainerYard" type="Node3D" parent="." unique_id=242225309]
+
+[node name="OpenYard" type="MeshInstance3D" parent="ContainerYard" unique_id=1361204806]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.06, 94)
+mesh = SubResource("BoxMesh_b7hkx")
+
+[node name="ContainerRowWest" parent="ContainerYard" unique_id=1912051321 instance=ExtResource("8_jegy1")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 25, 0, 95)
+
+[node name="ContainerRowEast" parent="ContainerYard" unique_id=598474320 instance=ExtResource("8_jegy1")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 46, 0, 98)
+
+[node name="LoadingLane" type="MeshInstance3D" parent="ContainerYard" unique_id=2043410018]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.099999994, 94)
+mesh = SubResource("BoxMesh_ok425")
+
+[node name="EngineeringWorks" type="Node3D" parent="." unique_id=598519741]
+
+[node name="ServiceYard" type="MeshInstance3D" parent="EngineeringWorks" unique_id=566859059]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 94, 0.06, 94)
+mesh = SubResource("BoxMesh_my3i6")
+
+[node name="MachineWorks" parent="EngineeringWorks" unique_id=1962557994 instance=ExtResource("2_1rkuc")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 94, 0, 98)
+
+[node name="ExhaustStack" type="MeshInstance3D" parent="EngineeringWorks" unique_id=1039862676]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 107, 9, 108)
+mesh = SubResource("CylinderMesh_ea3qc")
+
+[node name="ExhaustRim" type="MeshInstance3D" parent="EngineeringWorks" unique_id=1585444782]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 107, 17.9, 108)
+mesh = SubResource("CylinderMesh_fi8tn")
+
+[node name="MaintenanceVan" parent="EngineeringWorks" unique_id=609116406 instance=ExtResource("3_2n1fc")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 88, 0.1, 80)
+
+[node name="YardFurniture" type="Node3D" parent="." unique_id=198550629]
+
+[node name="FreightLamp" parent="YardFurniture" unique_id=1425482352 instance=ExtResource("13_x5vxh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 53, 0, 48)
+
+[node name="DepotLamp" parent="YardFurniture" unique_id=1698409808 instance=ExtResource("13_x5vxh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 109, 0, 53)
+
+[node name="DepotBarrier" parent="YardFurniture" unique_id=818320504 instance=ExtResource("14_6tw2u")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 82, 0, 52)

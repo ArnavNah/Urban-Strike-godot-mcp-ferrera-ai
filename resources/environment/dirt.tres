@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://st4ltur1twda"]
+
+[resource]
+resource_name = "Dirt"
+albedo_color = Color(0.5058824, 0.44705883, 0.34117648, 1)
+roughness = 0.92

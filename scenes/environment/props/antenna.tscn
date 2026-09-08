@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://dpewxnf6q68mk"]
+
+[ext_resource type="Material" uid="uid://c08tyu1wvxfxp" path="res://resources/environment/metal.tres" id="1_e8h8v"]
+[ext_resource type="Material" uid="uid://ck2jsxjec5j0i" path="res://resources/environment/rust.tres" id="2_lyfb1"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_hj6rm"]
+material = ExtResource("1_e8h8v")
+size = Vector3(0.18, 5.5, 0.18)
+
+[sub_resource type="BoxMesh" id="BoxMesh_lunwn"]
+material = ExtResource("2_lyfb1")
+size = Vector3(1.6, 0.08, 0.08)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6ah5q"]
+material = ExtResource("2_lyfb1")
+size = Vector3(1, 0.08, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0dak7"]
+albedo_color = Color(0.9, 0.15, 0.1, 1)
+emission_enabled = true
+emission = Color(0.9, 0.15, 0.1, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_70nv2"]
+material = SubResource("StandardMaterial3D_0dak7")
+size = Vector3(0.25, 0.35, 0.25)
+
+[node name="RooftopAntenna" type="Node3D" unique_id=967803692]
+
+[node name="MastSpire" type="MeshInstance3D" parent="." unique_id=463887370]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.75, 0)
+mesh = SubResource("BoxMesh_hj6rm")
+
+[node name="CrossbarLower" type="MeshInstance3D" parent="." unique_id=1658776116]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0)
+mesh = SubResource("BoxMesh_lunwn")
+
+[node name="CrossbarUpper" type="MeshInstance3D" parent="." unique_id=373799235]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, 0)
+mesh = SubResource("BoxMesh_6ah5q")
+
+[node name="BeaconTip" type="MeshInstance3D" parent="." unique_id=1434291527]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.65, 0)
+mesh = SubResource("BoxMesh_70nv2")

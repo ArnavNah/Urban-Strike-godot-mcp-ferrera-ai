@@ -1,0 +1,6 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://cub24u6v0a51h"]
+
+[resource]
+resource_name = "Line"
+albedo_color = Color(0.78431374, 0.7254902, 0.5254902, 1)
+roughness = 0.92

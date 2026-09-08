@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://cfisbv4tqybil"]
+
+[ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="1_sjdaq"]
+[ext_resource type="Material" uid="uid://dmqmstpvn8eaj" path="res://resources/environment/asphalt.tres" id="2_0gyx0"]
+[ext_resource type="Material" uid="uid://cub24u6v0a51h" path="res://resources/environment/line.tres" id="3_244mx"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_gruet"]
+material = ExtResource("1_sjdaq")
+size = Vector3(30, 0.12, 60)
+
+[sub_resource type="BoxMesh" id="BoxMesh_fjn05"]
+material = ExtResource("2_0gyx0")
+size = Vector3(26, 0.12, 60)
+
+[sub_resource type="BoxMesh" id="BoxMesh_go3v8"]
+material = ExtResource("3_244mx")
+size = Vector3(0.22, 0.025, 2.5)
+
+[sub_resource type="MultiMesh" id="MultiMesh_e7pve"]
+transform_format = 1
+instance_count = 10
+mesh = SubResource("BoxMesh_go3v8")
+buffer = PackedFloat32Array(1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, -27, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, -21, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, -15, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, -9, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, -3, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, 3, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, 9, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, 15, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, 21, 1, 0, 0, 0, 0, 1, 0, 0.155, 0, 0, 1, 27)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jk4a7"]
+material = ExtResource("3_244mx")
+size = Vector3(0.16, 0.025, 60)
+
+[sub_resource type="BoxMesh" id="BoxMesh_tgolm"]
+material = ExtResource("3_244mx")
+size = Vector3(0.16, 0.025, 60)
+
+[node name="RoadModule" type="Node3D" unique_id=1542204577]
+
+[node name="Shoulders" type="MeshInstance3D" parent="." unique_id=2012797184]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+mesh = SubResource("BoxMesh_gruet")
+
+[node name="Asphalt" type="MeshInstance3D" parent="." unique_id=445939315]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("BoxMesh_fjn05")
+
+[node name="DashedLaneMarkings" type="MultiMeshInstance3D" parent="." unique_id=1844696303]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.145, 0)
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_e7pve")
+
+[node name="LeftEdgeLine" type="MeshInstance3D" parent="." unique_id=2014324567]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 0.3, 0)
+mesh = SubResource("BoxMesh_jk4a7")
+
+[node name="RightEdgeLine" type="MeshInstance3D" parent="." unique_id=878481882]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 0.3, 0)
+mesh = SubResource("BoxMesh_tgolm")

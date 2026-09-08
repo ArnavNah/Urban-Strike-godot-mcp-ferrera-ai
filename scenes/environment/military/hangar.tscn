@@ -1,50 +1,98 @@
 [gd_scene format=3 uid="uid://ddygpp17k2r3f"]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_xfg15"]
-size = Vector3(28, 12, 26)
+[ext_resource type="Material" uid="uid://dvake1pijcevk" path="res://resources/environment/roof.tres" id="1_f4f71"]
+[ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="2_irtak"]
+[ext_resource type="Material" uid="uid://dbm38g6dacn80" path="res://resources/environment/glass.tres" id="3_vyxd4"]
+[ext_resource type="Material" uid="uid://c08tyu1wvxfxp" path="res://resources/environment/metal.tres" id="4_530x4"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5qw8b"]
-albedo_color = Color(0.28, 0.32, 0.28, 1)
-metallic = 0.3
-roughness = 0.7
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5llun"]
+resource_name = "Olive"
+albedo_color = Color(0.39607844, 0.4392157, 0.32156864, 1)
+roughness = 0.92
 
-[sub_resource type="BoxMesh" id="BoxMesh_wdpki"]
-material = SubResource("StandardMaterial3D_5qw8b")
-size = Vector3(28, 12, 26)
+[sub_resource type="BoxMesh" id="BoxMesh_6kydu"]
+material = SubResource("StandardMaterial3D_5llun")
+size = Vector3(28, 10, 26)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wqvbs"]
-albedo_color = Color(0.08, 0.09, 0.08, 1)
+[sub_resource type="BoxMesh" id="BoxMesh_hmyw4"]
+material = ExtResource("1_f4f71")
+size = Vector3(28.25, 0.4, 26.25)
 
-[sub_resource type="BoxMesh" id="BoxMesh_f4f71"]
-material = SubResource("StandardMaterial3D_wqvbs")
-size = Vector3(18, 9, 0.2)
+[sub_resource type="BoxMesh" id="BoxMesh_jx047"]
+material = ExtResource("1_f4f71")
+size = Vector3(28.15, 0.6, 26.15)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_irtak"]
-albedo_color = Color(0.25, 0.25, 0.24, 1)
-roughness = 0.9
+[sub_resource type="BoxMesh" id="BoxMesh_3dsnr"]
+material = ExtResource("1_f4f71")
+size = Vector3(17.36, 7.2, 0.15)
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_vyxd4"]
-material = SubResource("StandardMaterial3D_irtak")
-size = Vector2(20, 14)
+[sub_resource type="BoxMesh" id="BoxMesh_cvus4"]
+material = ExtResource("2_irtak")
+size = Vector3(0.18, 0.15, 26)
+
+[sub_resource type="MultiMesh" id="MultiMesh_4gaj7"]
+transform_format = 1
+instance_count = 8
+mesh = SubResource("BoxMesh_cvus4")
+buffer = PackedFloat32Array(1, 0, 0, -12.5, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, -8.928572, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, -5.357143, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, -1.7857143, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, 1.7857143, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, 5.357143, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, 8.928572, 0, 1, 0, 10.48, 0, 0, 1, 0, 1, 0, 0, 12.5, 0, 1, 0, 10.48, 0, 0, 1, 0)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2ebv7"]
+material = ExtResource("3_vyxd4")
+size = Vector3(16.8, 0.15, 3)
+
+[sub_resource type="BoxMesh" id="BoxMesh_myvds"]
+material = ExtResource("4_530x4")
+size = Vector3(3, 0.8, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_38xss"]
+size = Vector3(28, 10.4, 26)
 
 [node name="MilitaryHangar" type="StaticBody3D" unique_id=434092438]
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=850879626]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
-shape = SubResource("BoxShape3D_xfg15")
+[node name="Intact" type="Node3D" parent="." unique_id=681697622]
 
-[node name="HangarArchMesh" type="MeshInstance3D" parent="." unique_id=1208603250]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
-mesh = SubResource("BoxMesh_wdpki")
+[node name="Facade" type="MeshInstance3D" parent="Intact" unique_id=1148916815]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 0)
+mesh = SubResource("BoxMesh_6kydu")
 
-[node name="HangarDoorOpening" type="MeshInstance3D" parent="." unique_id=1992530841]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 13.1)
-mesh = SubResource("BoxMesh_f4f71")
+[node name="RoofCap" type="MeshInstance3D" parent="Intact" unique_id=1433675656]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.2, 0)
+mesh = SubResource("BoxMesh_hmyw4")
 
-[node name="LandingApron" type="MeshInstance3D" parent="." unique_id=174994882]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 20)
-mesh = SubResource("PlaneMesh_vyxd4")
+[node name="Foundation" type="MeshInstance3D" parent="Intact" unique_id=758433966]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+mesh = SubResource("BoxMesh_jx047")
 
-[node name="LandingZone" type="Marker3D" parent="." unique_id=1804927802]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 20)
+[node name="ClosedLoadingDoor" type="MeshInstance3D" parent="Intact" unique_id=1835027410]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 13.1)
+mesh = SubResource("BoxMesh_3dsnr")
+
+[node name="RoofSeams" type="MultiMeshInstance3D" parent="Intact" unique_id=2122072316]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_4gaj7")
+
+[node name="RoofSkylight" type="MeshInstance3D" parent="Intact" unique_id=1381110041]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.55, 0)
+mesh = SubResource("BoxMesh_2ebv7")
+
+[node name="RoofFixtures" type="Node3D" parent="Intact" unique_id=648274513]
+
+[node name="VentilationUnit" type="MeshInstance3D" parent="Intact/RoofFixtures" unique_id=657531626]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.4, 10.8, -7.28)
+mesh = SubResource("BoxMesh_myvds")
+
+[node name="StructureCollision" type="CollisionShape3D" parent="." unique_id=1063734918]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.2, 0)
+shape = SubResource("BoxShape3D_38xss")
+
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=1197521330]
+
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=1912768662]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.28, 10.42, -6.5)
+
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=803373046]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.28, 10.42, 6.5)
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=314453713]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.42, 0)
