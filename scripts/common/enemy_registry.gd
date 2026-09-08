@@ -63,17 +63,15 @@ func register_enemy(enemy: Node3D, is_air: bool = false) -> void:
 				_insert_into_cell(enemy, cell)
 		, CONNECT_ONE_SHOT)
 
-func unregister_enemy(enemy: Node3D) -> void:
-	if not enemy:
+func unregister_enemy(enemy: Variant) -> void:
+	if enemy == null:
 		return
 
 	all_enemies.erase(enemy)
 	ground_enemies.erase(enemy)
 	air_enemies.erase(enemy)
 
-	var is_air_val: Variant = _enemy_air_status.get(enemy)
-	if is_air_val != null:
-		_enemy_air_status.erase(enemy)
+	_enemy_air_status.erase(enemy)
 
 	var cell_val: Variant = _enemy_cells.get(enemy)
 	if cell_val != null:
@@ -165,7 +163,7 @@ func _insert_into_cell(enemy: Node3D, cell: Vector2i) -> void:
 		list.append(enemy)
 	_enemy_cells[enemy] = cell
 
-func _remove_from_cell(enemy: Node3D, cell: Vector2i) -> void:
+func _remove_from_cell(enemy: Variant, cell: Vector2i) -> void:
 	if _spatial_grid.has(cell):
 		var list: Array = _spatial_grid[cell] as Array
 		list.erase(enemy)
@@ -173,12 +171,29 @@ func _remove_from_cell(enemy: Node3D, cell: Vector2i) -> void:
 			_spatial_grid.erase(cell)
 
 func _clean_dead_references() -> void:
-	var dead: Array[Node3D] = []
+	var valid_all: Array[Node3D] = []
 	for e in all_enemies:
-		if not is_instance_valid(e) or e.is_queued_for_deletion():
-			dead.append(e)
-	for d in dead:
-		unregister_enemy(d)
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			valid_all.append(e)
+		else:
+			_enemy_air_status.erase(e)
+			var cell_val: Variant = _enemy_cells.get(e)
+			if cell_val != null:
+				_remove_from_cell(e, cell_val as Vector2i)
+				_enemy_cells.erase(e)
+	all_enemies = valid_all
+
+	var valid_ground: Array[Node3D] = []
+	for e in ground_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			valid_ground.append(e)
+	ground_enemies = valid_ground
+
+	var valid_air: Array[Node3D] = []
+	for e in air_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			valid_air.append(e)
+	air_enemies = valid_air
 
 func _physics_process(_delta: float) -> void:
 	# Periodic spatial refresh of mobile enemies

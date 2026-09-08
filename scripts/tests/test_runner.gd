@@ -64,6 +64,8 @@ func _ready() -> void:
 	success = test_continuous_spawning_and_xp_magnet(log_lines) and success
 	append_log("Running test 22 (environment districts & boundary)...", log_lines)
 	success = test_environment_districts_and_playable_boundary(log_lines) and success
+	append_log("Running test 23 (environment gameplay integration)...", log_lines)
+	success = test_environment_gameplay_integration(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -1752,4 +1754,227 @@ func test_environment_districts_and_playable_boundary(logs: Array[String]) -> bo
 		return false
 
 	append_log("  -> 3-tier boundary, fuel tank, crate destruction, HUD border alert, and 4-district city battlefield verified.", logs)
+	return true
+
+func test_environment_gameplay_integration(logs: Array[String]) -> bool:
+	logs.append("[TEST 23] Testing Environment Gameplay Integration...")
+
+	var root_node := Node3D.new()
+	root_node.name = "TestBattlefieldRoot"
+	add_child(root_node)
+
+	# 1. Setup authored Battlefield containers
+	var g_sources := Node3D.new()
+	g_sources.name = "GroundSpawnSources"
+	root_node.add_child(g_sources)
+
+	var m_north := Marker3D.new()
+	m_north.name = "RoadEntrance_North"
+	m_north.position = Vector3(0, 0.3, -140)
+	g_sources.add_child(m_north)
+
+	var m_south := Marker3D.new()
+	m_south.name = "RoadEntrance_South"
+	m_south.position = Vector3(0, 0.3, 140)
+	g_sources.add_child(m_south)
+
+	var m_ind := Marker3D.new()
+	m_ind.name = "IndustrialEntrance"
+	m_ind.position = Vector3(120, 0.3, 66)
+	g_sources.add_child(m_ind)
+
+	var m_mil := Marker3D.new()
+	m_mil.name = "MilitaryGate"
+	m_mil.position = Vector3(-66, 0.3, 0)
+	g_sources.add_child(m_mil)
+
+	var a_sources := Node3D.new()
+	a_sources.name = "AirSpawnSources"
+	root_node.add_child(a_sources)
+
+	var a_north := Marker3D.new()
+	a_north.name = "AirEntry_North"
+	a_north.position = Vector3(0, 20, -140)
+	a_sources.add_child(a_north)
+
+	var a_east := Marker3D.new()
+	a_east.name = "AirEntry_East"
+	a_east.position = Vector3(140, 20, 0)
+	a_sources.add_child(a_east)
+
+	var a_south := Marker3D.new()
+	a_south.name = "AirEntry_South"
+	a_south.position = Vector3(0, 20, 140)
+	a_sources.add_child(a_south)
+
+	var a_west := Marker3D.new()
+	a_west.name = "AirEntry_West"
+	a_west.position = Vector3(-140, 20, 0)
+	a_sources.add_child(a_west)
+
+	var r_sources := Node3D.new()
+	r_sources.name = "RooftopSpawnSources"
+	root_node.add_child(r_sources)
+
+	var r_tower := Marker3D.new()
+	r_tower.name = "CommunicationsTower"
+	r_tower.position = Vector3(31, 24.42, -96)
+	r_sources.add_child(r_tower)
+
+	var r_civic := Marker3D.new()
+	r_civic.name = "CivicOffice"
+	r_civic.position = Vector3(31, 11.42, -38)
+	r_sources.add_child(r_civic)
+
+	var r_wh := Marker3D.new()
+	r_wh.name = "FreightWarehouse"
+	r_wh.position = Vector3(34, 8.42, 30)
+	r_sources.add_child(r_wh)
+
+	var p_locations := Node3D.new()
+	p_locations.name = "PickupLocations"
+	root_node.add_child(p_locations)
+
+	var p1 := Marker3D.new()
+	p1.name = "SupplyPoint_01"
+	p1.position = Vector3(35, 0.3, 50)
+	p_locations.add_child(p1)
+
+	var p2 := Marker3D.new()
+	p2.name = "SupplyPoint_02"
+	p2.position = Vector3(-24, 0.3, 24)
+	p_locations.add_child(p2)
+
+	var o_locations := Node3D.new()
+	o_locations.name = "ObjectiveLocations"
+	root_node.add_child(o_locations)
+
+	var o_radar := Marker3D.new()
+	o_radar.name = "RadarObjective"
+	o_radar.position = Vector3(-95, 0.5, -37)
+	o_locations.add_child(o_radar)
+
+	# Dummy player
+	var dummy_p := Node3D.new()
+	dummy_p.name = "PlayerHelicopter"
+	dummy_p.add_to_group("player")
+	root_node.add_child(dummy_p)
+	dummy_p.global_position = Vector3(0, 10, 0)
+
+	# Instantiate SpawnDirector as sibling in root_node
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: SpawnDirector = sd_script.new() as SpawnDirector
+	root_node.add_child(sd)
+	sd.is_continuous_mode = true
+
+	# 2. Verify Ground Entrance Selection & Alternation
+	var ground_spawn_1 := sd.get_authored_ground_spawn("tank", dummy_p.global_position, 28.0)
+	var s_name_1: String = ground_spawn_1.get("source_name", "")
+	if s_name_1 != "IndustrialEntrance" and s_name_1 != "MilitaryGate":
+		logs.append("FAIL: Tank ground spawn did not select IndustrialEntrance or MilitaryGate (got %s)" % s_name_1)
+		root_node.queue_free()
+		return false
+
+	var ground_spawn_2 := sd.get_authored_ground_spawn("tank", dummy_p.global_position, 28.0)
+	var s_name_2: String = ground_spawn_2.get("source_name", "")
+	if s_name_2 == s_name_1:
+		logs.append("FAIL: Ground spawn did not alternate sources on consecutive calls (repeated %s)" % s_name_1)
+		root_node.queue_free()
+		return false
+
+	var ground_pos: Vector3 = ground_spawn_1.get("position", Vector3.ZERO)
+	if dummy_p.global_position.distance_to(ground_pos) < 28.0:
+		logs.append("FAIL: Ground spawn closer than min safe distance of 28m")
+		root_node.queue_free()
+		return false
+
+	# 3. Verify Air Corridor Selection, Inward Heading, and Min Distance
+	var air_entry_1 := sd.get_air_corridor_entry(dummy_p.global_position, 38.0)
+	var a_name_1: String = air_entry_1.get("source_name", "")
+	var a_head_1: Vector3 = air_entry_1.get("heading", Vector3.ZERO)
+	var a_pos_1: Vector3 = air_entry_1.get("position", Vector3.ZERO)
+	if not a_name_1.begins_with("AirEntry_"):
+		logs.append("FAIL: Air entry did not use authored AirSpawnSources (got %s)" % a_name_1)
+		root_node.queue_free()
+		return false
+
+	var dist_air := dummy_p.global_position.distance_to(a_pos_1)
+	if dist_air < 38.0:
+		logs.append("FAIL: Air entry spawned directly above or closer than 38m to player (dist=%.1f)" % dist_air)
+		root_node.queue_free()
+		return false
+
+	if a_head_1.dot((dummy_p.global_position - a_pos_1).normalized()) < 0.7:
+		logs.append("FAIL: Air entry heading does not point inward toward player")
+		root_node.queue_free()
+		return false
+
+	# 4. Verify Rooftop Threat Marker Tracking, Cap, and Free on Exit
+	var r1 := sd.spawn_rooftop_threat(1, dummy_p.global_position)
+	if not r1 or sd.get_active_rooftop_count() != 1:
+		logs.append("FAIL: spawn_rooftop_threat failed to spawn or increment active rooftop count")
+		root_node.queue_free()
+		return false
+
+	var _r2 := sd.spawn_rooftop_threat(1, dummy_p.global_position)
+	var _r3 := sd.spawn_rooftop_threat(1, dummy_p.global_position)
+	if sd.get_active_rooftop_count() != 3:
+		logs.append("FAIL: Expected 3 active rooftop threats, got %d" % sd.get_active_rooftop_count())
+		root_node.queue_free()
+		return false
+
+	var r4 := sd.spawn_rooftop_threat(1, dummy_p.global_position)
+	if r4 != null:
+		logs.append("FAIL: Rooftop threat spawned exceeding max active cap of 3")
+		root_node.queue_free()
+		return false
+
+	# Free one rooftop threat and verify marker liberation
+	r1.queue_free()
+	if is_instance_valid(r1):
+		r1.emit_signal("tree_exited")
+	if sd.get_active_rooftop_count() != 2:
+		logs.append("FAIL: Freeing rooftop threat did not decrement active count (count=%d)" % sd.get_active_rooftop_count())
+		root_node.queue_free()
+		return false
+
+	# 5. Verify Authored Pickup Spawning at PickupLocations
+	var crate1 := sd._try_spawn_authored_pickup()
+	if not crate1 or sd._active_authored_pickups.size() != 1:
+		logs.append("FAIL: _try_spawn_authored_pickup failed to spawn at authored marker")
+		root_node.queue_free()
+		return false
+
+	var c_pos := crate1.global_position
+	if absf(c_pos.x) > 125.0 or absf(c_pos.z) > 125.0:
+		logs.append("FAIL: Pickup spawned outside EnvironmentBounds safe area (125m)")
+		root_node.queue_free()
+		return false
+
+	var crate2 := sd._try_spawn_authored_pickup()
+	if not crate2 or sd._active_authored_pickups.size() != 2:
+		logs.append("FAIL: Second pickup failed to spawn at alternate authored location")
+		root_node.queue_free()
+		return false
+
+	var crate3 := sd._try_spawn_authored_pickup()
+	if crate3 != null:
+		logs.append("FAIL: Pickup spawned exceeding max active authored pickups cap of 2")
+		root_node.queue_free()
+		return false
+
+	# 6. Verify Objective Location Integration
+	sd._spawn_radar_objective()
+	var radar_station := root_node.find_child("RadarStation", true, false)
+	if not radar_station:
+		radar_station = root_node.find_child("*Radar*", true, false)
+	if radar_station:
+		var r_pos: Vector3 = radar_station.global_position
+		if r_pos.distance_to(Vector3(-95, 0.5, -37)) > 1.0:
+			logs.append("FAIL: RadarObjective not placed at authored Marker3D location (-95, 0.5, -37)")
+			root_node.queue_free()
+			return false
+
+	root_node.queue_free()
+	append_log("  -> Authored ground entrances, air corridors, rooftop tracking, pickup locations, and bounds verified.", logs)
 	return true
