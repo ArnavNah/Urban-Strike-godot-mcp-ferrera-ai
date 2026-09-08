@@ -63,12 +63,14 @@ func _destroy_radar() -> void:
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(crate)
 
-	# Spawn multiple XP pickups
+	# Spawn multiple XP pickups (125 XP total: 5 x 25 XP)
 	for i in range(5):
 		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 		if xp_scene:
 			var gem: Node3D = xp_scene.instantiate() as Node3D
 			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = 25
 				var offset := Vector3(randf_range(-2.0, 2.0), 0.5, randf_range(-2.0, 2.0))
 				gem.transform.origin = global_position + offset
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root

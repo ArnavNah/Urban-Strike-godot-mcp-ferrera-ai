@@ -260,6 +260,18 @@ func _die() -> void:
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(crate)
 
+	# Spawn high-value Boss XP Gems (135 XP total: 3 x 45 XP)
+	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+	if xp_scene:
+		for i in range(3):
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = 45
+				gem.transform.origin = global_position + Vector3(randf_range(-3, 3), 0.5, randf_range(-3, 3))
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)
+
 	# Multi-explosion sequence using VfxPool
 	for i in range(8):
 		var offset := Vector3(randf_range(-3, 3), randf_range(-1, 2), randf_range(-4, 4))

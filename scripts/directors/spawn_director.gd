@@ -71,6 +71,8 @@ var is_radar_active: bool = false
 var _recent_spawn_sectors: Array[int] = []
 var _recent_ground_sources: Array[String] = []
 var _recent_air_sources: Array[String] = []
+var _formation_spawn_queue: Array[Dictionary] = []
+var _formation_stagger_timer: float = 0.0
 var _occupied_rooftop_markers: Dictionary = {}
 var _active_authored_pickups: Array[Node3D] = []
 var _pickup_spawn_timer: float = 12.0
@@ -386,6 +388,20 @@ func get_active_rooftop_count() -> int:
 			count += 1
 	return count
 
+## Calculates continuous stream interval based on game stage and deficit state.
+## Early game: 1.5 - 2.5s. Mid game: 1.0 - 2.0s. Late game: 0.7 - 1.5s.
+## Deficit recovery: recovers gradually at 0.85 - 1.2s without instant burst dumping.
+func _get_next_stream_interval(stage: int, is_behind_target: bool) -> float:
+	if is_behind_target:
+		return randf_range(0.85, 1.2)
+	match stage:
+		1:
+			return randf_range(1.5, 2.5)
+		2, 3:
+			return randf_range(1.0, 2.0)
+		_:
+			return randf_range(0.7, 1.5)
+
 func _on_stream_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
 		return
@@ -403,17 +419,11 @@ func _on_stream_timer_timeout() -> void:
 	var p_pos := player.global_position if player else Vector3.ZERO
 	var is_behind_target := current_living < target_count
 
+	# Single gradual stream spawn per tick (no double-spawn burst dumping)
 	_spawn_continuous_stream(stage, p_pos)
 
-	if is_behind_target and (current_living + 2 <= cap) and (current_living < target_count * 0.75):
-		_spawn_continuous_stream(stage, p_pos)
-
 	if stream_timer:
-		if is_behind_target:
-			var deficit_ratio := float(target_count - current_living) / float(maxi(1, target_count))
-			stream_timer.wait_time = lerpf(0.85, 1.6, 1.0 - deficit_ratio)
-		else:
-			stream_timer.wait_time = randf_range(1.9, 3.2)
+		stream_timer.wait_time = _get_next_stream_interval(stage, is_behind_target)
 
 func _on_formation_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
@@ -463,12 +473,50 @@ func _process(delta: float) -> void:
 	if not is_wave_active:
 		return
 
+	# Process staggered arrivals for active formations (0.25 - 0.8s between units)
+	_process_formation_stagger_queue(delta)
+
 	if is_continuous_mode:
 		_process_continuous_survival(delta)
+
+func _process_formation_stagger_queue(delta: float) -> void:
+	if _formation_spawn_queue.is_empty():
+		return
+	_formation_stagger_timer -= delta
+	if _formation_stagger_timer <= 0.0:
+		var item: Dictionary = _formation_spawn_queue.pop_front()
+		var unit: Node3D = item.get("unit", null) as Node3D
+		var parent: Node = item.get("parent", null) as Node
+		if is_instance_valid(unit) and not unit.is_queued_for_deletion():
+			if not unit.is_inside_tree() and is_instance_valid(parent):
+				parent.add_child.call_deferred(unit)
+				_register_spawned_node(unit)
+		_formation_stagger_timer = randf_range(0.3, 0.65)
+
+func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger: bool = true) -> void:
+	if not is_instance_valid(unit) or not is_instance_valid(parent):
+		return
+	if is_first or not stagger:
+		parent.add_child.call_deferred(unit)
+		_register_spawned_node(unit)
+	else:
+		_formation_spawn_queue.append({
+			"unit": unit,
+			"parent": parent
+		})
+
+func clear_formation_queue() -> void:
+	for item in _formation_spawn_queue:
+		var u: Node3D = item.get("unit", null) as Node3D
+		if is_instance_valid(u) and not u.is_inside_tree():
+			u.queue_free()
+	_formation_spawn_queue.clear()
+	_formation_stagger_timer = 0.0
 
 func start_wave(wave_num: int) -> void:
 	current_wave = wave_num
 	is_wave_active = true
+	clear_formation_queue()
 	if wave_num == 1:
 		clear_missile_pickups()
 		var p := _get_player()
@@ -538,19 +586,19 @@ func start_wave(wave_num: int) -> void:
 ## Guaranteed playable initial encounter on run start using authored ground, rooftop, and air entrances
 func _spawn_initial_encounter(player_pos: Vector3) -> void:
 	# 1. First infantry squad entering from Road Entrance North
-	var g_north := get_authored_ground_spawn("infantry", player_pos, 28.0)
+	var g_north := get_authored_ground_spawn("infantry", player_pos, 35.0)
 	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, g_north["position"])
 
 	# 2. Second infantry squad in opposing direction (Road Entrance South / Outskirts)
-	var g_south := get_authored_ground_spawn("infantry", player_pos, 28.0)
+	var g_south := get_authored_ground_spawn("infantry", player_pos, 35.0)
 	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, g_south["position"])
 
 	# 3. Ground Turret / technical at Industrial Entrance or Military Gate
-	var g_ind := get_authored_ground_spawn("turret", player_pos, 28.0)
+	var g_ind := get_authored_ground_spawn("turret", player_pos, 35.0)
 	_spawn_continuous_enemy(_scene_turret, player_pos, 0.0, g_ind["position"])
 
 	# 4. Third squad from available perimeter entrance
-	var g_west := get_authored_ground_spawn("infantry", player_pos, 28.0)
+	var g_west := get_authored_ground_spawn("infantry", player_pos, 35.0)
 	_spawn_continuous_enemy(_scene_infantry, player_pos, 0.0, g_west["position"])
 
 	# 5. Rooftop threat on authored rooftop marker in Urban / Industrial district
@@ -779,26 +827,22 @@ func _process_continuous_spawning(delta: float) -> void:
 	_continuous_stream_cooldown -= delta
 	if _continuous_stream_cooldown <= 0.0:
 		_spawn_continuous_stream(stage, p_pos)
-		if is_behind_target and (current_living + 2 <= cap) and (current_living < target_count * 0.75):
-			_spawn_continuous_stream(stage, p_pos)
-
-		if is_behind_target:
-			var deficit_ratio := float(target_count - current_living) / float(maxi(1, target_count))
-			_continuous_stream_cooldown = lerpf(0.85, 1.6, 1.0 - deficit_ratio)
-		else:
-			_continuous_stream_cooldown = randf_range(1.9, 3.2)
+		_continuous_stream_cooldown = _get_next_stream_interval(stage, is_behind_target)
 
 func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
 	# 1. Primary formation candidates
 	if _try_spawn_continuous_formation(stage, p_pos):
 		return true
 
-	# 2. Multi-tier Fallback: Cheaper formation (Infantry Squad)
+	# 2. Multi-tier Fallback: Cheaper formation (Infantry Squad, staggered)
 	if continuous_ground_budget >= 25.0 and can_spawn_formation("infantry_squad"):
 		var s_pos := get_frustum_safe_spawn_pos(p_pos, 35.0, 55.0)
 		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
 		var off := Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
-		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos + off)
+		var second: Node3D = _scene_infantry.instantiate() as Node3D
+		if second:
+			second.transform.origin = Vector3(s_pos.x + off.x, 0.0, s_pos.z + off.z)
+			_deploy_formation_unit(second, _get_spawn_parent(), false, true)
 		continuous_ground_budget -= 25.0
 		_record_formation("infantry_squad")
 		last_formation_name = "infantry_squad (Fallback)"
@@ -872,13 +916,16 @@ func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
 		continuous_air_budget -= 8.0
 		return true
 
-	# Formation Fallback: Infantry Squad (2 clusters)
+	# Formation Fallback: Infantry Squad (2 clusters, staggered)
 	if continuous_ground_budget >= 25.0 and can_spawn_formation("infantry_squad"):
-		var entry := get_authored_ground_spawn("infantry", p_pos, 28.0)
+		var entry := get_authored_ground_spawn("infantry", p_pos, 35.0)
 		var s_pos: Vector3 = entry["position"]
 		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
 		var off := Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
-		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos + off)
+		var second: Node3D = _scene_infantry.instantiate() as Node3D
+		if second:
+			second.transform.origin = Vector3(s_pos.x + off.x, 0.0, s_pos.z + off.z)
+			_deploy_formation_unit(second, _get_spawn_parent(), false, true)
 		continuous_ground_budget -= 25.0
 		_record_formation("infantry_squad")
 		return true
@@ -1199,7 +1246,7 @@ func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
 
 	return candidates[-1]
 
-func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3) -> Array[Node3D]:
+func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3, stagger: bool = true) -> Array[Node3D]:
 	var spawned: Array[Node3D] = []
 	if not form:
 		return spawned
@@ -1207,7 +1254,7 @@ func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3) -> Ar
 	continuous_ground_budget -= form.ground_budget_cost
 	continuous_air_budget -= form.air_budget_cost
 
-	var g_spawn := get_authored_ground_spawn(form.formation_id, p_pos, 28.0)
+	var g_spawn := get_authored_ground_spawn(form.formation_id, p_pos, 35.0)
 	var a_spawn := get_air_corridor_entry(p_pos, 42.0, 72.0)
 
 	var parent := _get_spawn_parent()
@@ -1241,22 +1288,22 @@ func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3) -> Ar
 				enemy.add_to_group("air_enemies")
 
 			var side_mult: float = 1.0 if i % 2 == 0 else -1.0
-			var stagger := float(i) * 3.5
+			var stagger_dist := float(i) * 3.5
 			var spawn_pos: Vector3
 			if is_air:
 				var p_y := clampf(_get_player_altitude(), 12.0, 18.0)
-				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 5.0) * side_mult) - (dir * stagger)
+				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 5.0) * side_mult) - (dir * stagger_dist)
 				spawn_pos.y = clampf(p_y + base_offset.y, 11.0, 22.0)
 			else:
-				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 2.5) * side_mult) - (dir * stagger)
+				spawn_pos = base_pos + (perp * (base_offset.x + float(i) * 2.5) * side_mult) - (dir * stagger_dist)
 				spawn_pos.y = 0.0
 
 			spawn_pos.x = clampf(spawn_pos.x, -arena_half_extents, arena_half_extents)
 			spawn_pos.z = clampf(spawn_pos.z, -arena_half_extents, arena_half_extents)
 			enemy.transform.origin = spawn_pos
 
-			parent.add_child.call_deferred(enemy)
-			_register_spawned_node(enemy)
+			var is_first: bool = spawned.is_empty()
+			_deploy_formation_unit(enemy, parent, is_first, stagger)
 			spawned.append(enemy)
 
 	_record_formation(form.formation_id)
@@ -1373,7 +1420,7 @@ func is_spawn_position_clear(pos: Vector3, is_air: bool = false) -> bool:
 	if player:
 		var flat_offset := Vector2(pos.x - player.global_position.x, pos.z - player.global_position.z)
 		var flat_dist := flat_offset.length()
-		var min_safe_dist: float = 24.0 if not is_air else 28.0
+		var min_safe_dist: float = 35.0 if not is_air else 38.0
 		if flat_dist < min_safe_dist:
 			return false
 
@@ -1454,8 +1501,8 @@ func _get_sector_spawn_position(player_pos: Vector3, sector: int, min_dist: floa
 	return _get_safe_perimeter_fallback(player_pos)
 
 ## Selects an authored ground entrance (RoadEntrance_North, RoadEntrance_South, IndustrialEntrance, MilitaryGate)
-## based on player distance (min safe >= 28m), district affinity, direction alternation, and clearance.
-func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vector3 = Vector3.ZERO, min_dist: float = 28.0) -> Dictionary:
+## based on player distance (min safe >= 35m), district affinity, direction alternation, and clearance.
+func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vector3 = Vector3.ZERO, min_dist: float = 35.0) -> Dictionary:
 	var nodes := get_ground_spawn_nodes()
 	if nodes.is_empty():
 		var fb_pos := get_frustum_safe_spawn_pos(player_pos, min_dist, 65.0)
@@ -1468,7 +1515,7 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		var pos := marker.global_position
 		var flat_dist := Vector2(pos.x - player_pos.x, pos.z - player_pos.z).length()
 		if flat_dist < min_dist:
-			continue # Exclude entrances too close to player (safe distance >= 28m)
+			continue # Exclude entrances too close to player (safe distance >= 35m)
 
 		var m_name := marker.name
 		var score := 50.0
@@ -1499,9 +1546,9 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		# 2. Alternation / Recency penalty (avoid repeatedly spawning from same source)
 		if _recent_ground_sources.size() > 0:
 			if _recent_ground_sources[-1] == m_name:
-				score -= 60.0
+				score -= 80.0
 			if _recent_ground_sources.size() > 1 and _recent_ground_sources[-2] == m_name:
-				score -= 30.0
+				score -= 40.0
 
 		# 3. Distance weighting
 		if flat_dist >= 35.0 and flat_dist <= 95.0:
@@ -1509,14 +1556,14 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		elif flat_dist > 120.0:
 			score -= 10.0
 
-		score += randf_range(0.0, 5.0)
+		score += randf_range(0.0, 25.0)
 		scored_candidates.append({ "marker": marker, "score": score, "dist": flat_dist })
 
 	scored_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["score"]) > float(b["score"])
 	)
 
-	# Validate clearance with entrance road perpendicular offset
+	# Validate clearance with entrance road perpendicular lateral spread (±6-15m)
 	for cand in scored_candidates:
 		var marker: Marker3D = cand["marker"]
 		var base_pos: Vector3 = marker.global_position
@@ -1526,10 +1573,11 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		var fwd := to_center.normalized() if to_center.length_squared() > 0.1 else Vector3.FORWARD
 		var perp := Vector3(-fwd.z, 0.0, fwd.x)
 
-		for attempt in range(4):
-			var lateral_off := randf_range(-2.5, 2.5) if attempt > 0 else 0.0
-			var depth_off := randf_range(-2.0, 2.0) if attempt > 1 else 0.0
-			var spawn_cand := base_pos + (perp * lateral_off) + (fwd * depth_off)
+		for attempt in range(6):
+			var side_dir: float = 1.0 if (attempt % 2 == 0) else -1.0
+			var lateral_dist: float = randf_range(6.0, 15.0) if attempt < 4 else randf_range(2.0, 6.0)
+			var depth_off: float = randf_range(-3.0, 6.0)
+			var spawn_cand := base_pos + (perp * lateral_dist * side_dir) + (fwd * depth_off)
 			spawn_cand.y = base_pos.y
 
 			if is_spawn_position_clear(spawn_cand, false):
@@ -1638,15 +1686,15 @@ func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 38.0, max_dis
 			# Alternation: avoid repeatedly using the same entry
 			if _recent_air_sources.size() > 0:
 				if _recent_air_sources[-1] == m_name:
-					score -= 50.0
+					score -= 80.0
 				if _recent_air_sources.size() > 1 and _recent_air_sources[-2] == m_name:
-					score -= 25.0
+					score -= 40.0
 
 			# Frustum preference
 			if cam and (cam.is_position_behind(pos) or not cam.is_position_in_frustum(pos)):
 				score += 20.0
 
-			score += randf_range(0.0, 5.0)
+			score += randf_range(0.0, 25.0)
 			scored_candidates.append({ "marker": marker, "score": score, "pos": pos })
 
 		scored_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -1656,22 +1704,28 @@ func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 38.0, max_dis
 		for cand in scored_candidates:
 			var marker: Marker3D = cand["marker"]
 			var base_pos: Vector3 = marker.global_position
-			var p_y := clampf(_get_player_altitude() + randf_range(-1.0, 2.5), 14.0, 24.0)
-
-			# Add lateral corridor jitter (±6m)
 			var to_player := (player_pos - base_pos)
 			to_player.y = 0.0
 			var dir := to_player.normalized() if to_player.length_squared() > 0.01 else Vector3.FORWARD
 			var perp := Vector3(-dir.z, 0.0, dir.x)
-			var spawn_pos := base_pos + (perp * randf_range(-6.0, 6.0))
-			spawn_pos.y = p_y
-			spawn_pos.x = clampf(spawn_pos.x, -arena_half_extents + 5.0, arena_half_extents - 5.0)
-			spawn_pos.z = clampf(spawn_pos.z, -arena_half_extents + 5.0, arena_half_extents - 5.0)
 
-			if is_spawn_position_clear(spawn_pos, true):
-				_record_air_source(marker.name)
-				last_spawn_source = marker.name
-				return { "position": spawn_pos, "heading": dir, "source_name": marker.name }
+			for attempt in range(6):
+				var side_dir: float = 1.0 if (attempt % 2 == 0) else -1.0
+				# Add lateral corridor spread (±8-20m) and varied altitude
+				var lateral_dist: float = randf_range(8.0, 20.0) if attempt < 4 else randf_range(4.0, 8.0)
+				var depth_off: float = randf_range(-4.0, 6.0)
+				var alt_jitter: float = randf_range(-2.5, 4.0)
+				var p_y := clampf(_get_player_altitude() + alt_jitter, 13.0, 24.0)
+
+				var spawn_pos := base_pos + (perp * lateral_dist * side_dir) + (dir * depth_off)
+				spawn_pos.y = p_y
+				spawn_pos.x = clampf(spawn_pos.x, -arena_half_extents + 5.0, arena_half_extents - 5.0)
+				spawn_pos.z = clampf(spawn_pos.z, -arena_half_extents + 5.0, arena_half_extents - 5.0)
+
+				if is_spawn_position_clear(spawn_pos, true):
+					_record_air_source(marker.name)
+					last_spawn_source = marker.name
+					return { "position": spawn_pos, "heading": dir, "source_name": marker.name }
 
 	# Fallback perimeter corridors
 	var perimeter_candidates: Array[Vector3] = [
@@ -1874,7 +1928,7 @@ func _try_spawn_authored_pickup() -> Node3D:
 
 # --- FORMATION SPAWNING IMPLEMENTATIONS ---
 
-func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3, stagger: bool = true) -> Array[Node3D]:
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("scouts") + 2 > cap_scout:
 		return spawned
@@ -1892,8 +1946,7 @@ func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
 		s1.add_to_group("air_enemies")
 		s1.add_to_group("enemies")
 		s1.transform.origin = Vector3(spawn_origin.x, alt, spawn_origin.z)
-		parent.add_child.call_deferred(s1)
-		_register_spawned_node(s1)
+		_deploy_formation_unit(s1, parent, true, stagger)
 		spawned.append(s1)
 
 	var s2 := _scene_air_scout.instantiate() as Node3D
@@ -1907,14 +1960,13 @@ func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
 			alt + 1.0,
 			clampf(pos2.z, -arena_half_extents, arena_half_extents)
 		)
-		parent.add_child.call_deferred(s2)
-		_register_spawned_node(s2)
+		_deploy_formation_unit(s2, parent, false, stagger)
 		spawned.append(s2)
 
 	_record_formation("air_patrol")
 	return spawned
 
-func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3, stagger: bool = true) -> Array[Node3D]:
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("rocket_raiders") + 1 > cap_raider or get_active_air_count("scouts") + 2 > cap_scout:
 		return spawned
@@ -1932,8 +1984,7 @@ func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3) -> Array[No
 		raider.add_to_group("air_enemies")
 		raider.add_to_group("enemies")
 		raider.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 15.0, 21.0), spawn_origin.z)
-		parent.add_child.call_deferred(raider)
-		_register_spawned_node(raider)
+		_deploy_formation_unit(raider, parent, true, stagger)
 		spawned.append(raider)
 
 	var offsets: Array[Vector3] = [
@@ -1952,8 +2003,7 @@ func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3) -> Array[No
 				clampf(p_y, 11.0, 15.0),
 				clampf(spos.z, -arena_half_extents, arena_half_extents)
 			)
-			parent.add_child.call_deferred(scout)
-			_register_spawned_node(scout)
+			_deploy_formation_unit(scout, parent, false, stagger)
 			spawned.append(scout)
 
 	_record_formation("harassment_group")
@@ -2208,7 +2258,7 @@ func spawn_combined_arms_formation(spawn_origin: Vector3, heading: Vector3) -> A
 	_record_formation("combined_arms")
 	return spawned
 
-func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count: int = 3) -> Array[Node3D]:
+func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count: int = 3, stagger: bool = true) -> Array[Node3D]:
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 	var dir := approach_direction.normalized()
@@ -2232,8 +2282,7 @@ func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count
 			else:
 				if lead_tank:
 					lead_tank.register_escort(tank)
-			parent.add_child.call_deferred(tank)
-			_register_spawned_node(tank)
+			_deploy_formation_unit(tank, parent, i == 0, stagger)
 			spawned.append(tank)
 
 	return spawned

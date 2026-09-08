@@ -20,6 +20,7 @@ enum State {
 @export var attack_speed: float = 34.0 # High-speed commit speed
 @export var damage_per_shot: float = 2.4
 @export var fire_rate: float = 8.0 # RPS during attack window
+@export var xp_reward: int = 28
 
 var current_health: float = 50.0
 var current_state: State = State.APPROACH
@@ -352,6 +353,8 @@ func _spawn_xp() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			if "xp_value" in gem:
+				gem.xp_value = xp_reward
 			gem.transform.origin = global_position
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)

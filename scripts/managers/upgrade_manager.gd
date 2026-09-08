@@ -5,7 +5,7 @@ extends Node
 
 var current_xp: int = 0
 var current_level: int = 1
-var xp_needed: int = 50
+var xp_needed: int = 35
 var requisition_points: int = 0
 
 var acquired_upgrades: Array[String] = []
@@ -236,10 +236,25 @@ func _init_definitions() -> void:
 func get_definition(upgrade_id: String) -> UpgradeDefinition:
 	return upgrade_definitions.get(upgrade_id, null)
 
+## Smooth configurable XP curve balancing early progression and mid/late geometric scaling
+## Target timings: L2: ~25-35s (35 XP), L3: ~45-65s (65 XP), L4: ~75-100s (105 XP)
+func get_required_xp_for_level(level: int) -> int:
+	match level:
+		1:
+			return 35
+		2:
+			return 65
+		3:
+			return 105
+		4:
+			return 160
+		_:
+			return int(160.0 * pow(1.32, float(level - 4)))
+
 func reset_run() -> void:
 	current_xp = 0
 	current_level = 1
-	xp_needed = 50
+	xp_needed = get_required_xp_for_level(current_level)
 	requisition_points = 0
 	acquired_upgrades.clear()
 	pending_levels.clear()
@@ -263,7 +278,7 @@ func add_xp(amount: int) -> void:
 	while current_xp >= xp_needed:
 		current_xp -= xp_needed
 		current_level += 1
-		xp_needed = maxi(1, int(xp_needed * 1.45))
+		xp_needed = get_required_xp_for_level(current_level)
 		pending_levels.append(current_level)
 	_notify_xp()
 	_present_next_choice.call_deferred()

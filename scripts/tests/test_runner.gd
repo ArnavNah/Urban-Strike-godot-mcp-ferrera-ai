@@ -76,6 +76,8 @@ func _ready() -> void:
 	success = test_mini_helicopter_support_and_upgrades(log_lines) and success
 	append_log("Running test 28 (limited missile ammo & supply pickups)...", log_lines)
 	success = test_limited_missile_ammo_and_pickups(log_lines) and success
+	append_log("Running test 29 (level-up pacing & continuous randomized spawning)...", log_lines)
+	success = test_level_up_pacing_and_continuous_spawning(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2899,4 +2901,274 @@ func test_limited_missile_ammo_and_pickups(logs: Array[String]) -> bool:
 
 	root_node.queue_free()
 	append_log("  -> Limited missile ammo, supply pickups, upgrade capacity, and HUD warnings verified.", logs)
+	return true
+
+func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
+	append_log("[TEST 29] Level-Up Pacing + Continuous Randomized Spawning...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test29Root"
+	add_child(root_node)
+
+	# 1. Test Configurable XP Curve in UpgradeManager
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr: UpgradeManager = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+
+	var req_l1 := mgr.get_required_xp_for_level(1)
+	var req_l2 := mgr.get_required_xp_for_level(2)
+	var req_l3 := mgr.get_required_xp_for_level(3)
+	var req_l4 := mgr.get_required_xp_for_level(4)
+
+	if req_l1 != 35 or req_l2 != 65 or req_l3 != 105 or req_l4 != 160:
+		append_log("FAIL: Configurable XP curve values mismatch (expected 35, 65, 105, 160; got %d, %d, %d, %d)" % [req_l1, req_l2, req_l3, req_l4], logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Test Level-Up progression and immediate EventBus notification
+	var notified_xp: Array[int] = []
+	var on_xp_sig = func(curr: int, needed: int, lvl: int) -> void:
+		notified_xp.clear()
+		notified_xp.append(curr)
+		notified_xp.append(needed)
+		notified_xp.append(lvl)
+	EventBus.xp_updated.connect(on_xp_sig)
+
+	mgr.reset_run()
+	if mgr.xp_needed != 35 or mgr.current_level != 1:
+		append_log("FAIL: reset_run failed to set base xp_needed to 35 (got %d, level %d)" % [mgr.xp_needed, mgr.current_level], logs)
+		EventBus.xp_updated.disconnect(on_xp_sig)
+		root_node.queue_free()
+		return false
+
+	# Add 35 XP -> reaches Level 2
+	mgr.add_xp(35)
+	if mgr.current_level != 2 or mgr.xp_needed != 65:
+		append_log("FAIL: add_xp(35) did not reach Level 2 with 65 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+		EventBus.xp_updated.disconnect(on_xp_sig)
+		root_node.queue_free()
+		return false
+
+	if notified_xp.is_empty() or notified_xp[1] != 65 or notified_xp[2] != 2:
+		append_log("FAIL: EventBus.xp_updated not emitted immediately on level-up (got %s)" % str(notified_xp), logs)
+		EventBus.xp_updated.disconnect(on_xp_sig)
+		root_node.queue_free()
+		return false
+
+	# Add 65 XP -> reaches Level 3
+	mgr.add_xp(65)
+	if mgr.current_level != 3 or mgr.xp_needed != 105:
+		append_log("FAIL: add_xp(65) did not reach Level 3 with 105 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+		EventBus.xp_updated.disconnect(on_xp_sig)
+		root_node.queue_free()
+		return false
+
+	# Add 105 XP -> reaches Level 4
+	mgr.add_xp(105)
+	if mgr.current_level != 4 or mgr.xp_needed != 160:
+		append_log("FAIL: add_xp(105) did not reach Level 4 with 160 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+		EventBus.xp_updated.disconnect(on_xp_sig)
+		root_node.queue_free()
+		return false
+
+	EventBus.xp_updated.disconnect(on_xp_sig)
+
+	# 3. Test Differentiated Enemy XP Drop Values & Archetypes
+	var enemy_reward_checks: Array[Dictionary] = [
+		{"path": "res://scenes/enemies/ground_scout_buggy.tscn", "expected_xp": 8},
+		{"path": "res://scenes/enemies/ground_rocket_technical.tscn", "expected_xp": 12},
+		{"path": "res://scenes/enemies/air_scout_helicopter.tscn", "expected_xp": 12},
+		{"path": "res://scenes/enemies/ground_assault_ifv.tscn", "expected_xp": 20},
+		{"path": "res://scenes/enemies/ground_troop_carrier_apc.tscn", "expected_xp": 20},
+		{"path": "res://scenes/enemies/air_transport_helicopter.tscn", "expected_xp": 22},
+		{"path": "res://scenes/enemies/ground_mortar_carrier.tscn", "expected_xp": 30},
+		{"path": "res://scenes/enemies/air_rocket_raider.tscn", "expected_xp": 30},
+		{"path": "res://scenes/enemies/ground_jammer_vehicle.tscn", "expected_xp": 45},
+		{"path": "res://scenes/enemies/air_jammer_helicopter.tscn", "expected_xp": 48},
+		{"path": "res://scenes/enemies/air_attack_gunship.tscn", "expected_xp": 55},
+		{"path": "res://scenes/enemies/air_ace_gunship.tscn", "expected_xp": 60}
+	]
+
+	for item in enemy_reward_checks:
+		var sc := load(item["path"]) as PackedScene
+		if not sc:
+			append_log("FAIL: Could not load enemy scene %s" % item["path"], logs)
+			root_node.queue_free()
+			return false
+		var inst := sc.instantiate() as Node3D
+		var arch: Variant = inst.get("archetype")
+		if not arch:
+			append_log("FAIL: Enemy %s missing archetype resource" % item["path"], logs)
+			inst.queue_free()
+			root_node.queue_free()
+			return false
+		var xp_rew: int = int(arch.get("xp_reward"))
+		if xp_rew != item["expected_xp"]:
+			append_log("FAIL: Enemy %s xp_reward mismatch (got %d, expected %d)" % [item["path"], xp_rew, item["expected_xp"]], logs)
+			inst.queue_free()
+			root_node.queue_free()
+			return false
+		inst.queue_free()
+
+	# Test Infantry Cluster XP reward
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf := inf_scene.instantiate() as InfantryCluster
+	if inf.xp_reward != 6:
+		append_log("FAIL: InfantryCluster xp_reward is not 6 (got %d)" % inf.xp_reward, logs)
+		inf.queue_free()
+		root_node.queue_free()
+		return false
+	inf.queue_free()
+
+	# Test Tank XP reward
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var tank := tank_scene.instantiate() as Tank
+	if tank.xp_reward != 30:
+		append_log("FAIL: Tank baseline xp_reward is not 30 (got %d)" % tank.xp_reward, logs)
+		tank.queue_free()
+		root_node.queue_free()
+		return false
+	tank.queue_free()
+
+	# Test SAM Site XP reward
+	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
+	var sam := sam_scene.instantiate() as SAMSite
+	if sam.xp_reward != 50:
+		append_log("FAIL: SAMSite xp_reward is not 50 (got %d)" % sam.xp_reward, logs)
+		sam.queue_free()
+		root_node.queue_free()
+		return false
+	sam.queue_free()
+
+	# Test Ground Turret XP reward
+	var turret_scene := load("res://scenes/enemies/ground_turret.tscn") as PackedScene
+	var turret := turret_scene.instantiate() as GroundTurret
+	if turret.xp_reward != 22:
+		append_log("FAIL: GroundTurret xp_reward is not 22 (got %d)" % turret.xp_reward, logs)
+		turret.queue_free()
+		root_node.queue_free()
+		return false
+	turret.queue_free()
+
+	# Test Hunter Helicopter XP reward
+	var hunter_scene := load("res://scenes/enemies/hunter_helicopter.tscn") as PackedScene
+	var hunter := hunter_scene.instantiate() as HunterHelicopter
+	if hunter.xp_reward != 28:
+		append_log("FAIL: HunterHelicopter xp_reward is not 28 (got %d)" % hunter.xp_reward, logs)
+		hunter.queue_free()
+		root_node.queue_free()
+		return false
+	hunter.queue_free()
+
+	# 4. Test SpawnDirector Continuous Intervals
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: SpawnDirector = sd_script.new() as SpawnDirector
+	root_node.add_child(sd)
+
+	for i in range(10):
+		var int_s1: float = sd._get_next_stream_interval(1, false)
+		if int_s1 < 1.49 or int_s1 > 2.51:
+			append_log("FAIL: Stage 1 stream interval out of range [1.5, 2.5] (got %.2f)" % int_s1, logs)
+			root_node.queue_free()
+			return false
+
+		var int_s2: float = sd._get_next_stream_interval(2, false)
+		if int_s2 < 0.99 or int_s2 > 2.01:
+			append_log("FAIL: Stage 2 stream interval out of range [1.0, 2.0] (got %.2f)" % int_s2, logs)
+			root_node.queue_free()
+			return false
+
+		var int_s4: float = sd._get_next_stream_interval(4, false)
+		if int_s4 < 0.69 or int_s4 > 1.51:
+			append_log("FAIL: Stage 4 stream interval out of range [0.7, 1.5] (got %.2f)" % int_s4, logs)
+			root_node.queue_free()
+			return false
+
+		var int_def: float = sd._get_next_stream_interval(1, true)
+		if int_def < 0.84 or int_def > 1.21:
+			append_log("FAIL: Deficit recovery interval out of range [0.85, 1.2] (got %.2f)" % int_def, logs)
+			root_node.queue_free()
+			return false
+
+	# 5. Test Formation Staggering Queue
+	sd.clear_formation_queue()
+	var col_units := sd.spawn_road_column(Vector3(0, 0, 50), Vector3.FORWARD, 3, true)
+	if col_units.size() != 3:
+		append_log("FAIL: spawn_road_column did not return 3 units (got %d)" % col_units.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Lead tank should be inside tree, and 2 escorts should be enqueued
+	if sd._formation_spawn_queue.size() != 2:
+		append_log("FAIL: Formation staggering queue did not receive 2 escort units (got %d)" % sd._formation_spawn_queue.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Process 1 tick of stagger
+	sd._formation_stagger_timer = 0.0
+	sd._process_formation_stagger_queue(0.1)
+	if sd._formation_spawn_queue.size() != 1:
+		append_log("FAIL: Stagger queue did not pop 1 unit on timer expiry (got %d remaining)" % sd._formation_spawn_queue.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Process 2nd tick of stagger
+	sd._formation_stagger_timer = 0.0
+	sd._process_formation_stagger_queue(0.1)
+	if sd._formation_spawn_queue.size() != 0:
+		append_log("FAIL: Stagger queue did not pop final unit (got %d remaining)" % sd._formation_spawn_queue.size(), logs)
+		root_node.queue_free()
+		return false
+
+	for u in col_units:
+		if is_instance_valid(u):
+			u.queue_free()
+
+	# 6. Test Source Selection Standoff (>= 35m ground, >= 38m air)
+	# Player is at (0, 0, 0)
+	var dummy_p := Node3D.new()
+	dummy_p.add_to_group("player")
+	dummy_p.transform.origin = Vector3.ZERO
+	root_node.add_child(dummy_p)
+
+	if sd.is_spawn_position_clear(Vector3(0, 0, 20), false):
+		append_log("FAIL: is_spawn_position_clear allowed ground spawn at 20m (< 35m minimum)", logs)
+		root_node.queue_free()
+		return false
+
+	if sd.is_spawn_position_clear(Vector3(0, 0, 32), false):
+		append_log("FAIL: is_spawn_position_clear allowed ground spawn at 32m (< 35m minimum)", logs)
+		root_node.queue_free()
+		return false
+
+	if sd.is_spawn_position_clear(Vector3(0, 15, 30), true):
+		append_log("FAIL: is_spawn_position_clear allowed air spawn at 30m (< 38m minimum)", logs)
+		root_node.queue_free()
+		return false
+
+	if not sd.is_spawn_position_clear(Vector3(0, 0, 60), false):
+		append_log("FAIL: is_spawn_position_clear rejected open ground position at 60m", logs)
+		root_node.queue_free()
+		return false
+
+	# Test authored ground spawn standoff distance
+	var g_entry: Dictionary = sd.get_authored_ground_spawn("infantry", Vector3.ZERO, 35.0)
+	var g_pos: Vector3 = g_entry.get("position", Vector3.ZERO)
+	var g_dist: float = (g_pos - Vector3.ZERO).length()
+	if g_dist < 34.5:
+		append_log("FAIL: get_authored_ground_spawn returned position closer than 35m (got %.1fm)" % g_dist, logs)
+		root_node.queue_free()
+		return false
+
+	# Test air corridor standoff distance
+	var a_entry: Dictionary = sd.get_air_corridor_entry(Vector3.ZERO, 38.0, 85.0)
+	var a_pos: Vector3 = a_entry.get("position", Vector3.ZERO)
+	var a_dist: float = Vector2(a_pos.x, a_pos.z).length()
+	if a_dist < 37.5:
+		append_log("FAIL: get_air_corridor_entry returned position closer than 38m (got %.1fm)" % a_dist, logs)
+		root_node.queue_free()
+		return false
+
+	dummy_p.queue_free()
+	root_node.queue_free()
+	append_log("  -> Level-up pacing curve, differentiated enemy XP drops, continuous stream intervals, formation staggering queue, and entrance standoff verified.", logs)
 	return true

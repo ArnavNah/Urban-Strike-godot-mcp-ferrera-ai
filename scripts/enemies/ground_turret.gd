@@ -21,6 +21,7 @@ enum State {
 @export var reload_time: float = 1.3
 @export var wait_time: float = 0.25
 @export var bullet_damage: float = 6.5
+@export var xp_reward: int = 22
 
 var current_health: float = 45.0
 var current_state: State = State.IDLE
@@ -234,6 +235,8 @@ func _die() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			if "xp_value" in gem:
+				gem.xp_value = xp_reward
 			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)

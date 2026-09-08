@@ -26,6 +26,7 @@ enum State {
 		archetype = value
 		_apply_archetype_config()
 @export var custom_threat_cost: int = -1
+@export var xp_reward: int = 28
 
 var current_state: State = State.APPROACH
 var current_health: float = 30.0
@@ -98,6 +99,7 @@ func _apply_archetype_config() -> void:
 
 	current_health = archetype.max_health
 	threat_score = archetype.threat_score
+	xp_reward = archetype.xp_reward
 
 	for tag in archetype.formation_tags:
 		if not is_in_group(tag):
@@ -684,6 +686,9 @@ func _spawn_rewards() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			var xp_val: int = archetype.xp_reward if archetype else 28
+			if "xp_value" in gem:
+				gem.xp_value = xp_val
 			gem.transform.origin = global_position
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)

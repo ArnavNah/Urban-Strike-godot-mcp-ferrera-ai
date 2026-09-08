@@ -19,6 +19,7 @@ enum State {
 @export var reload_time: float = 3.5
 @export var missile_damage: float = 22.0 # GDD baseline
 @export var missile_scene: PackedScene
+@export var xp_reward: int = 50
 
 var current_health: float = 60.0
 var current_state: State = State.SEARCHING
@@ -265,6 +266,8 @@ func _spawn_xp() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			if "xp_value" in gem:
+				gem.xp_value = xp_reward
 			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)

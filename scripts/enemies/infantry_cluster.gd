@@ -21,6 +21,7 @@ enum State {
 @export var burst_interval: float = 0.11
 @export var reload_time: float = 1.3
 @export var damage_per_shot: float = 1.2 # GDD baseline
+@export var xp_reward: int = 6
 
 var current_health: float = 24.0
 var current_state: State = State.APPROACH
@@ -399,6 +400,8 @@ func _spawn_xp() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			if "xp_value" in gem:
+				gem.xp_value = xp_reward
 			gem.transform.origin = global_position + Vector3(0, 0.5, 0)
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)

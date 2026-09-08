@@ -25,6 +25,7 @@ enum State {
 @export var move_speed: float = 7.5
 @export var is_command_unit: bool = false
 @export var escort_leader: Node3D = null
+@export var xp_reward: int = 30
 
 var current_health: float = 75.0
 var current_state: State = State.REPOSITIONING
@@ -59,6 +60,7 @@ func _ready() -> void:
 		reload_time = archetype.reload_time
 		move_speed = archetype.move_speed
 		is_command_unit = archetype.is_command_unit
+		xp_reward = archetype.xp_reward
 		if archetype.is_armored:
 			add_to_group("armored_enemies")
 		for tag in archetype.formation_tags:
@@ -680,6 +682,9 @@ func _spawn_xp() -> void:
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
+			var xp_val: int = archetype.xp_reward if archetype else 30
+			if "xp_value" in gem:
+				gem.xp_value = xp_val
 			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(gem)
