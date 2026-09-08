@@ -8,6 +8,8 @@ extends Node3D
 @export var is_swarm_rockets: bool = false
 @export var is_multi_lock: bool = false
 @export var max_lock_targets: int = 1
+@export var splash_radius_multiplier: float = 1.0
+@export var splash_damage_multiplier: float = 1.0
 
 var lock_cone_scale: float = 1.0
 var current_target: Node3D = null
@@ -87,6 +89,14 @@ func _update_lock_progress(delta: float) -> void:
 		var emit_target: Node3D = current_target if (is_instance_valid(current_target) and not current_target.is_queued_for_deletion()) else null
 		eb.emit_signal("missile_lock_updated", lock_progress, emit_target, is_locked)
 
+func _configure_missile(missile: Node3D) -> void:
+	if not missile:
+		return
+	if "splash_radius" in missile:
+		missile.splash_radius *= splash_radius_multiplier
+	if "damage" in missile:
+		missile.damage *= splash_damage_multiplier
+
 func try_fire() -> bool:
 	if _cooldown_timer > 0.0:
 		return false
@@ -103,6 +113,7 @@ func try_fire() -> bool:
 			var fwd: Vector3 = (-global_transform.basis.z + spread).normalized()
 			var missile: Node3D = missile_scene.instantiate() as Node3D
 			if missile:
+				_configure_missile(missile)
 				missile.transform.origin = spawn_pos
 				parent.add_child.call_deferred(missile)
 				missile.call_deferred("launch", spawn_pos, fwd, current_target if is_locked else null, true)
@@ -132,6 +143,7 @@ func try_fire() -> bool:
 			var fwd: Vector3 = (-global_transform.basis.z + spread).normalized()
 			var missile: Node3D = missile_scene.instantiate() as Node3D
 			if missile:
+				_configure_missile(missile)
 				missile.transform.origin = spawn_pos
 				parent.add_child.call_deferred(missile)
 				missile.call_deferred("launch", spawn_pos, fwd, tgt, true)
@@ -143,6 +155,7 @@ func try_fire() -> bool:
 			var fwd: Vector3 = (-global_transform.basis.z + spread).normalized()
 			var missile: Node3D = missile_scene.instantiate() as Node3D
 			if missile:
+				_configure_missile(missile)
 				missile.transform.origin = spawn_pos
 				parent.add_child.call_deferred(missile)
 				missile.call_deferred("launch", spawn_pos, fwd, current_target if is_locked else null, true)
@@ -153,6 +166,7 @@ func try_fire() -> bool:
 		var initial_fwd: Vector3 = -global_transform.basis.z
 		var missile: Node3D = missile_scene.instantiate() as Node3D
 		if missile:
+			_configure_missile(missile)
 			missile.transform.origin = spawn_pos
 			parent.add_child.call_deferred(missile)
 			missile.call_deferred("launch", spawn_pos, initial_fwd, current_target if is_locked else null, true)

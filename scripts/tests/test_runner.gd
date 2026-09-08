@@ -72,6 +72,8 @@ func _ready() -> void:
 	success = test_enemy_roster_and_procedural_formations(log_lines) and success
 	append_log("Running test 26 (ground enemy grounding & gravity)...", log_lines)
 	success = test_ground_enemy_grounding_and_gravity(log_lines) and success
+	append_log("Running test 27 (mini helicopter support & upgrades)...", log_lines)
+	success = test_mini_helicopter_support_and_upgrades(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2418,4 +2420,206 @@ func test_ground_enemy_grounding_and_gravity(logs: Array[String]) -> bool:
 	test_inf.queue_free()
 	root_node.queue_free()
 	append_log("  -> Ground classification, continuous spawner ground elevation, gravity, and ground clamping verified.", logs)
+	return true
+
+func test_mini_helicopter_support_and_upgrades(logs: Array[String]) -> bool:
+	logs.append("[TEST] Mini Helicopter Escort Drones, First Level Guarantee & Upgrades...")
+	var root_node := Node3D.new()
+	add_child(root_node)
+
+	# 1. Test UpgradeDefinition resource
+	var def := UpgradeDefinition.new()
+	def.id = "test_upgrade"
+	def.display_name = "Test Upgrade"
+	def.category = "Support"
+	def.benefit = "Does good things"
+	def.tradeoff = "Costs something"
+	var def_dict: Dictionary = def.to_dictionary()
+	if def_dict.get("id") != "test_upgrade" or def_dict.get("display_name") != "Test Upgrade" or def_dict.get("category") != "Support":
+		append_log("FAIL: UpgradeDefinition to_dictionary failed", logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Test First Level-Up Guarantee in UpgradeManager
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr: UpgradeManager = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+
+	# Player reaches Level 2 (first level-up)
+	mgr.current_level = 2
+	mgr.pending_levels = [2]
+	var first_choices: Array = mgr.get_random_choices(3)
+	if first_choices.size() != 3:
+		append_log("FAIL: First level-up choices did not return 3 cards (got %d)" % first_choices.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var has_mini_heli := false
+	for c in first_choices:
+		if c.get("id") == "mini_helicopter_support":
+			has_mini_heli = true
+			break
+
+	if not has_mini_heli:
+		append_log("FAIL: First level-up guarantee failed; mini_helicopter_support not in offered choices", logs)
+		root_node.queue_free()
+		return false
+
+	# Simulate rejecting mini_helicopter_support on level 2 and leveling up to level 3
+	mgr.has_guaranteed_mini_heli_offered = true
+	mgr.current_level = 3
+	mgr.pending_levels = [3]
+	var sub_choices: Array = mgr.get_random_choices(3)
+	if sub_choices.size() != 3:
+		append_log("FAIL: Subsequent level-up choices did not return 3 cards", logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Test Mini Helicopter Support Selection & Formation Spawning
+	for existing in get_tree().get_nodes_in_group("player"):
+		existing.remove_from_group("player")
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	player.global_position = Vector3(0, 10, 0)
+
+	# Projectile pool for firing
+	var proj_pool_scene := load("res://scenes/weapons/projectile_pool.tscn") as PackedScene
+	var proj_pool: ProjectilePool = proj_pool_scene.instantiate() as ProjectilePool
+	root_node.add_child(proj_pool)
+
+	# Apply mini_helicopter_support
+	var applied := mgr.apply_upgrade("mini_helicopter_support")
+	if not applied:
+		append_log("FAIL: Failed to apply mini_helicopter_support upgrade", logs)
+		root_node.queue_free()
+		return false
+
+	var drones := root_node.get_tree().get_nodes_in_group("mini_helicopters")
+	if drones.size() != 2:
+		append_log("FAIL: Expected exactly 2 mini helicopters spawned, found %d" % drones.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var drone1: MiniHelicopter = drones[0] as MiniHelicopter
+	var drone2: MiniHelicopter = drones[1] as MiniHelicopter
+
+	# Verify formation slots (flanking left-rear and right-rear)
+	var has_left_rear := (drone1.formation_offset.x < -3.0 and drone1.formation_offset.z > 2.0) or (drone2.formation_offset.x < -3.0 and drone2.formation_offset.z > 2.0)
+	var has_right_rear := (drone1.formation_offset.x > 3.0 and drone1.formation_offset.z > 2.0) or (drone2.formation_offset.x > 3.0 and drone2.formation_offset.z > 2.0)
+	if not has_left_rear or not has_right_rear:
+		append_log("FAIL: Mini helicopters do not have correct flanking formation offsets (offsets: %s, %s)" % [str(drone1.formation_offset), str(drone2.formation_offset)], logs)
+		root_node.queue_free()
+		return false
+
+	# Verify smooth follow (not rigid child nodes glued to player)
+	if drone1.get_parent() == player or drone2.get_parent() == player:
+		append_log("FAIL: Mini helicopters are rigidly parented to player instead of scene root", logs)
+		root_node.queue_free()
+		return false
+
+	# Simulate movement and rotor spin
+	var initial_rot1: float = drone1.main_rotor.rotation.y if drone1.main_rotor else 0.0
+	drone1._physics_process(0.1)
+	drone2._physics_process(0.1)
+	var post_rot1: float = drone1.main_rotor.rotation.y if drone1.main_rotor else 0.0
+	if absf(post_rot1 - initial_rot1) < 0.01:
+		append_log("FAIL: Mini helicopter main rotor did not rotate during physics process", logs)
+		root_node.queue_free()
+		return false
+
+	# 4. Test Auto-Targeting & Auto-Firing
+	var reg_script: GDScript = load("res://scripts/common/enemy_registry.gd")
+	var reg: EnemyRegistry = reg_script.new() as EnemyRegistry
+	root_node.add_child(reg)
+
+	# Clean leftover enemies from prior tests for isolated targeting verification
+	for e in root_node.get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e) and e is Node3D:
+			reg.unregister_enemy(e)
+			(e as Node3D).remove_from_group("enemies")
+
+	var enemy_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var dummy_enemy: Tank = enemy_scene.instantiate() as Tank
+	dummy_enemy.position = Vector3(5, 0, -10)
+	dummy_enemy.is_alive = true
+	dummy_enemy.add_to_group("enemies")
+	root_node.add_child(dummy_enemy)
+	reg.register_enemy(dummy_enemy, false)
+
+	drone1._shot_cooldown = 0.0
+	drone1._target_stick_timer = 0.0
+	drone1.current_target = null
+	drone1._physics_process(0.1)
+	if not is_instance_valid(drone1.current_target) and not is_instance_valid(drone2.current_target):
+		drone2._shot_cooldown = 0.0
+		drone2._target_stick_timer = 0.0
+		drone2.current_target = null
+		drone2._physics_process(0.1)
+
+	if not is_instance_valid(drone1.current_target) and not is_instance_valid(drone2.current_target):
+		append_log("FAIL: Mini helicopter failed to acquire nearby enemy target", logs)
+		root_node.queue_free()
+		return false
+
+	# 5. Test Core Catalog Upgrades
+	var gun: Chaingun = player.chaingun
+	var pod: MissilePod = player.missile_pod
+	var prev_heat := gun.heat_per_shot
+	var applied_ms := mgr.apply_upgrade("multi_shot")
+	if not applied_ms or gun.multishot_count != 2 or gun.heat_per_shot <= prev_heat:
+		append_log("FAIL: multi_shot upgrade failed to set multishot_count=2 or increase heat", logs)
+		root_node.queue_free()
+		return false
+
+	var prev_fire_rate := gun.fire_rate
+	var applied_fc := mgr.apply_upgrade("faster_cannon")
+	if not applied_fc or gun.fire_rate <= prev_fire_rate:
+		append_log("FAIL: faster_cannon upgrade failed to increase fire_rate", logs)
+		root_node.queue_free()
+		return false
+
+	var applied_le := mgr.apply_upgrade("larger_explosions")
+	if not applied_le or pod.splash_radius_multiplier < 1.4:
+		append_log("FAIL: larger_explosions upgrade failed to increase splash radius multiplier", logs)
+		root_node.queue_free()
+		return false
+
+	var prev_ml := pod.multi_launch_count
+	var applied_mc := mgr.apply_upgrade("missile_capacity")
+	if not applied_mc or pod.multi_launch_count != prev_ml + 2:
+		append_log("FAIL: missile_capacity upgrade failed to increase multi_launch_count", logs)
+		root_node.queue_free()
+		return false
+
+	var prev_magnet := player.magnet_radius
+	var applied_mr := mgr.apply_upgrade("xp_magnet_range")
+	if not applied_mr or player.magnet_radius <= prev_magnet:
+		append_log("FAIL: xp_magnet_range upgrade failed to increase magnet_radius", logs)
+		root_node.queue_free()
+		return false
+
+	var prev_spd := player.max_forward_speed
+	var applied_mb := mgr.apply_upgrade("movement_boost")
+	if not applied_mb or player.max_forward_speed <= prev_spd:
+		append_log("FAIL: movement_boost upgrade failed to increase max_forward_speed", logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Test Clean Despawn on Player Death
+	if EventBus:
+		EventBus.player_died.emit()
+	var remaining_drones: int = 0
+	for d in root_node.get_tree().get_nodes_in_group("mini_helicopters"):
+		if is_instance_valid(d) and not d.is_queued_for_deletion():
+			remaining_drones += 1
+
+	if remaining_drones > 0:
+		append_log("FAIL: Mini helicopters did not queue_free upon player death", logs)
+		root_node.queue_free()
+		return false
+
+	dummy_enemy.queue_free()
+	root_node.queue_free()
+	append_log("  -> Mini Helicopter escort drones, first-level guarantee, targeting, and upgrade catalog verified.", logs)
 	return true

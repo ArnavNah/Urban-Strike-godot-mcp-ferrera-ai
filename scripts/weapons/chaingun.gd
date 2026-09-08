@@ -12,6 +12,8 @@ extends Node3D
 @export var pierce_count: int = 0
 @export var ricochet_count: int = 0
 @export var armor_multiplier: float = 1.0
+@export var multishot_count: int = 1
+@export var multishot_spread_rad: float = 0.045
 
 var armored_damage_multiplier: float = 1.0
 var air_damage_multiplier: float = 1.0
@@ -76,14 +78,22 @@ func _execute_fire() -> void:
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
-	if pool:
-		var projectile := pool.spawn_projectile(muzzle_pos, fire_dir, true, damage_per_shot, pierce_count, ricochet_count, armor_multiplier)
-		if projectile:
-			# Snapshot the build when fired; later purchases do not alter these rounds.
-			projectile.armored_damage_multiplier = armored_damage_multiplier
-			projectile.air_damage_multiplier = air_damage_multiplier
-			projectile.ground_damage_multiplier = ground_damage_multiplier
-			projectile.enemy_hit_limit = enemy_hit_limit
+
+	var count := maxi(1, multishot_count)
+	for i in range(count):
+		var shot_dir := fire_dir
+		if count > 1:
+			var angle_offset: float = (float(i) - float(count - 1) * 0.5) * multishot_spread_rad
+			shot_dir = fire_dir.rotated(Vector3.UP, angle_offset).normalized()
+
+		if pool:
+			var projectile := pool.spawn_projectile(muzzle_pos, shot_dir, true, damage_per_shot, pierce_count, ricochet_count, armor_multiplier)
+			if projectile:
+				# Snapshot the build when fired; later purchases do not alter these rounds.
+				projectile.armored_damage_multiplier = armored_damage_multiplier
+				projectile.air_damage_multiplier = air_damage_multiplier
+				projectile.ground_damage_multiplier = ground_damage_multiplier
+				projectile.enemy_hit_limit = enemy_hit_limit
 
 	# Spawn muzzle flash (VfxPool with fallback)
 	if VfxPool.instance:

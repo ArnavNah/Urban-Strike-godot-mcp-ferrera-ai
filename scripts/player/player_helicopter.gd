@@ -74,6 +74,9 @@ var current_visual_bank: float = 0.0
 var hover_time: float = 0.0
 var _base_tilt_rotation: Vector3 = Vector3.ZERO
 var _recoil_offset: float = 0.0
+var _base_gun_mount_pos: Vector3 = Vector3(0.0, -0.55, -1.15)
+var _current_main_speed: float = 48.0
+var _current_tail_speed: float = 72.0
 var _smoothed_throttle: float = 0.0
 var _smoothed_strafe: float = 0.0
 
@@ -103,6 +106,10 @@ func _ready() -> void:
 
 	if flight_tilt_pivot:
 		_base_tilt_rotation = flight_tilt_pivot.rotation
+	if gun_mount:
+		_base_gun_mount_pos = gun_mount.position
+	_current_main_speed = main_rotor_speed
+	_current_tail_speed = tail_rotor_speed
 
 	global_position.y = clampf(global_position.y, minimum_altitude, maximum_altitude)
 	reset_physics_interpolation()
@@ -156,6 +163,33 @@ func exp_weight(response: float, delta: float) -> float:
 # Alias for legacy compatibility
 func exp_response(rate: float, delta: float) -> float:
 	return exp_weight(rate, delta)
+
+func _process(delta: float) -> void:
+	_handle_rotor_animations(delta)
+
+func _handle_rotor_animations(delta: float) -> void:
+	var target_main := main_rotor_speed
+	var target_tail := tail_rotor_speed
+	if _is_dying or not is_alive:
+		_current_main_speed = move_toward(_current_main_speed, 0.0, 40.0 * delta)
+		_current_tail_speed = move_toward(_current_tail_speed, 0.0, 60.0 * delta)
+	else:
+		var throttle_in := Input.get_axis("heli_throttle_reverse", "heli_throttle_forward")
+		if absf(throttle_in) < 0.001:
+			throttle_in = Input.get_axis("move_backward", "move_forward")
+		var collective_in := Input.get_axis("heli_descend", "heli_climb")
+		if absf(collective_in) < 0.001:
+			collective_in = Input.get_axis("descend", "ascend")
+		var power_boost := 1.0 + 0.15 * clampf(absf(throttle_in) + absf(collective_in), 0.0, 1.0)
+		target_main *= power_boost
+		target_tail *= power_boost
+		_current_main_speed = lerp(_current_main_speed, target_main, exp_weight(8.0, delta))
+		_current_tail_speed = lerp(_current_tail_speed, target_tail, exp_weight(8.0, delta))
+
+	if main_rotor and _current_main_speed > 0.001:
+		main_rotor.rotate_y(_current_main_speed * delta)
+	if tail_rotor and _current_tail_speed > 0.001:
+		tail_rotor.rotate_x(_current_tail_speed * delta)
 
 func _physics_process(delta: float) -> void:
 	if not is_alive or not _control_enabled or _is_dying:
@@ -348,16 +382,11 @@ func _handle_visual_tilt(delta: float) -> void:
 		tilt_target.rotation.z = _base_tilt_rotation.z + current_visual_bank
 		tilt_target.rotation.y = _base_tilt_rotation.y
 
-	# 6. Hover breathing and rotor animations
+	# 6. Hover breathing
 	if visuals:
 		hover_time += delta
 		var hover_offset := sin(hover_time * 2.4) * 0.08
 		visuals.position.y = hover_offset
-
-	if main_rotor:
-		main_rotor.rotate_y(main_rotor_speed * delta)
-	if tail_rotor:
-		tail_rotor.rotate_x(tail_rotor_speed * delta)
 
 func _handle_gun_aim(delta: float) -> void:
 	if not gun_mount or not gun_yaw_pivot or not gun_pitch_pivot:
@@ -365,7 +394,7 @@ func _handle_gun_aim(delta: float) -> void:
 
 	# Handle gun recoil recovery
 	_recoil_offset = move_toward(_recoil_offset, 0.0, 1.8 * delta)
-	gun_mount.position.z = -1.2 + _recoil_offset
+	gun_mount.position = _base_gun_mount_pos + Vector3(0.0, 0.0, _recoil_offset)
 
 	var aim_weight := exp_weight(gun_traverse_speed, delta)
 

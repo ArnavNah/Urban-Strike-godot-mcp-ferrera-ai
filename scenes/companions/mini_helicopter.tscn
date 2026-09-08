@@ -1,0 +1,113 @@
+[gd_scene format=3 uid="uid://b74vc2qlk0mh0"]
+
+[ext_resource type="Script" uid="uid://d02ok2duo7ni0" path="res://scripts/companions/mini_helicopter.gd" id="1_ljto1"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_7qaoa"]
+radius = 0.45
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_h2w3n"]
+albedo_color = Color(0.24, 0.3, 0.24, 1)
+metallic = 0.3
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_qa5jj"]
+material = SubResource("StandardMaterial3D_h2w3n")
+size = Vector3(0.52, 0.42, 0.95)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l12sc"]
+albedo_color = Color(0.12, 0.28, 0.38, 1)
+metallic = 0.7
+roughness = 0.15
+
+[sub_resource type="BoxMesh" id="BoxMesh_pl6bc"]
+material = SubResource("StandardMaterial3D_l12sc")
+size = Vector3(0.42, 0.26, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_g6e6o"]
+material = SubResource("StandardMaterial3D_h2w3n")
+size = Vector3(0.12, 0.12, 0.95)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gukfo"]
+material = SubResource("StandardMaterial3D_h2w3n")
+size = Vector3(0.04, 0.38, 0.22)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lt6nh"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_dmrqq"]
+material = SubResource("StandardMaterial3D_lt6nh")
+size = Vector3(1.6, 0.02, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_077v6"]
+material = SubResource("StandardMaterial3D_lt6nh")
+size = Vector3(0.02, 0.42, 0.06)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_5vmjs"]
+radius = 36.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_d0xmt"]
+shading_mode = 0
+albedo_color = Color(1, 0.8, 0.2, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_few38"]
+material = SubResource("StandardMaterial3D_d0xmt")
+radius = 0.12
+height = 0.24
+
+[node name="MiniHelicopter" type="CharacterBody3D" unique_id=1422453403]
+collision_layer = 0
+collision_mask = 0
+motion_mode = 1
+script = ExtResource("1_ljto1")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1402203814]
+shape = SubResource("SphereShape3D_7qaoa")
+
+[node name="VisualRoot" type="Node3D" parent="." unique_id=1580199113]
+
+[node name="Fuselage" type="MeshInstance3D" parent="VisualRoot" unique_id=1843157665]
+mesh = SubResource("BoxMesh_qa5jj")
+
+[node name="CockpitCanopy" type="MeshInstance3D" parent="VisualRoot" unique_id=1235250218]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -0.3)
+mesh = SubResource("BoxMesh_pl6bc")
+
+[node name="TailBoom" type="MeshInstance3D" parent="VisualRoot" unique_id=465050491]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0.9)
+mesh = SubResource("BoxMesh_g6e6o")
+
+[node name="TailFin" type="MeshInstance3D" parent="VisualRoot" unique_id=1259623246]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 1.35)
+mesh = SubResource("BoxMesh_gukfo")
+
+[node name="MainRotor" type="Node3D" parent="VisualRoot" unique_id=1888620239]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.32, 0)
+
+[node name="RotorBlades" type="MeshInstance3D" parent="VisualRoot/MainRotor" unique_id=166292857]
+mesh = SubResource("BoxMesh_dmrqq")
+
+[node name="TailRotor" type="Node3D" parent="VisualRoot" unique_id=776007288]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, 0.25, 1.35)
+
+[node name="TailBlades" type="MeshInstance3D" parent="VisualRoot/TailRotor" unique_id=2090141737]
+mesh = SubResource("BoxMesh_077v6")
+
+[node name="WeaponMount" type="Marker3D" parent="." unique_id=1702115860]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, -0.55)
+
+[node name="TargetDetection" type="Area3D" parent="." unique_id=1765737149]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TargetDetection" unique_id=1838946109]
+shape = SubResource("SphereShape3D_5vmjs")
+
+[node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=1754528418]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, -0.7)
+visible = false
+mesh = SubResource("SphereMesh_few38")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=735443457]
+unit_size = 6.0
+max_distance = 45.0

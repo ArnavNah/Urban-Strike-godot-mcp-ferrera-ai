@@ -1,57 +1,17 @@
 [gd_scene format=3 uid="uid://cerjq4bw0ykkv"]
 
 [ext_resource type="Script" uid="uid://dj7ww06dowr0k" path="res://scripts/player/player_helicopter.gd" id="1_heli"]
+[ext_resource type="PackedScene" uid="uid://bia2j1rijnc06" path="res://Player model/top propeller.glb" id="2_savs3"]
 [ext_resource type="Script" uid="uid://cn730adoyfjgp" path="res://scripts/player/targeting_system.gd" id="2_targ"]
+[ext_resource type="PackedScene" uid="uid://c2e68nm5rs24y" path="res://Player model/back propeller.glb" id="3_g1dng"]
 [ext_resource type="PackedScene" uid="uid://d3m5k8r2xay1q" path="res://scenes/weapons/chaingun.tscn" id="3_gun"]
 [ext_resource type="PackedScene" uid="uid://df7w1k8m5x4p2" path="res://scenes/weapons/missile_pod.tscn" id="4_pod"]
+[ext_resource type="PackedScene" uid="uid://8boti1nhvhol" path="res://Player model/body.glb" id="4_vxykv"]
 [ext_resource type="Script" uid="uid://b4m3p7fulb3uu" path="res://scripts/weapons/flare_dispenser.gd" id="5_flare"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-radius = 0.9
-height = 3.6
-
-[sub_resource type="StandardMaterial3D" id="Mat_Fuselage"]
-albedo_color = Color(0.18, 0.28, 0.25, 1)
-metallic = 0.4
-roughness = 0.5
-
-[sub_resource type="BoxMesh" id="Mesh_Fuselage"]
-material = SubResource("Mat_Fuselage")
-size = Vector3(1.2, 1, 3.2)
-
-[sub_resource type="StandardMaterial3D" id="Mat_Canopy"]
-albedo_color = Color(0.1, 0.15, 0.2, 0.9)
-metallic = 0.9
-roughness = 0.1
-
-[sub_resource type="BoxMesh" id="Mesh_Canopy"]
-material = SubResource("Mat_Canopy")
-size = Vector3(0.9, 0.65, 1.3)
-
-[sub_resource type="BoxMesh" id="Mesh_TailBoom"]
-material = SubResource("Mat_Fuselage")
-size = Vector3(0.35, 0.4, 2.8)
-
-[sub_resource type="PrismMesh" id="Mesh_Fin"]
-material = SubResource("Mat_Fuselage")
-size = Vector3(0.15, 0.8, 0.6)
-
-[sub_resource type="StandardMaterial3D" id="Mat_Rotor"]
-albedo_color = Color(0.1, 0.1, 0.1, 1)
-metallic = 0.8
-roughness = 0.2
-
-[sub_resource type="BoxMesh" id="Mesh_RotorBlade"]
-material = SubResource("Mat_Rotor")
-size = Vector3(4.8, 0.04, 0.25)
-
-[sub_resource type="BoxMesh" id="Mesh_TailBlade"]
-material = SubResource("Mat_Rotor")
-size = Vector3(0.04, 1.1, 0.12)
-
-[sub_resource type="BoxMesh" id="Mesh_StubWing"]
-material = SubResource("Mat_Fuselage")
-size = Vector3(2.4, 0.12, 0.5)
+radius = 0.95
+height = 4.2
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_Detect"]
 radius = 110.0
@@ -106,49 +66,30 @@ shape = SubResource("CapsuleShape3D_1")
 
 [node name="Visuals" type="Node3D" parent="FlightTiltPivot" unique_id=165425412]
 
-[node name="Fuselage" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=1474678028]
-mesh = SubResource("Mesh_Fuselage")
-
-[node name="Canopy" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=1283161307]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, -0.6)
-mesh = SubResource("Mesh_Canopy")
-
-[node name="TailBoom" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=78757597]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 2.5)
-mesh = SubResource("Mesh_TailBoom")
-
-[node name="VerticalFin" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=2085395750]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 3.7)
-mesh = SubResource("Mesh_Fin")
-
 [node name="MainRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1314457934]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, -0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -0.62)
 
-[node name="Blade1" type="MeshInstance3D" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=1335136495]
-mesh = SubResource("Mesh_RotorBlade")
-
-[node name="Blade2" type="MeshInstance3D" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=445808100]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
-mesh = SubResource("Mesh_RotorBlade")
+[node name="TopProp" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=1641788905 instance=ExtResource("2_savs3")]
+transform = Transform3D(2.8, 0, 0, 0, 2.8, 0, 0, 0, 2.8, 0, 0, 0)
 
 [node name="TailRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1244027535]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, 0.7, 3.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.68, 2.55)
 
-[node name="Blade" type="MeshInstance3D" parent="FlightTiltPivot/Visuals/TailRotor" unique_id=503896092]
-mesh = SubResource("Mesh_TailBlade")
+[node name="BackProp" parent="FlightTiltPivot/Visuals/TailRotor" unique_id=175918836 instance=ExtResource("3_g1dng")]
+transform = Transform3D(-2.8412401e-08, 0, 0.65, 0, 0.65, 0, -0.65, 0, -2.8412401e-08, 0, 0, 0)
+
+[node name="Body" parent="FlightTiltPivot/Visuals" unique_id=1461646268 instance=ExtResource("4_vxykv")]
+transform = Transform3D(-1.2239188e-07, 0, -2.8, 0, 2.8, 0, 2.8, 0, -1.2239188e-07, 0, 0, 0)
 
 [node name="StubWings" type="Node3D" parent="." unique_id=1441639570]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
-
-[node name="WingMesh" type="MeshInstance3D" parent="StubWings" unique_id=1982213946]
-mesh = SubResource("Mesh_StubWing")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, -0.75)
 
 [node name="MissilePod" parent="StubWings" unique_id=1661510436 instance=ExtResource("4_pod")]
 
 [node name="StableTrackingPoint" type="Marker3D" parent="." unique_id=418993551]
 
 [node name="GunMount" type="Node3D" parent="." unique_id=1971080532]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4, -1.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -1.15)
 
 [node name="GunYawPivot" type="Node3D" parent="GunMount" unique_id=1938765534]
 
