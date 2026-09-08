@@ -66,6 +66,8 @@ func _ready() -> void:
 	success = test_environment_districts_and_playable_boundary(log_lines) and success
 	append_log("Running test 23 (environment gameplay integration)...", log_lines)
 	success = test_environment_gameplay_integration(log_lines) and success
+	append_log("Running test 24 (ground and air ai)...", log_lines)
+	success = test_ground_and_air_ai(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -1977,4 +1979,143 @@ func test_environment_gameplay_integration(logs: Array[String]) -> bool:
 
 	root_node.queue_free()
 	append_log("  -> Authored ground entrances, air corridors, rooftop tracking, pickup locations, and bounds verified.", logs)
+	return true
+
+func test_ground_and_air_ai(logs: Array[String]) -> bool:
+	append_log("[TEST 24] Starting Ground + Air Enemy AI tests...", logs)
+
+	var root_node := Node3D.new()
+	root_node.name = "TestAIRoot"
+	add_child(root_node)
+
+	var dummy_player := Node3D.new()
+	dummy_player.name = "DummyPlayer"
+	dummy_player.add_to_group("player")
+	dummy_player.global_position = Vector3(0.0, 10.0, 30.0)
+	root_node.add_child(dummy_player)
+
+	# 1. Test InfantryCluster mobility and approach
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf: Node3D = inf_scene.instantiate() as Node3D
+	inf.global_position = Vector3(0.0, 0.0, 0.0)
+	root_node.add_child(inf)
+
+	if not (inf is CharacterBody3D):
+		append_log("FAIL: InfantryCluster is not a CharacterBody3D", logs)
+		root_node.queue_free()
+		return false
+
+	var inf_body := inf as CharacterBody3D
+	inf.set("_player", dummy_player)
+	inf_body.call("_physics_process", 0.05)
+	inf_body.call("_physics_process", 0.05)
+	if inf_body.velocity.z <= 0.0:
+		append_log("FAIL: InfantryCluster did not advance toward player in APPROACH state (velocity: %s)" % str(inf_body.velocity), logs)
+		root_node.queue_free()
+		return false
+
+	if int(inf.get("burst_count")) < 4 or float(inf.get("reload_time")) > 1.8:
+		append_log("FAIL: InfantryCluster burst count or reload timing not tuned for frequent short bursts", logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Test Tank approach, chassis orientation, and pre-fire charge
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var tank: Node3D = tank_scene.instantiate() as Node3D
+	tank.global_position = Vector3(0.0, 0.0, -10.0)
+	root_node.add_child(tank)
+
+	var tank_body := tank as CharacterBody3D
+	tank.set("_player", dummy_player)
+	tank.set("current_state", Tank.State.REPOSITIONING)
+	tank.set("_reposition_time", 2.0)
+	tank.set("_lod_frame_counter", 1)
+	tank_body.call("_physics_process", 0.05)
+	if tank_body.velocity.z <= 0.0:
+		append_log("FAIL: Tank did not advance toward player in REPOSITIONING/APPROACH state (velocity: %s)" % str(tank_body.velocity), logs)
+		root_node.queue_free()
+		return false
+
+	var charge_light := tank.find_child("ChargeLight", true, false) as OmniLight3D
+	if not charge_light:
+		append_log("FAIL: Tank missing ChargeLight telegraph node", logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Test GroundTurret rapid burst parameters
+	var turret_scene := load("res://scenes/enemies/ground_turret.tscn") as PackedScene
+	var turret: Node3D = turret_scene.instantiate() as Node3D
+	root_node.add_child(turret)
+	if float(turret.get("aim_prep_time")) > 0.45 or int(turret.get("burst_count")) < 4 or float(turret.get("reload_time")) > 1.6:
+		append_log("FAIL: GroundTurret fire timings not tuned for rapid responsive bursts", logs)
+		root_node.queue_free()
+		return false
+
+	# 4. Test SAMSite telegraph and lock structure
+	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
+	var sam: Node3D = sam_scene.instantiate() as Node3D
+	root_node.add_child(sam)
+	if float(sam.get("base_lock_time")) < 1.0 or float(sam.get("reload_time")) < 2.5:
+		append_log("FAIL: SAMSite timings unexpectedly rapid, must remain telegraphed and deliberate", logs)
+		root_node.queue_free()
+		return false
+
+	# 5. Test Flying Enemy AI (AirEnemyController)
+	var scout_scene := load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
+	var scout: Node3D = scout_scene.instantiate() as Node3D
+	scout.global_position = Vector3(0.0, 16.0, -30.0)
+	root_node.add_child(scout)
+
+	var scout_body := scout as CharacterBody3D
+	scout.set("_player", dummy_player)
+	scout.set("_lod_frame_counter", 1)
+	scout_body.call("_physics_process", 0.05)
+	if scout_body.velocity.z <= 0.0:
+		append_log("FAIL: Scout helicopter did not fly toward player in APPROACH state (velocity: %s)" % str(scout_body.velocity), logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Test Air Enemy Break-Away on player proximity (< 14m)
+	scout.global_position = dummy_player.global_position + Vector3(2.0, 0.0, 2.0)
+	scout.set("_lod_frame_counter", 1)
+	scout_body.call("_physics_process", 0.05)
+	var scout_state: int = int(scout.get("current_state"))
+	if scout_state != AirEnemyController.State.BREAK_AWAY and scout_state != AirEnemyController.State.DISENGAGE:
+		append_log("FAIL: Air enemy did not immediately BREAK_AWAY when dangerously close to player (state: %d)" % scout_state, logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Test Separation Steering between multiple aircraft
+	var raider_scene := load("res://scenes/enemies/air_rocket_raider.tscn") as PackedScene
+	var raider1: Node3D = raider_scene.instantiate() as Node3D
+	var raider2: Node3D = raider_scene.instantiate() as Node3D
+	raider1.global_position = Vector3(30.0, 16.0, 30.0)
+	raider2.global_position = Vector3(31.0, 16.0, 30.0) # 1m apart (within 10m search radius)
+	root_node.add_child(raider1)
+	root_node.add_child(raider2)
+
+	var r1_body := raider1 as CharacterBody3D
+	var r2_body := raider2 as CharacterBody3D
+	r1_body.call("_apply_separation")
+	r2_body.call("_apply_separation")
+
+	if r1_body.velocity.x >= r2_body.velocity.x:
+		append_log("FAIL: Separation steering failed to push clustered aircraft apart laterally", logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Test Dynamic Player Pursuit across City
+	dummy_player.global_position = Vector3(50.0, 18.0, 50.0) # Player relocates across city (dist ~ 70m)
+	scout.global_position = Vector3(0.0, 16.0, 0.0)
+	scout.set("_player", dummy_player)
+	scout.set("current_state", AirEnemyController.State.REPOSITION)
+	scout.set("_lod_frame_counter", 1)
+	scout_body.call("_physics_process", 0.05)
+	if int(scout.get("current_state")) != AirEnemyController.State.APPROACH:
+		append_log("FAIL: Air enemy failed to fall back to APPROACH when player relocated across city", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Ground approach, fire loops, turret/SAM timings, air approach/break-away/separation verified.", logs)
 	return true

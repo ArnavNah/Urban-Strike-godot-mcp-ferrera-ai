@@ -14,7 +14,7 @@ material = SubResource("Mat_Soldier")
 radius = 0.25
 height = 1.4
 
-[node name="InfantryCluster" type="StaticBody3D" groups=["enemies"]]
+[node name="InfantryCluster" type="CharacterBody3D" groups=["enemies"]]
 collision_layer = 4
 collision_mask = 1
 script = ExtResource("1_inf")

@@ -3,6 +3,7 @@ extends CharacterBody3D
 
 ## Hostile air superiority gunship executing fast, committed sweeping strafe runs.
 ## Matches player altitude in the air for intense same-altitude aerial dogfights.
+## Features dynamic pursuit across the city, neighbor separation, and visual banking.
 
 enum State {
 	APPROACH,
@@ -50,6 +51,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
+	_release_air_slot()
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:
@@ -62,7 +64,7 @@ func _physics_process(delta: float) -> void:
 	if main_rotor:
 		main_rotor.rotate_y(44.0 * delta)
 
-	# Distance-based AI LOD throttling (Gap 11)
+	# Distance-based AI LOD throttling
 	var dist := global_position.distance_to(_player.global_position)
 	_lod_frame_counter += 1
 	var step_delta := delta
@@ -80,21 +82,34 @@ func _physics_process(delta: float) -> void:
 	# Keep altitude matched with player in all states
 	_match_player_altitude(step_delta)
 
+	var dist_flat := Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
+
+	# Safety check: Never hover directly over player or ram
+	if dist_flat < 14.0 and current_state != State.BREAK_AWAY:
+		_release_air_slot()
+		_transition_to(State.BREAK_AWAY)
+
+	# Active pursuit: follow when player travels across city
+	if dist_flat > 52.0 and current_state != State.APPROACH:
+		_release_air_slot()
+		_transition_to(State.APPROACH)
+
 	match current_state:
 		State.APPROACH:
 			_update_approach_waypoint()
 			var to_wp := _target_waypoint - global_position
 			to_wp.y = 0.0
-			if to_wp.length() < 8.0 or _state_timer <= 0.0:
+			if to_wp.length() < 10.0 or _state_timer <= 0.0 or dist_flat <= 32.0:
 				_transition_to(State.ALIGN)
 			else:
-				_fly_toward(_target_waypoint, cruise_speed, step_delta)
+				var spd := cruise_speed * 1.35 if dist_flat > 50.0 else cruise_speed
+				_fly_toward(_target_waypoint, spd, step_delta)
 			_state_timer -= step_delta
 
 		State.ALIGN:
-			# Face player and check LoS
+			# Face player smoothly
 			_attack_vector = (_player.global_position - global_position)
-			_attack_vector.y = 0.0 # Maintain same altitude attack vector
+			_attack_vector.y = 0.0
 			_attack_vector = _attack_vector.normalized()
 			var target_yaw := atan2(-_attack_vector.x, -_attack_vector.z)
 			rotation.y = lerp_angle(rotation.y, target_yaw, 5.0 * step_delta)
@@ -106,17 +121,14 @@ func _physics_process(delta: float) -> void:
 					_state_timer = 0.35 # Wait for air slot
 
 		State.COMMIT:
-			# High-speed committed charge pass towards player position at same altitude
 			velocity.x = _attack_vector.x * attack_speed
 			velocity.z = _attack_vector.z * attack_speed
 			move_and_slide()
-			var dist_flat := Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
 			if dist_flat <= 35.0 or _state_timer <= 0.0:
 				_transition_to(State.ATTACK)
 			_state_timer -= step_delta
 
 		State.ATTACK:
-			# Fire chaingun bursts while sweeping past at same altitude
 			velocity.x = _attack_vector.x * attack_speed
 			velocity.z = _attack_vector.z * attack_speed
 			move_and_slide()
@@ -126,14 +138,13 @@ func _physics_process(delta: float) -> void:
 				_shot_cooldown = 1.0 / fire_rate
 				_fire_pass_shot()
 
-			if _attack_timer <= 0.0:
+			if _attack_timer <= 0.0 or dist_flat < 14.0:
 				_transition_to(State.BREAK_AWAY)
 
 		State.BREAK_AWAY:
-			# Peel away laterally at same altitude
-			var break_vec := (_attack_vector + Vector3(0.6, 0.0, 0.3)).normalized()
-			velocity.x = break_vec.x * cruise_speed
-			velocity.z = break_vec.z * cruise_speed
+			var break_vec := (_attack_vector + Vector3(0.7, 0.0, 0.35)).normalized()
+			velocity.x = break_vec.x * (cruise_speed * 1.15)
+			velocity.z = break_vec.z * (cruise_speed * 1.15)
 			move_and_slide()
 			_state_timer -= step_delta
 			if _state_timer <= 0.0:
@@ -144,7 +155,7 @@ func _physics_process(delta: float) -> void:
 			_update_reposition_waypoint()
 			var to_wp := _target_waypoint - global_position
 			to_wp.y = 0.0
-			if to_wp.length() < 10.0 or _state_timer <= 0.0:
+			if to_wp.length() < 12.0 or _state_timer <= 0.0 or dist_flat > 46.0:
 				_transition_to(State.COOLDOWN)
 			else:
 				_fly_toward(_target_waypoint, cruise_speed, step_delta)
@@ -155,6 +166,19 @@ func _physics_process(delta: float) -> void:
 			if _state_timer <= 0.0:
 				_pick_approach_waypoint()
 				_transition_to(State.APPROACH)
+
+	# Aircraft separation steering so helicopters never stack
+	_apply_separation()
+
+	# Visual banking into turns
+	if visuals:
+		var horiz_vel := Vector2(velocity.x, velocity.z)
+		if horiz_vel.length_squared() > 0.5:
+			var target_yaw := atan2(-velocity.x, -velocity.z)
+			var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, clampf(-yaw_diff * 1.5, -deg_to_rad(30.0), deg_to_rad(30.0)), 6.0 * delta)
+		else:
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, 4.0 * delta)
 
 func _match_player_altitude(delta: float) -> void:
 	if is_instance_valid(_player):
@@ -168,7 +192,7 @@ func _transition_to(new_state: State) -> void:
 		State.APPROACH:
 			_state_timer = 3.5
 		State.ALIGN:
-			_state_timer = 0.5
+			_state_timer = 0.4
 		State.COMMIT:
 			_state_timer = 1.6
 		State.ATTACK:
@@ -178,9 +202,9 @@ func _transition_to(new_state: State) -> void:
 			_state_timer = 1.5
 		State.REPOSITION:
 			_pick_reposition_waypoint()
-			_state_timer = 3.0
+			_state_timer = 2.5
 		State.COOLDOWN:
-			_state_timer = 1.2
+			_state_timer = 1.0
 
 func _fly_toward(dest: Vector3, speed: float, delta: float) -> void:
 	var to_dest := dest - global_position
@@ -196,21 +220,26 @@ func _fly_toward(dest: Vector3, speed: float, delta: float) -> void:
 func _pick_approach_waypoint() -> void:
 	if not is_instance_valid(_player):
 		return
-	var angle := randf() * TAU
-	var offset := Vector3(cos(angle), 0, sin(angle)) * 40.0
-	_target_waypoint = _player.global_position + offset
+	var to_player := (_player.global_position - global_position)
+	to_player.y = 0.0
+	var dir := to_player.normalized() if to_player.length_squared() > 0.01 else Vector3.FORWARD
+	_target_waypoint = _player.global_position - dir * 28.0
 	_target_waypoint.y = _player.global_position.y
 
 func _update_approach_waypoint() -> void:
 	if not is_instance_valid(_player):
 		return
+	var to_player := (_player.global_position - global_position)
+	to_player.y = 0.0
+	var dir := to_player.normalized() if to_player.length_squared() > 0.01 else Vector3.FORWARD
+	_target_waypoint = _player.global_position - dir * 28.0
 	_target_waypoint.y = _player.global_position.y
 
 func _pick_reposition_waypoint() -> void:
 	if not is_instance_valid(_player):
 		return
 	var angle := randf() * TAU
-	var offset := Vector3(cos(angle), 0, sin(angle)) * 60.0
+	var offset := Vector3(cos(angle), 0, sin(angle)) * 48.0
 	_target_waypoint = _player.global_position + offset
 	_target_waypoint.y = _player.global_position.y
 
@@ -218,6 +247,30 @@ func _update_reposition_waypoint() -> void:
 	if not is_instance_valid(_player):
 		return
 	_target_waypoint.y = _player.global_position.y
+
+func _apply_separation() -> void:
+	var avoidance := Vector3.ZERO
+	var search_radius: float = 10.0
+	var nearby: Array[Node3D] = []
+
+	if EnemyRegistry.instance:
+		nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius)
+	else:
+		for e in get_tree().get_nodes_in_group("air_enemies"):
+			if e is Node3D and e != self:
+				nearby.append(e as Node3D)
+
+	for other in nearby:
+		if other != self and is_instance_valid(other) and other.is_in_group("air_enemies"):
+			var diff := global_position - other.global_position
+			diff.y = 0.0
+			var d := diff.length()
+			if d < search_radius and d > 0.05:
+				var weight: float = (search_radius - d) / search_radius
+				avoidance += (diff / d) * weight * 16.0
+
+	velocity.x += avoidance.x
+	velocity.z += avoidance.z
 
 func _fire_pass_shot() -> void:
 	if not is_instance_valid(_player):

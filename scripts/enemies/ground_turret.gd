@@ -1,6 +1,9 @@
 class_name GroundTurret
 extends StaticBody3D
 
+## Stationary defense turret on ground or rooftops.
+## Fires responsive, readable machine-gun/autocannon bursts (3-8 shots) with crisp pauses.
+
 enum State {
 	IDLE,
 	AIMING,
@@ -10,14 +13,14 @@ enum State {
 }
 
 @export var max_health: float = 45.0
-@export var threat_range: float = 42.0
-@export var aim_speed: float = 4.0
-@export var aim_prep_time: float = 0.75
-@export var burst_count: int = 3
-@export var burst_interval: float = 0.18
-@export var reload_time: float = 2.0
-@export var wait_time: float = 0.6
-@export var bullet_damage: float = 8.0
+@export var threat_range: float = 46.0
+@export var aim_speed: float = 4.8
+@export var aim_prep_time: float = 0.35
+@export var burst_count: int = 5
+@export var burst_interval: float = 0.11
+@export var reload_time: float = 1.3
+@export var wait_time: float = 0.25
+@export var bullet_damage: float = 6.5
 
 var current_health: float = 45.0
 var current_state: State = State.IDLE
@@ -194,7 +197,6 @@ func _check_line_of_sight() -> bool:
 
 	if los_ray.is_colliding():
 		var col := los_ray.get_collider()
-		# If colliding with World (layer 1), line of sight is obstructed
 		if col != _player_node:
 			return false
 
@@ -206,8 +208,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 	current_health = maxf(0.0, current_health - amount)
 	_flash_hit()
-	if EventBus:
-		EventBus.damage_number_spawned.emit(global_position + Vector3(0, 1.2, 0), amount, amount >= 30.0)
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("damage_number_spawned"):
+		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.2, 0), amount, amount >= 30.0)
 
 	if current_health <= 0.0:
 		_die()
@@ -223,8 +226,9 @@ func _die() -> void:
 	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
-	if EventBus:
-		EventBus.enemy_destroyed.emit(self, 100)
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("enemy_destroyed"):
+		eb.emit_signal("enemy_destroyed", self, 100)
 
 	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 	if xp_scene:

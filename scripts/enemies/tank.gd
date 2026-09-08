@@ -2,6 +2,8 @@ class_name Tank
 extends CharacterBody3D
 
 ## Armored heavy vehicle with rotating turret, pre-fire charge telegraph, and slot lease.
+## Implements the shared ground combat loop: APPROACH -> ENGAGE -> ATTACK -> REPOSITION -> ENGAGE
+## Features chassis steering, obstacle evasion, neighbor separation, and active player pursuit.
 
 enum State {
 	REPOSITIONING,
@@ -13,12 +15,13 @@ enum State {
 }
 
 @export var max_health: float = 75.0
-@export var threat_range: float = 65.0
+@export var threat_range: float = 55.0
+@export var preferred_range: float = 36.0
 @export var cannon_damage: float = 12.0 # GDD baseline
-@export var aim_prep_time: float = 0.9
-@export var charge_time: float = 0.6 # Visible pre-shot tell
-@export var reload_time: float = 2.4
-@export var move_speed: float = 7.0
+@export var aim_prep_time: float = 0.5
+@export var charge_time: float = 0.45 # Visible pre-shot tell
+@export var reload_time: float = 2.0
+@export var move_speed: float = 7.5
 @export var is_command_unit: bool = false
 @export var escort_leader: Node3D = null
 
@@ -57,6 +60,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
+	_release_slot()
 
 func register_escort(escort: Tank) -> void:
 	if escort and not _escorts.has(escort):
@@ -105,7 +109,7 @@ func _physics_process(delta: float) -> void:
 
 	var dist := global_position.distance_to(_player.global_position)
 
-	# Distance-based AI LOD throttling (Gap 11)
+	# Distance-based AI LOD throttling
 	_lod_frame_counter += 1
 	var step_delta := delta
 	if dist > 130.0 and not is_scattered:
@@ -126,75 +130,142 @@ func _physics_process(delta: float) -> void:
 		_cached_los = _check_los()
 	var has_los := _cached_los
 
+	# If player moves far away, break out of aiming/reloading to pursue across the city
+	if dist > threat_range and current_state != State.REPOSITIONING and not is_scattered:
+		_release_slot()
+		if charge_light:
+			charge_light.visible = false
+		_start_new_reposition()
+
 	match current_state:
 		State.REPOSITIONING:
-			_state_timer -= step_delta
-			var current_speed: float = move_speed * 1.5 if is_scattered else move_speed
-			velocity = _reposition_dir * current_speed
-			move_and_slide()
-			if _state_timer <= 0.0:
-				velocity = Vector3.ZERO
-				if is_scattered:
-					var angle := randf() * TAU
-					_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
-					_state_timer = 1.0
-				elif dist <= threat_range and has_los:
-					_transition_to(State.ACQUIRE)
-				else:
-					_start_new_reposition()
-
+			_tick_repositioning(step_delta, dist, has_los)
 		State.ACQUIRE:
-			if not has_los or dist > threat_range:
-				_start_new_reposition()
-				return
-
-			_track_player(step_delta)
-			_state_timer -= step_delta
-			if _state_timer <= 0.0:
-				if _request_slot():
-					_transition_to(State.AIMING)
-				else:
-					_state_timer = 0.35 # Wait for slot
-
+			_tick_acquire(step_delta, dist, has_los)
 		State.AIMING:
-			if not has_los or dist > threat_range:
-				_release_slot()
-				_start_new_reposition()
-				return
-
-			_track_player(step_delta)
-			_state_timer -= step_delta
-			if _state_timer <= 0.0:
-				_transition_to(State.CHARGING)
-
+			_tick_aiming(step_delta, dist, has_los)
 		State.CHARGING:
-			if not has_los:
-				_release_slot()
-				if charge_light:
-					charge_light.visible = false
-				_start_new_reposition()
-				return
-
-			_track_player(step_delta * 0.6)
-			_state_timer -= step_delta
-			if charge_light:
-				charge_light.visible = true
-				charge_light.light_energy = (1.0 - (_state_timer / charge_time)) * 4.0
-
-			if _state_timer <= 0.0:
-				_transition_to(State.FIRING)
-
+			_tick_charging(step_delta, has_los)
 		State.FIRING:
-			if charge_light:
-				charge_light.visible = false
-			_fire_cannon()
-			_release_slot()
-			_transition_to(State.RELOADING)
-
+			_tick_firing()
 		State.RELOADING:
-			_state_timer -= step_delta
-			if _state_timer <= 0.0:
-				_start_new_reposition()
+			_tick_reloading(step_delta, dist, has_los)
+
+	# Ground vehicle separation steering so tanks do not stack
+	_apply_separation()
+
+	velocity.y = 0.0
+	move_and_slide()
+
+func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
+	_state_timer -= delta
+	var current_speed: float = move_speed * 1.4 if is_scattered else move_speed
+
+	var move_dir := _reposition_dir
+	if not is_scattered:
+		# If too far from preferred range, steer toward player
+		if dist > preferred_range or not has_los:
+			var to_player := (_player.global_position - global_position)
+			to_player.y = 0.0
+			move_dir = to_player.normalized()
+
+		# Steer around buildings and obstacles
+		move_dir = _steer_around_obstacles(move_dir)
+
+	velocity.x = move_dir.x * current_speed
+	velocity.z = move_dir.z * current_speed
+
+	# Rotate tank chassis to face movement direction
+	if move_dir.length_squared() > 0.01:
+		var target_yaw := atan2(-move_dir.x, -move_dir.z)
+		rotation.y = lerp_angle(rotation.y, target_yaw, 4.0 * delta)
+
+	# Check for transition into combat engagement
+	if not is_scattered and dist <= preferred_range and has_los:
+		velocity = Vector3.ZERO
+		_transition_to(State.ACQUIRE)
+		return
+
+	if _state_timer <= 0.0:
+		velocity = Vector3.ZERO
+		if is_scattered:
+			var angle := randf() * TAU
+			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
+			_state_timer = 1.0
+		elif dist <= threat_range and has_los:
+			_transition_to(State.ACQUIRE)
+		else:
+			_start_new_reposition()
+
+func _tick_acquire(delta: float, dist: float, has_los: bool) -> void:
+	velocity = Vector3.ZERO
+	if not has_los or dist > threat_range:
+		_start_new_reposition()
+		return
+
+	_track_player(delta)
+	_state_timer -= delta
+	if _state_timer <= 0.0:
+		if _request_slot():
+			_transition_to(State.AIMING)
+		else:
+			_state_timer = 0.25 # Wait for attack slot
+
+func _tick_aiming(delta: float, dist: float, has_los: bool) -> void:
+	velocity = Vector3.ZERO
+	if not has_los or dist > threat_range:
+		_release_slot()
+		_start_new_reposition()
+		return
+
+	_track_player(delta)
+	_state_timer -= delta
+	if _state_timer <= 0.0:
+		_transition_to(State.CHARGING)
+
+func _tick_charging(delta: float, has_los: bool) -> void:
+	velocity = Vector3.ZERO
+	if not has_los:
+		_release_slot()
+		if charge_light:
+			charge_light.visible = false
+		_start_new_reposition()
+		return
+
+	_track_player(delta * 0.6)
+	_state_timer -= delta
+	if charge_light:
+		charge_light.visible = true
+		charge_light.light_energy = (1.0 - (_state_timer / charge_time)) * 4.0
+
+	if _state_timer <= 0.0:
+		_transition_to(State.FIRING)
+
+func _tick_firing() -> void:
+	velocity = Vector3.ZERO
+	if charge_light:
+		charge_light.visible = false
+	_fire_cannon()
+	_release_slot()
+	_transition_to(State.RELOADING)
+
+func _tick_reloading(delta: float, dist: float, has_los: bool) -> void:
+	# Tactical slow creep/strafe while reloading
+	if _state_timer > reload_time * 0.4:
+		velocity.x = _reposition_dir.x * (move_speed * 0.6)
+		velocity.z = _reposition_dir.z * (move_speed * 0.6)
+	else:
+		velocity = Vector3.ZERO
+
+	_track_player(delta * 0.7)
+	_state_timer -= delta
+
+	if _state_timer <= 0.0:
+		velocity = Vector3.ZERO
+		if dist <= preferred_range and has_los:
+			_transition_to(State.ACQUIRE)
+		else:
+			_start_new_reposition()
 
 func _transition_to(new_state: State) -> void:
 	current_state = new_state
@@ -202,7 +273,7 @@ func _transition_to(new_state: State) -> void:
 		State.REPOSITIONING:
 			_state_timer = _reposition_time
 		State.ACQUIRE:
-			_state_timer = 0.2
+			_state_timer = 0.15
 		State.AIMING:
 			_state_timer = aim_prep_time
 		State.CHARGING:
@@ -211,24 +282,88 @@ func _transition_to(new_state: State) -> void:
 			pass
 		State.RELOADING:
 			_state_timer = reload_time
+			_pick_tactical_reposition_dir()
 
 func _start_new_reposition() -> void:
 	if is_instance_valid(_player):
 		var to_player := (_player.global_position - global_position)
 		to_player.y = 0.0
 		var dist := to_player.length()
-		if dist > threat_range * 0.85:
-			# Move toward player
+		if dist > preferred_range:
+			# Advance toward player
 			_reposition_dir = to_player.normalized()
+		elif dist < 16.0:
+			# Too close: back up
+			_reposition_dir = -to_player.normalized()
 		else:
-			# Flank or reposition laterally
+			# Flank laterally
 			var perp := Vector3(-to_player.z, 0, to_player.x).normalized()
 			_reposition_dir = perp if randf() > 0.5 else -perp
 	else:
 		_reposition_dir = Vector3.FORWARD
 
-	_reposition_time = randf_range(1.4, 2.5)
+	_reposition_time = randf_range(1.6, 2.5)
 	_transition_to(State.REPOSITIONING)
+
+func _pick_tactical_reposition_dir() -> void:
+	if not is_instance_valid(_player):
+		_reposition_dir = Vector3.FORWARD
+		return
+
+	var to_player := (_player.global_position - global_position)
+	to_player.y = 0.0
+	var dist := to_player.length()
+
+	if dist < 18.0:
+		_reposition_dir = -to_player.normalized() # Back up
+	else:
+		var perp := Vector3(-to_player.z, 0.0, to_player.x).normalized()
+		_reposition_dir = (perp if randf() > 0.5 else -perp) + to_player.normalized() * randf_range(-0.2, 0.2)
+		_reposition_dir = _reposition_dir.normalized()
+
+func _apply_separation() -> void:
+	var avoidance := Vector3.ZERO
+	var search_radius: float = 6.0
+	var nearby: Array[Node3D] = []
+
+	if EnemyRegistry.instance:
+		nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius)
+	else:
+		for e in get_tree().get_nodes_in_group("enemies"):
+			if e is Node3D and e != self:
+				nearby.append(e as Node3D)
+
+	for other in nearby:
+		if other != self and is_instance_valid(other) and not other.is_in_group("air_enemies"):
+			var diff := global_position - other.global_position
+			diff.y = 0.0
+			var d := diff.length()
+			if d < search_radius and d > 0.05:
+				var weight: float = (search_radius - d) / search_radius
+				avoidance += (diff / d) * weight * 7.0
+
+	velocity.x += avoidance.x
+	velocity.z += avoidance.z
+
+func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	var origin := global_position + Vector3(0.0, 1.0, 0.0)
+	var forward_check := origin + desired_dir * 5.0
+	var query := PhysicsRayQueryParameters3D.create(origin, forward_check, 1) # Layer 1 = World
+	var hit := space.intersect_ray(query)
+
+	if hit.is_empty():
+		return desired_dir
+
+	var normal: Vector3 = hit.get("normal", Vector3.UP)
+	normal.y = 0.0
+	if normal.length_squared() > 0.01:
+		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
+		if tangent.dot(desired_dir) < 0.0:
+			tangent = -tangent
+		return (desired_dir * 0.35 + tangent * 0.65).normalized()
+
+	return desired_dir
 
 func _track_player(delta: float) -> void:
 	if not is_instance_valid(_player) or not turret or not barrel:
@@ -236,13 +371,13 @@ func _track_player(delta: float) -> void:
 	var target_pos := _player.global_position
 	var local_pos := to_local(target_pos)
 	var target_yaw := atan2(-local_pos.x, -local_pos.z)
-	turret.rotation.y = lerp_angle(turret.rotation.y, target_yaw, 4.5 * delta)
+	turret.rotation.y = lerp_angle(turret.rotation.y, target_yaw, 5.0 * delta)
 
 	var local_barrel := turret.to_local(target_pos)
 	var flat_dist := Vector2(local_barrel.x, local_barrel.z).length()
 	var target_pitch := atan2(local_barrel.y, flat_dist)
 	target_pitch = clampf(target_pitch, deg_to_rad(-5.0), deg_to_rad(45.0))
-	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, 4.5 * delta)
+	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, 5.0 * delta)
 
 func _fire_cannon() -> void:
 	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else turret.global_position
@@ -316,13 +451,11 @@ func _die() -> void:
 		if is_command_unit and eb.has_signal("command_unit_destroyed"):
 			eb.emit_signal("command_unit_destroyed", global_position)
 
-	# Scatter all registered escorts
 	for escort in _escorts:
 		if is_instance_valid(escort) and escort != self and escort.is_alive:
 			escort.scatter(global_position)
 	_escorts.clear()
 
-	# Also scatter any nearby tanks that had this as their escort_leader
 	if is_inside_tree():
 		var group_tanks := get_tree().get_nodes_in_group("enemies")
 		for node in group_tanks:
