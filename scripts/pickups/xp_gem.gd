@@ -110,6 +110,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	global_position = p1
+	rotate_y(12.0 * delta)
 
 func _collect() -> void:
 	if _is_collected:
@@ -121,4 +122,13 @@ func _collect() -> void:
 	set_deferred("monitoring", false)
 	set_deferred("monitorable", false)
 	mgr.add_xp(xp_value)
-	queue_free()
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("xp_collected"):
+		eb.emit_signal("xp_collected", xp_value)
+	if mesh and is_inside_tree():
+		var tw := create_tween()
+		tw.tween_property(mesh, "scale", Vector3(1.6, 1.6, 1.6), 0.06)
+		tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
+		tw.tween_callback(queue_free)
+	else:
+		queue_free()

@@ -111,7 +111,7 @@ func spawn_sparks(pos: Vector3) -> Node3D:
 	oldest.call("play")
 	return oldest
 
-func spawn_explosion(pos: Vector3) -> Node3D:
+func spawn_explosion(pos: Vector3, scale_mult: float = 1.0) -> Node3D:
 	var count: int = _explosion_pool.size()
 	if count == 0:
 		return null
@@ -122,11 +122,11 @@ func spawn_explosion(pos: Vector3) -> Node3D:
 		if not bool(item.get("is_active")):
 			_explosion_idx = (idx + 1) % count
 			item.global_position = pos
-			item.call("play")
+			item.call("play", scale_mult)
 			return item
 
 	var oldest: Node3D = _explosion_pool[_explosion_idx]
 	_explosion_idx = (_explosion_idx + 1) % count
 	oldest.global_position = pos
-	oldest.call("play")
+	oldest.call("play", scale_mult)
 	return oldest

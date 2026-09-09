@@ -170,6 +170,9 @@ func exp_response(rate: float, delta: float) -> float:
 
 func _process(delta: float) -> void:
 	_handle_rotor_animations(delta)
+	var tail_light := get_node_or_null("FlightTiltPivot/Visuals/NavLightTail") as MeshInstance3D
+	if tail_light:
+		tail_light.visible = fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.15
 
 func _handle_rotor_animations(delta: float) -> void:
 	var target_main := main_rotor_speed
@@ -567,8 +570,19 @@ func _flash_hit() -> void:
 	var target_vis: Node3D = flight_tilt_pivot if flight_tilt_pivot else visuals
 	if target_vis:
 		var tween := create_tween()
-		tween.tween_property(target_vis, "scale", Vector3(1.12, 1.12, 1.12), 0.05)
+		tween.tween_property(target_vis, "scale", Vector3(1.10, 1.10, 1.10), 0.05)
 		tween.tween_property(target_vis, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
+	var body_mesh := get_node_or_null("FlightTiltPivot/Visuals/Body/Mesh0") as MeshInstance3D
+	if body_mesh and is_inside_tree():
+		var flash_mat := StandardMaterial3D.new()
+		flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		flash_mat.albedo_color = Color(1.8, 0.3, 0.3, 1.0)
+		var orig_mat := body_mesh.material_override
+		body_mesh.material_override = flash_mat
+		get_tree().create_timer(0.06, false).timeout.connect(func():
+			if is_instance_valid(body_mesh) and body_mesh.material_override == flash_mat:
+				body_mesh.material_override = orig_mat
+		)
 
 func _die() -> void:
 	if _is_dying:

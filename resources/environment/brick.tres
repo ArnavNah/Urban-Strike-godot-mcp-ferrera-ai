@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Brick"
-albedo_color = Color(0.54509807, 0.34901962, 0.27450982, 1)
-roughness = 0.92
+albedo_color = Color(0.72, 0.32, 0.22, 1)
+roughness = 0.88

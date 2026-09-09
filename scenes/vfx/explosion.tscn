@@ -1,28 +1,39 @@
-[gd_scene format=3 uid="uid://d1x8y9p2k4m7q"]
+[gd_scene format=3 uid="uid://d1x80ap2k4m7q"]
 
-[ext_resource type="Script" path="res://scripts/vfx/explosion.gd" id="1_expl"]
+[ext_resource type="Script" uid="uid://dkj2apynqqqsn" path="res://scripts/vfx/explosion.gd" id="1_expl"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_1"]
 direction = Vector3(0, 1, 0)
 spread = 180.0
 initial_velocity_min = 6.0
 initial_velocity_max = 14.0
-gravity = Vector3(0, -5.0, 0)
+gravity = Vector3(0, -5, 0)
 scale_min = 0.2
 scale_max = 0.6
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 shading_mode = 0
-albedo_color = Color(1.0, 0.45, 0.05, 1)
+albedo_color = Color(1, 0.45, 0.05, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
 material = SubResource("StandardMaterial3D_1")
 size = Vector3(0.25, 0.25, 0.25)
 
-[node name="Explosion" type="Node3D"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6d3yd"]
+shading_mode = 0
+albedo_color = Color(1, 0.62, 0.12, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_rckmw"]
+material = SubResource("StandardMaterial3D_6d3yd")
+radius = 0.6
+height = 1.2
+radial_segments = 6
+rings = 3
+
+[node name="Explosion" type="Node3D" unique_id=1737044042]
 script = ExtResource("1_expl")
 
-[node name="GPUParticles3D" type="GPUParticles3D" parent="."]
+[node name="GPUParticles3D" type="GPUParticles3D" parent="." unique_id=2140079517]
 emitting = false
 amount = 28
 lifetime = 0.65
@@ -30,3 +41,12 @@ one_shot = true
 explosiveness = 0.95
 process_material = SubResource("ParticleProcessMaterial_1")
 draw_pass_1 = SubResource("BoxMesh_1")
+
+[node name="FireballMesh" type="MeshInstance3D" parent="." unique_id=320013467]
+transform = Transform3D(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+mesh = SubResource("SphereMesh_rckmw")
+
+[node name="FlashLight" type="OmniLight3D" parent="." unique_id=994073907]
+light_color = Color(1, 0.72, 0.22, 1)
+light_energy = 0.0
+omni_range = 12.0

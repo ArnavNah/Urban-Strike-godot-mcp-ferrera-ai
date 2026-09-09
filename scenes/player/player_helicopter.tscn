@@ -13,6 +13,46 @@
 radius = 0.95
 height = 4.2
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_savs3"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.18, 0.2, 0.22, 0.25)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_g1dng"]
+material = SubResource("StandardMaterial3D_savs3")
+top_radius = 2.65
+bottom_radius = 2.65
+height = 0.01
+radial_segments = 24
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vxykv"]
+shading_mode = 0
+albedo_color = Color(1, 0.15, 0.15, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_8pd81"]
+material = SubResource("StandardMaterial3D_vxykv")
+radius = 0.08
+height = 0.16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2d2j2"]
+shading_mode = 0
+albedo_color = Color(0.15, 1, 0.25, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_xrd4b"]
+material = SubResource("StandardMaterial3D_2d2j2")
+radius = 0.08
+height = 0.16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gwqkx"]
+shading_mode = 0
+albedo_color = Color(1, 0.8, 0.15, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_wctr3"]
+material = SubResource("StandardMaterial3D_gwqkx")
+radius = 0.08
+height = 0.16
+
 [sub_resource type="SphereShape3D" id="SphereShape3D_Detect"]
 radius = 110.0
 
@@ -72,6 +112,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -0.62)
 [node name="TopProp" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=1641788905 instance=ExtResource("2_savs3")]
 transform = Transform3D(2.8, 0, 0, 0, 2.8, 0, 0, 0, 2.8, 0, 0, 0)
 
+[node name="RotorBlurDisc" type="MeshInstance3D" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=609163453]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("CylinderMesh_g1dng")
+
 [node name="TailRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1244027535]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.68, 2.55)
 
@@ -80,6 +124,18 @@ transform = Transform3D(-2.8412401e-08, 0, 0.65, 0, 0.65, 0, -0.65, 0, -2.841240
 
 [node name="Body" parent="FlightTiltPivot/Visuals" unique_id=1461646268 instance=ExtResource("4_vxykv")]
 transform = Transform3D(-1.2239188e-07, 0, -2.8, 0, 2.8, 0, 2.8, 0, -1.2239188e-07, 0, 0, 0)
+
+[node name="NavLightPort" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=2092899897]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.85, -0.15, -0.6)
+mesh = SubResource("SphereMesh_8pd81")
+
+[node name="NavLightStarboard" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=266054811]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.85, -0.15, -0.6)
+mesh = SubResource("SphereMesh_xrd4b")
+
+[node name="NavLightTail" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=281827416]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 2.7)
+mesh = SubResource("SphereMesh_wctr3")
 
 [node name="StubWings" type="Node3D" parent="." unique_id=1441639570]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, -0.75)

@@ -82,6 +82,8 @@ func _ready() -> void:
 	success = test_survival_encounter_director_and_frustum_safety(log_lines) and success
 	append_log("Running test 31 (xp collection & progression integrity)...", log_lines)
 	success = test_xp_collection_and_progression_integrity(log_lines) and success
+	append_log("Running test 32 (dynamic strike missions & combat causality)...", log_lines)
+	success = test_dynamic_strike_missions(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -3569,3 +3571,279 @@ func test_xp_collection_and_progression_integrity(logs: Array[String]) -> bool:
 	append_log("  -> Single-kill non-level, 49/50/51 XP boundary & overflow, multi-level jumps, requisition decoupling, idempotent death/drops, and 3D altitude sweep collection verified.", logs)
 	return true
 
+func test_dynamic_strike_missions(logs: Array[String]) -> bool:
+	logs.append("[TEST] Dynamic Strike Missions & Combat Causality...")
+	var root_node := Node3D.new()
+	root_node.name = "TestBattlefieldRoot"
+	add_child(root_node)
+
+	# 1. Setup mock scene environment
+	var obj_locations := Node3D.new()
+	obj_locations.name = "ObjectiveLocations"
+	root_node.add_child(obj_locations)
+
+	var radar_marker := Marker3D.new()
+	radar_marker.name = "RadarObjective"
+	radar_marker.position = Vector3(-95.0, 0.5, -37.0)
+	obj_locations.add_child(radar_marker)
+
+	var mil_marker := Marker3D.new()
+	mil_marker.name = "MilitaryObjective"
+	mil_marker.position = Vector3(-35.0, 0.3, -35.0)
+	obj_locations.add_child(mil_marker)
+
+	var spawn_sources := Node3D.new()
+	spawn_sources.name = "GroundSpawnSources"
+	root_node.add_child(spawn_sources)
+	var north_entrance := Marker3D.new()
+	north_entrance.name = "RoadEntrance_North"
+	north_entrance.position = Vector3(0.0, 0.3, -190.0)
+	spawn_sources.add_child(north_entrance)
+
+	# Managers
+	var upgrade_mgr := UpgradeManager.new()
+	upgrade_mgr.name = "UpgradeManager"
+	upgrade_mgr.add_to_group("upgrade_manager")
+	root_node.add_child(upgrade_mgr)
+	upgrade_mgr.reset_run()
+
+	var game_mgr := GameManager.new()
+	game_mgr.name = "GameManager"
+	game_mgr.add_to_group("game_manager")
+	root_node.add_child(game_mgr)
+
+	# Player helicopter
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player := player_scene.instantiate() as CharacterBody3D
+	root_node.add_child(player)
+	player.global_position = Vector3(0.0, 15.0, 0.0)
+
+	# SpawnDirector
+	var spawn_director := SpawnDirector.new()
+	spawn_director.name = "SpawnDirector"
+	spawn_director.add_to_group("spawn_director")
+	root_node.add_child(spawn_director)
+
+	# MissionDirector
+	var mission_director := MissionDirector.new()
+	mission_director.name = "MissionDirector"
+	mission_director.auto_start_missions = false
+	root_node.add_child(mission_director)
+
+	if mission_director.current_state != MissionDirector.State.IDLE:
+		append_log("FAIL: MissionDirector initial state is not IDLE", logs)
+		root_node.queue_free()
+		return false
+
+	# -------------------------------------------------------------
+	# 2. Test Mission 1: Destroy Radar Station & SAM Network Coupling
+	# -------------------------------------------------------------
+	var sam_scene: PackedScene = load("res://scenes/enemies/sam_site.tscn")
+	var sam: SAMSite = sam_scene.instantiate() as SAMSite
+	root_node.add_child(sam)
+	sam.global_position = Vector3(-80.0, 0.0, -30.0)
+
+	var m1: StrikeMission = mission_director.start_mission_by_id("destroy_radar")
+	if not m1 or mission_director.current_state != MissionDirector.State.ACTIVE:
+		append_log("FAIL: Destroy Radar mission failed to transition to ACTIVE state", logs)
+		root_node.queue_free()
+		return false
+
+	if not sam._radar_active:
+		append_log("FAIL: SAM site did not receive radar_status_changed(true)", logs)
+		root_node.queue_free()
+		return false
+
+	var lock_active: float = sam._get_effective_lock_time()
+	var range_active: float = sam._get_effective_threat_range()
+	if lock_active > 2.0 or range_active < 80.0:
+		append_log("FAIL: SAM site active radar parameters incorrect (lock=%.2f, range=%.2f)" % [lock_active, range_active], logs)
+		root_node.queue_free()
+		return false
+
+	var hud_info := m1.update(0.2, player)
+	if hud_info.get("title") != "DESTROY RADAR" or not String(hud_info.get("detail", "")).ends_with("m"):
+		append_log("FAIL: Destroy Radar HUD telemetry format mismatch: %s" % str(hud_info), logs)
+		root_node.queue_free()
+		return false
+
+	var radar_inst: Node3D = (m1 as DestroyRadarMission).radar_station
+	if not is_instance_valid(radar_inst):
+		append_log("FAIL: Destroy Radar mission did not instantiate radar station", logs)
+		root_node.queue_free()
+		return false
+
+	var pre_level: int = upgrade_mgr.current_level
+	var pre_xp: int = upgrade_mgr.current_xp
+	var pre_req: int = upgrade_mgr.requisition_points
+	var pre_salvage: int = game_mgr.run_salvage
+
+	radar_inst.queue_free()
+	if not m1.check_completion():
+		append_log("FAIL: Destroy Radar mission failed to register completion upon radar free", logs)
+		root_node.queue_free()
+		return false
+
+	mission_director.resolve_mission(true)
+
+	if sam._radar_active:
+		append_log("FAIL: SAM site failed to transition to degraded mode after radar destroyed", logs)
+		root_node.queue_free()
+		return false
+
+	var lock_degraded: float = sam._get_effective_lock_time()
+	var range_degraded: float = sam._get_effective_threat_range()
+	if lock_degraded < 2.0 or range_degraded > 65.0:
+		append_log("FAIL: SAM site degraded parameters incorrect (lock=%.2f, range=%.2f)" % [lock_degraded, range_degraded], logs)
+		root_node.queue_free()
+		return false
+
+	var xp_gained_1: bool = (upgrade_mgr.current_level > pre_level) or (upgrade_mgr.current_xp > pre_xp)
+	if not xp_gained_1 or upgrade_mgr.requisition_points != pre_req + 1 or game_mgr.run_salvage <= pre_salvage:
+		append_log("FAIL: Destroy Radar mission rewards not awarded correctly (xp=%d->%d, req=%d->%d, salvage=%d->%d)" % [
+			pre_xp, upgrade_mgr.current_xp, pre_req, upgrade_mgr.requisition_points, pre_salvage, game_mgr.run_salvage
+		], logs)
+		root_node.queue_free()
+		return false
+
+	sam.queue_free()
+
+	# -------------------------------------------------------------
+	# 3. Test Mission 2: Destroy Jammer Convoy & Targeting Disruption
+	# -------------------------------------------------------------
+	var targeting := player.get_node_or_null("TargetingSystem") as TargetingSystem
+	var pod := player.get_node_or_null("StubWings/MissilePod") as MissilePod
+
+	var m2: StrikeMission = mission_director.start_mission_by_id("destroy_jammer")
+	if not m2 or mission_director.current_state != MissionDirector.State.ACTIVE:
+		append_log("FAIL: Jammer Convoy mission failed to transition to ACTIVE state", logs)
+		root_node.queue_free()
+		return false
+
+	var jammer_mission := m2 as JammerConvoyMission
+	var jammer_inst: Node3D = jammer_mission.jammer_unit
+	if not is_instance_valid(jammer_inst):
+		append_log("FAIL: Jammer Convoy mission did not instantiate jammer unit", logs)
+		root_node.queue_free()
+		return false
+
+	if not targeting.is_jammed() or not pod._is_jammed():
+		append_log("FAIL: TargetingSystem or MissilePod not jammed during jammer mission", logs)
+		root_node.queue_free()
+		return false
+
+	hud_info = m2.update(0.2, player)
+	if hud_info.get("title") != "DESTROY JAMMER":
+		append_log("FAIL: Jammer Convoy HUD telemetry title mismatch: %s" % str(hud_info), logs)
+		root_node.queue_free()
+		return false
+
+	pre_level = upgrade_mgr.current_level
+	pre_xp = upgrade_mgr.current_xp
+	pre_req = upgrade_mgr.requisition_points
+	pre_salvage = game_mgr.run_salvage
+
+	jammer_inst.remove_from_group("jammers")
+	jammer_inst.queue_free()
+
+	if not m2.check_completion():
+		append_log("FAIL: Jammer Convoy mission failed to register completion", logs)
+		root_node.queue_free()
+		return false
+
+	mission_director.resolve_mission(true)
+
+	if targeting.is_jammed() or pod._is_jammed():
+		append_log("FAIL: TargetingSystem or MissilePod still jammed after jammer destroyed", logs)
+		root_node.queue_free()
+		return false
+
+	var xp_gained_2: bool = (upgrade_mgr.current_level > pre_level) or (upgrade_mgr.current_xp > pre_xp)
+	if not xp_gained_2 or upgrade_mgr.requisition_points != pre_req + 1 or game_mgr.run_salvage <= pre_salvage:
+		append_log("FAIL: Jammer Convoy mission rewards not applied correctly (xp=%d->%d, req=%d->%d, salvage=%d->%d)" % [
+			pre_xp, upgrade_mgr.current_xp, pre_req, upgrade_mgr.requisition_points, pre_salvage, game_mgr.run_salvage
+		], logs)
+		root_node.queue_free()
+		return false
+
+	# -------------------------------------------------------------
+	# 4. Test Mission 3: Rescue / Secure LZ Proximity Hold & Spawn Focus
+	# -------------------------------------------------------------
+	var m3: StrikeMission = mission_director.start_mission_by_id("secure_lz")
+	if not m3 or mission_director.current_state != MissionDirector.State.ACTIVE:
+		append_log("FAIL: Secure LZ mission failed to transition to ACTIVE state", logs)
+		root_node.queue_free()
+		return false
+
+	var secure_lz: SecureLZMission = m3 as SecureLZMission
+	if not spawn_director.has_mission_focus:
+		append_log("FAIL: SpawnDirector did not receive mission focus from Secure LZ mission", logs)
+		root_node.queue_free()
+		return false
+
+	# Position player inside LZ zone (military objective is (-35, 0.3, -35), player at (-35, 12, -35))
+	player.global_position = Vector3(-35.0, 12.0, -35.0)
+	hud_info = secure_lz.update(5.0, player)
+	if secure_lz.current_hold_time != 5.0:
+		append_log("FAIL: Secure LZ hold time did not advance (expected 5.0, got %.2f)" % secure_lz.current_hold_time, logs)
+		root_node.queue_free()
+		return false
+
+	if hud_info.get("detail") != "5 / 20 SEC":
+		append_log("FAIL: Secure LZ detail string incorrect: %s" % str(hud_info.get("detail")), logs)
+		root_node.queue_free()
+		return false
+
+	# Position player outside LZ zone (150, 15, 150)
+	player.global_position = Vector3(150.0, 15.0, 150.0)
+	hud_info = secure_lz.update(5.0, player)
+	if secure_lz.current_hold_time != 5.0:
+		append_log("FAIL: Secure LZ hold time advanced while player was out of zone (got %.2f)" % secure_lz.current_hold_time, logs)
+		root_node.queue_free()
+		return false
+
+	# Return player inside LZ zone and finish hold
+	player.global_position = Vector3(-35.0, 20.0, -35.0)
+	hud_info = secure_lz.update(15.0, player)
+	if secure_lz.current_hold_time != 20.0 or not secure_lz.is_completed:
+		append_log("FAIL: Secure LZ mission did not complete at 20s (hold=%.2f, is_completed=%s)" % [secure_lz.current_hold_time, str(secure_lz.is_completed)], logs)
+		root_node.queue_free()
+		return false
+
+	pre_level = upgrade_mgr.current_level
+	pre_xp = upgrade_mgr.current_xp
+	pre_req = upgrade_mgr.requisition_points
+	pre_salvage = game_mgr.run_salvage
+
+	mission_director.resolve_mission(true)
+
+	if spawn_director.has_mission_focus:
+		append_log("FAIL: SpawnDirector mission focus was not cleared upon mission completion", logs)
+		root_node.queue_free()
+		return false
+
+	var xp_gained_3: bool = (upgrade_mgr.current_level > pre_level) or (upgrade_mgr.current_xp > pre_xp)
+	if not xp_gained_3 or upgrade_mgr.requisition_points != pre_req + 1 or game_mgr.run_salvage <= pre_salvage:
+		append_log("FAIL: Secure LZ mission rewards not applied correctly (xp=%d->%d, req=%d->%d, salvage=%d->%d)" % [
+			pre_xp, upgrade_mgr.current_xp, pre_req, upgrade_mgr.requisition_points, pre_salvage, game_mgr.run_salvage
+		], logs)
+		root_node.queue_free()
+		return false
+
+	# -------------------------------------------------------------
+	# 5. Continuous Combat & Non-Interference Verification
+	# -------------------------------------------------------------
+	spawn_director.set_mission_focus(Vector3(50, 0, 50))
+	if not spawn_director.has_mission_focus:
+		append_log("FAIL: SpawnDirector focus hook broken", logs)
+		root_node.queue_free()
+		return false
+	spawn_director.clear_mission_focus()
+	if spawn_director.has_mission_focus:
+		append_log("FAIL: SpawnDirector clear focus broken", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Dynamic strike missions, radar/SAM causality, jammer EW interference, LZ 3D proximity hold, and continuous horde focus verified.", logs)
+	return true

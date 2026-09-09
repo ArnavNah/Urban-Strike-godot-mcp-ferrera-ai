@@ -2,5 +2,6 @@
 
 [resource]
 resource_name = "Metal"
-albedo_color = Color(0.39215687, 0.45882353, 0.45882353, 1)
-roughness = 0.92
+albedo_color = Color(0.35, 0.44, 0.52, 1)
+metallic = 0.45
+roughness = 0.75

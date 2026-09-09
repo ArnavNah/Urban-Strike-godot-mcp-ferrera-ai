@@ -45,6 +45,10 @@ var _max_missiles: int = 6
 var _missile_warning_timer: float = 0.0
 var _last_lock_progress: float = 0.0
 var _is_missile_locked: bool = false
+var mission_card: PanelContainer = null
+var mission_title_label: Label = null
+var mission_detail_label: Label = null
+var _mission_banner_timer: float = 0.0
 
 func _ready() -> void:
 	_player = get_tree().get_first_node_in_group("player") as Node3D
@@ -102,6 +106,16 @@ func _ready() -> void:
 			eb.jammer_status_changed.connect(_on_jammer_status_changed)
 		if eb.has_signal("border_warning_changed"):
 			eb.border_warning_changed.connect(_on_border_warning_changed)
+		if eb.has_signal("mission_started"):
+			eb.mission_started.connect(_on_mission_started)
+		if eb.has_signal("mission_updated"):
+			eb.mission_updated.connect(_on_mission_updated)
+		if eb.has_signal("mission_completed"):
+			eb.mission_completed.connect(_on_mission_completed)
+		if eb.has_signal("mission_failed"):
+			eb.mission_failed.connect(_on_mission_failed)
+
+	_setup_mission_card()
 
 	if _player and "missile_pod" in _player and _player.missile_pod:
 		var pod: Node = _player.missile_pod
@@ -111,6 +125,11 @@ func _ready() -> void:
 	_update_missile_status_display()
 
 func _process(delta: float) -> void:
+	if _mission_banner_timer > 0.0:
+		_mission_banner_timer -= delta
+		if _mission_banner_timer <= 0.0 and mission_card:
+			mission_card.visible = false
+
 	if not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player") as Node3D
 		return
@@ -263,25 +282,32 @@ func _update_missile_status_display() -> void:
 	if not missile_status:
 		return
 
+	var pips := ""
+	for i in range(_max_missiles):
+		if i < _missile_ammo:
+			pips += "▲ "
+		else:
+			pips += "△ "
+
 	if _missile_warning_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d  [ ⚠ NO MISSILES ⚠ ]" % [_missile_ammo, _max_missiles]
+		missile_status.text = "MISSILES  %d / %d  [%s]  [ ⚠ NO MISSILES ⚠ ]" % [_missile_ammo, _max_missiles, pips.strip_edges()]
 		missile_status.modulate = Color(1.0, 0.2, 0.2, 1.0)
 		return
 
 	if _missile_ammo <= 0:
-		missile_status.text = "MISSILES  0 / %d  [ EMPTY ]" % _max_missiles
+		missile_status.text = "MISSILES  0 / %d  [%s]  [ EMPTY ]" % [_max_missiles, pips.strip_edges()]
 		missile_status.modulate = Color(0.85, 0.25, 0.25, 0.75) # Dim red
 		return
 
 	var jam_suffix := " [EW JAMMED]" if _is_jammed else ""
 	if _is_missile_locked:
-		missile_status.text = "MISSILES  %d / %d  [ LOCKED - RMB ]" % [_missile_ammo, _max_missiles]
+		missile_status.text = "MISSILES  %d / %d  [%s]  [ LOCKED - RMB ]" % [_missile_ammo, _max_missiles, pips.strip_edges()]
 		missile_status.modulate = Color(0.2, 1.0, 0.3, 1.0)
 	elif _last_lock_progress > 0.05:
-		missile_status.text = "MISSILES  %d / %d  [ LOCKING %d%%%s ]" % [_missile_ammo, _max_missiles, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.text = "MISSILES  %d / %d  [%s]  [ LOCKING %d%%%s ]" % [_missile_ammo, _max_missiles, pips.strip_edges(), int(_last_lock_progress * 100.0), jam_suffix]
 		missile_status.modulate = Color(1.0, 0.4, 0.2) if _is_jammed else Color(1.0, 0.8, 0.2)
 	else:
-		missile_status.text = "MISSILES  %d / %d  [ READY%s ]" % [_missile_ammo, _max_missiles, jam_suffix]
+		missile_status.text = "MISSILES  %d / %d  [%s]  [ READY%s ]" % [_missile_ammo, _max_missiles, pips.strip_edges(), jam_suffix]
 		missile_status.modulate = Color(1.0, 0.5, 0.1) if _is_jammed else Color(0.85, 0.9, 0.95)
 
 func _on_missile_ammo_changed(current: int, maximum: int) -> void:
@@ -336,9 +362,13 @@ func _on_wave_started(wave_num: int, announcement: String) -> void:
 	if wave_label:
 		wave_label.text = "STAGE %d" % wave_num
 	if wave_banner:
-		wave_banner.text = announcement
-		wave_banner.visible = true
-		_banner_timer = 4.0
+		var wave_hud := get_tree().get_first_node_in_group("wave_hud")
+		if wave_hud:
+			wave_banner.visible = false
+		else:
+			wave_banner.text = announcement
+			wave_banner.visible = true
+			_banner_timer = 4.0
 
 func _on_wave_progress(remaining: int, _total: int) -> void:
 	if wave_progress_label:
@@ -379,3 +409,110 @@ func _on_border_warning_changed(is_warning: bool, _return_direction: Vector3, di
 		border_warning_banner.visible = is_warning
 	if is_warning and border_warning_label:
 		border_warning_label.text = "⚠ WARNING: LEAVING MISSION AIRSPACE ⚠\nRETURN TO COMBAT AREA (%.0fm to perimeter)" % maxf(0.0, distance_to_edge)
+
+func _setup_mission_card() -> void:
+	if not mission_card:
+		mission_card = find_child("MissionCard", true, false) as PanelContainer
+	if mission_card:
+		if not mission_title_label:
+			mission_title_label = mission_card.find_child("MissionTitleLabel", true, false) as Label
+		if not mission_detail_label:
+			mission_detail_label = mission_card.find_child("MissionDetailLabel", true, false) as Label
+		return
+
+	mission_card = PanelContainer.new()
+	mission_card.name = "MissionCard"
+	mission_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mission_card.offset_left = 16.0
+	mission_card.offset_top = 132.0
+	mission_card.offset_right = 296.0
+	mission_card.offset_bottom = 188.0
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.08, 0.12, 0.82)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.24, 0.38, 0.48, 0.65)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_right = 6
+	style.corner_radius_bottom_left = 6
+	style.content_margin_left = 12.0
+	style.content_margin_top = 6.0
+	style.content_margin_right = 12.0
+	style.content_margin_bottom = 6.0
+	mission_card.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	mission_card.add_child(vbox)
+
+	mission_title_label = Label.new()
+	mission_title_label.name = "MissionTitleLabel"
+	mission_title_label.text = "STRIKE MISSION"
+	mission_title_label.add_theme_font_size_override("font_size", 13)
+	mission_title_label.modulate = Color(0.22, 0.98, 0.82)
+	vbox.add_child(mission_title_label)
+
+	mission_detail_label = Label.new()
+	mission_detail_label.name = "MissionDetailLabel"
+	mission_detail_label.text = "STANDBY"
+	mission_detail_label.add_theme_font_size_override("font_size", 12)
+	mission_detail_label.modulate = Color(1.0, 0.85, 0.3)
+	vbox.add_child(mission_detail_label)
+
+	add_child(mission_card)
+	mission_card.visible = false
+
+func _on_mission_started(_id: String, title: String, _desc: String, _pos: Vector3) -> void:
+	if not mission_card:
+		_setup_mission_card()
+	if mission_card:
+		mission_card.visible = true
+	if mission_title_label:
+		mission_title_label.text = title
+		mission_title_label.modulate = Color(0.22, 0.98, 0.82)
+	if mission_detail_label:
+		mission_detail_label.text = "IN PROGRESS"
+		mission_detail_label.modulate = Color(1.0, 1.0, 1.0)
+	_mission_banner_timer = 0.0
+
+func _on_mission_updated(_id: String, title: String, detail_text: String, _progress: float) -> void:
+	if not mission_card:
+		_setup_mission_card()
+	if mission_card and _mission_banner_timer <= 0.0:
+		mission_card.visible = true
+	if mission_title_label and _mission_banner_timer <= 0.0:
+		mission_title_label.text = title
+		mission_title_label.modulate = Color(0.22, 0.98, 0.82)
+	if mission_detail_label and _mission_banner_timer <= 0.0:
+		mission_detail_label.text = detail_text
+		mission_detail_label.modulate = Color(1.0, 0.85, 0.3)
+
+func _on_mission_completed(_id: String, title: String, reward_text: String) -> void:
+	if not mission_card:
+		_setup_mission_card()
+	if mission_card:
+		mission_card.visible = true
+	if mission_title_label:
+		mission_title_label.text = "%s // COMPLETE" % title
+		mission_title_label.modulate = Color(0.3, 1.0, 0.45)
+	if mission_detail_label:
+		mission_detail_label.text = reward_text
+		mission_detail_label.modulate = Color(1.0, 0.9, 0.4)
+	_mission_banner_timer = 3.5
+
+func _on_mission_failed(_id: String, title: String, reason: String) -> void:
+	if not mission_card:
+		_setup_mission_card()
+	if mission_card:
+		mission_card.visible = true
+	if mission_title_label:
+		mission_title_label.text = "%s // FAILED" % title
+		mission_title_label.modulate = Color(1.0, 0.35, 0.35)
+	if mission_detail_label:
+		mission_detail_label.text = reason if not reason.is_empty() else "TIME EXPIRED"
+		mission_detail_label.modulate = Color(0.85, 0.85, 0.85)
+	_mission_banner_timer = 3.0

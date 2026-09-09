@@ -231,11 +231,38 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	if not is_alive:
 		return
 	current_health = maxf(0.0, current_health - amount)
+	_trigger_damage_flash()
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
 		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, amount >= 30.0)
 	if current_health <= 0.0:
 		_die()
+
+var _visual_meshes: Array[MeshInstance3D] = []
+static var _flash_mat: StandardMaterial3D = null
+
+func _collect_visual_meshes(node: Node) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			_visual_meshes.append(child as MeshInstance3D)
+		_collect_visual_meshes(child)
+
+func _trigger_damage_flash() -> void:
+	if _visual_meshes.is_empty():
+		_collect_visual_meshes(self)
+	if not _flash_mat:
+		_flash_mat = StandardMaterial3D.new()
+		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
+	for m in _visual_meshes:
+		if is_instance_valid(m):
+			m.material_override = _flash_mat
+	if is_inside_tree():
+		get_tree().create_timer(0.06, false).timeout.connect(func():
+			for m in _visual_meshes:
+				if is_instance_valid(m) and m.material_override == _flash_mat:
+					m.material_override = null
+		)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
@@ -254,7 +281,7 @@ func _die() -> void:
 	_spawn_xp()
 
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 1.2, 0))
+		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 1.2, 0), 1.6)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:

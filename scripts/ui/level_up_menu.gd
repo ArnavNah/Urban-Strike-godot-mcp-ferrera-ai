@@ -99,33 +99,57 @@ func finish_selection() -> void:
 
 func _create_card_widget(data: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(240, 320)
+	panel.custom_minimum_size = Vector2(250, 340)
 	
 	var style := StyleBoxFlat.new()
-	if data.get("is_evolution", false):
-		style.bg_color = Color(0.2, 0.12, 0.05, 0.96)
-		style.border_color = Color(1.0, 0.6, 0.1, 1.0)
+	style.content_margin_left = 18.0
+	style.content_margin_right = 18.0
+	style.content_margin_top = 18.0
+	style.content_margin_bottom = 18.0
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+
+	var is_evo: bool = data.get("is_evolution", false)
+	if is_evo:
+		style.bg_color = Color(0.16, 0.10, 0.04, 0.96)
+		style.border_color = Color(1.0, 0.72, 0.15, 1.0)
+		style.border_width_left = 3
+		style.border_width_top = 3
+		style.border_width_right = 3
+		style.border_width_bottom = 3
 	else:
-		style.bg_color = Color(0.1, 0.14, 0.18, 0.96)
-		style.border_color = Color(0.25, 0.8, 0.7, 0.9)
-	style.border_width_bottom = 3
-	style.border_width_top = 3
-	style.border_width_left = 3
-	style.border_width_right = 3
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
+		style.bg_color = Color(0.08, 0.11, 0.15, 0.96)
+		style.border_color = Color(0.24, 0.75, 0.68, 0.85)
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
 	panel.add_theme_stylebox_override("panel", style)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", 10)
 	panel.add_child(vbox)
 
+	var raw_cat: String = str(data.get("category", "UPGRADE")).to_upper()
+	var cat_icon := "⚙ "
+	if is_evo:
+		cat_icon = "★ "
+	elif raw_cat.contains("WEAPON"):
+		cat_icon = "⚡ "
+	elif raw_cat.contains("AIRFRAME"):
+		cat_icon = "🛡 "
+	elif raw_cat.contains("SUPPORT"):
+		cat_icon = "🚁 "
+	elif raw_cat.contains("DEFENSE"):
+		cat_icon = "🔰 "
+
 	var cat_label := Label.new()
-	cat_label.text = "[ " + data.get("category", "UPGRADE").to_upper() + " ]"
+	cat_label.text = "[ " + cat_icon + raw_cat + " ]"
 	cat_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cat_label.modulate = Color(0.4, 0.9, 0.8)
+	cat_label.modulate = Color(1.0, 0.85, 0.3) if is_evo else Color(0.35, 0.92, 0.82)
+	cat_label.add_theme_font_size_override("font_size", 13)
 	vbox.add_child(cat_label)
 
 	var name_label := Label.new()
@@ -133,6 +157,8 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.add_theme_font_size_override("font_size", 18)
+	if is_evo:
+		name_label.modulate = Color(1.0, 0.95, 0.7)
 	vbox.add_child(name_label)
 
 	var sep := HSeparator.new()
@@ -141,13 +167,15 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 	var benefit_label := Label.new()
 	benefit_label.text = ("PRO: " if not str(data.get("id", "")).is_empty() else "") + data.get("benefit", "")
 	benefit_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	benefit_label.modulate = Color(0.3, 1.0, 0.4)
+	benefit_label.modulate = Color(0.3, 1.0, 0.45)
+	benefit_label.add_theme_font_size_override("font_size", 13)
 	vbox.add_child(benefit_label)
 
 	var trade_label := Label.new()
 	trade_label.text = ("COST: " if not str(data.get("id", "")).is_empty() else "") + data.get("tradeoff", "")
 	trade_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	trade_label.modulate = Color(1.0, 0.5, 0.3)
+	trade_label.modulate = Color(1.0, 0.55, 0.35)
+	trade_label.add_theme_font_size_override("font_size", 13)
 	vbox.add_child(trade_label)
 
 	var spacer := Control.new()
@@ -155,7 +183,7 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 	vbox.add_child(spacer)
 
 	var btn := Button.new()
-	btn.text = "CONTINUE" if str(data.get("id", "")).is_empty() else "SELECT UPGRADE"
+	btn.text = "CONTINUE" if str(data.get("id", "")).is_empty() else ("SELECT EVOLUTION" if is_evo else "SELECT UPGRADE")
 	btn.custom_minimum_size = Vector2(0, 42)
 	btn.pressed.connect(_on_card_selected.bind(data.get("id", "")))
 	vbox.add_child(btn)

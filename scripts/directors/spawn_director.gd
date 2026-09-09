@@ -40,6 +40,8 @@ var _offscreen_cleanup_timer: float = 0.0
 var _enemy_offscreen_durations: Dictionary = {}
 var _active_sectors: Array[int] = [0, 2] # 2 active non-adjacent sectors to preserve escape routes
 var _sector_rotation_timer: float = 8.0
+var has_mission_focus: bool = false
+var mission_focus_position: Vector3 = Vector3.ZERO
 
 @export_group("Continuous Survival Tuning")
 @export var is_continuous_mode: bool = true
@@ -890,7 +892,28 @@ func _process_continuous_survival(delta: float) -> void:
 	if not stream_timer and not formation_timer:
 		_process_continuous_spawning(delta)
 
+func set_mission_focus(pos: Vector3) -> void:
+	has_mission_focus = true
+	mission_focus_position = pos
+	_apply_mission_sector_focus()
+
+func clear_mission_focus() -> void:
+	has_mission_focus = false
+	mission_focus_position = Vector3.ZERO
+
+func _apply_mission_sector_focus() -> void:
+	var player := _get_player()
+	var p_pos := player.global_position if is_instance_valid(player) else Vector3.ZERO
+	var to_mission := mission_focus_position - p_pos
+	var angle := atan2(to_mission.x, to_mission.z)
+	var focus_sec := posmod(int(round((angle + PI) / (TAU / 8.0))), 8)
+	var second_sec := (focus_sec + 2) % 8
+	_active_sectors = [focus_sec, second_sec]
+
 func _rotate_active_sectors() -> void:
+	if has_mission_focus:
+		_apply_mission_sector_focus()
+		return
 	var old_first := _active_sectors[0] if _active_sectors.size() > 0 else 0
 	var new_first := (old_first + randi_range(2, 6)) % 8
 	var offsets: Array[int] = [2, 3, 4, 5]

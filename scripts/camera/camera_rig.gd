@@ -29,6 +29,7 @@ extends Node3D
 @export var vertical_camera_response: float = 5.5
 @export var look_response: float = 9.0
 @export var camera_roll_scale: float = 0.15
+@export var camera_shake_enabled: bool = true
 
 var smoothed_camera_position: Vector3 = Vector3.ZERO
 var smoothed_look_position: Vector3 = Vector3.ZERO
@@ -178,11 +179,15 @@ func _on_shake_requested(trauma_amount: float) -> void:
 func _apply_camera_shake(delta: float) -> void:
 	if not camera:
 		return
+	if not camera_shake_enabled:
+		camera.transform.origin = Vector3.ZERO
+		_shake_trauma = 0.0
+		return
 	if _shake_trauma > 0.0:
 		var shake_amount := _shake_trauma * _shake_trauma
 		var offset_x := (randf() * 2.0 - 1.0) * shake_amount * 0.3
 		var offset_y := (randf() * 2.0 - 1.0) * shake_amount * 0.3
 		camera.transform.origin = Vector3(offset_x, offset_y, 0.0)
-		_shake_trauma = maxf(0.0, _shake_trauma - delta * 2.0)
+		_shake_trauma = maxf(0.0, _shake_trauma - delta * 2.5)
 	else:
 		camera.transform.origin = Vector3.ZERO
