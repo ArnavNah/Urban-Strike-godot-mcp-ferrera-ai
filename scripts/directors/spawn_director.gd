@@ -5,7 +5,7 @@ extends Node
 ## Manages ground/air threat budgets, active population caps, air corridors,
 ## and tactical battlefield formations (air, ground, combined arms).
 
-@export var arena_half_extents: float = 145.0
+@export var arena_half_extents: float = 215.0
 @export var recovery_pause_duration: float = 5.5
 @export var autostart_wave: bool = false
 
@@ -22,6 +22,24 @@ extends Node
 @export var cap_sam: int = 3
 @export var cap_mortar: int = 2
 @export var cap_support: int = 1
+
+@export_group("Encounter System Configuration")
+@export var encounter_config: EncounterConfig = null
+
+enum EncounterState {
+	WARMUP,
+	STREAMING,
+	SURGE,
+	RECOVERY
+}
+
+var encounter_state: EncounterState = EncounterState.WARMUP
+var recovery_timer_remaining: float = 0.0
+var total_despawns: int = 0
+var _offscreen_cleanup_timer: float = 0.0
+var _enemy_offscreen_durations: Dictionary = {}
+var _active_sectors: Array[int] = [0, 2] # 2 active non-adjacent sectors to preserve escape routes
+var _sector_rotation_timer: float = 8.0
 
 @export_group("Continuous Survival Tuning")
 @export var is_continuous_mode: bool = true
@@ -222,6 +240,7 @@ var wave_table: Array[Dictionary] = [
 
 func _ready() -> void:
 	add_to_group("spawn_director")
+	_init_encounter_config()
 	_setup_spawn_nodes_and_timers()
 	if EventBus:
 		EventBus.enemy_destroyed.connect(_on_enemy_destroyed)
@@ -229,6 +248,17 @@ func _ready() -> void:
 			EventBus.radar_status_changed.connect(_on_radar_status_changed)
 	if autostart_wave:
 		get_tree().create_timer(1.0).timeout.connect(_on_intro_timeout)
+
+func _init_encounter_config() -> void:
+	if not encounter_config:
+		if is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Battlefield":
+			if ResourceLoader.exists("res://resources/directors/default_encounter_config.tres"):
+				encounter_config = load("res://resources/directors/default_encounter_config.tres") as EncounterConfig
+	if encounter_config:
+		base_ground_budget_rate = encounter_config.base_ground_budget_rate
+		base_air_budget_rate = encounter_config.base_air_budget_rate
+		surge_interval = encounter_config.surge_interval_min
+		surge_duration = encounter_config.surge_duration
 
 func _setup_spawn_nodes_and_timers() -> void:
 	if not ground_zones_node or (is_inside_tree() and ground_zones_node.get_child_count() == 0):
@@ -392,15 +422,25 @@ func get_active_rooftop_count() -> int:
 ## Early game: 1.5 - 2.5s. Mid game: 1.0 - 2.0s. Late game: 0.7 - 1.5s.
 ## Deficit recovery: recovers gradually at 0.85 - 1.2s without instant burst dumping.
 func _get_next_stream_interval(stage: int, is_behind_target: bool) -> float:
+	var base_int: float
 	if is_behind_target:
-		return randf_range(0.85, 1.2)
-	match stage:
-		1:
-			return randf_range(1.5, 2.5)
-		2, 3:
-			return randf_range(1.0, 2.0)
+		base_int = randf_range(0.85, 1.2)
+	else:
+		match stage:
+			1:
+				base_int = randf_range(1.5, 2.5)
+			2, 3:
+				base_int = randf_range(1.0, 2.0)
+			_:
+				base_int = randf_range(0.7, 1.5)
+
+	match encounter_state:
+		EncounterState.SURGE:
+			return base_int * 0.60
+		EncounterState.RECOVERY:
+			return base_int * 2.8
 		_:
-			return randf_range(0.7, 1.5)
+			return base_int
 
 func _on_stream_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
@@ -448,13 +488,18 @@ func _on_formation_timer_timeout() -> void:
 func _on_surge_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
 		return
-	surge_timer_duration_active = surge_duration
-	continuous_ground_budget += 45.0
-	continuous_air_budget += 25.0
+	encounter_state = EncounterState.SURGE
+	surge_timer_duration_active = encounter_config.surge_duration if encounter_config else surge_duration
+	var bonus_g: float = encounter_config.surge_budget_bonus_ground if encounter_config else 50.0
+	var bonus_a: float = encounter_config.surge_budget_bonus_air if encounter_config else 30.0
+	continuous_ground_budget += bonus_g
+	continuous_air_budget += bonus_a
 	if EventBus:
 		EventBus.wave_started.emit(current_wave, "⚠ WARNING: HOSTILE HORDE SURGE INBOUND ⚠")
+	var s_min: float = encounter_config.surge_interval_min if encounter_config else 75.0
+	var s_max: float = encounter_config.surge_interval_max if encounter_config else 90.0
 	if surge_timer:
-		surge_timer.wait_time = surge_interval + randf_range(-10.0, 15.0)
+		surge_timer.wait_time = randf_range(s_min, s_max)
 
 func _on_intro_timeout() -> void:
 	if is_inside_tree() and not is_queued_for_deletion() and not is_wave_active:
@@ -626,25 +671,52 @@ func get_survival_stage() -> int:
 		return 6 # 15+ min: Extreme
 
 func get_active_population_cap() -> int:
-	var stage := get_survival_stage()
-	match stage:
-		1: return 24
-		2: return 45
-		3: return 65
-		4: return 80
-		5: return 95
-		6: return 120
-		_: return 35
+	if not encounter_config:
+		var stage := get_survival_stage()
+		match stage:
+			1: return 24
+			2: return 45
+			3: return 65
+			4: return 80
+			5: return 95
+			6: return 120
+			_: return 35
+	if elapsed_survival_time < encounter_config.warmup_duration:
+		return encounter_config.warmup_ground_cap + encounter_config.warmup_air_cap
+	var progress := clampf(elapsed_survival_time / encounter_config.escalation_duration, 0.0, 1.0)
+	var max_total: int = encounter_config.max_ground_cap + encounter_config.max_air_cap
+	return mini(int(lerpf(float(encounter_config.warmup_ground_cap + encounter_config.warmup_air_cap), float(max_total), progress)), encounter_config.global_active_cap)
+
+func get_ground_population_cap() -> int:
+	if not encounter_config:
+		return 14
+	if elapsed_survival_time < encounter_config.warmup_duration:
+		return encounter_config.warmup_ground_cap
+	var progress := clampf(elapsed_survival_time / encounter_config.escalation_duration, 0.0, 1.0)
+	return int(lerpf(float(encounter_config.warmup_ground_cap), float(encounter_config.max_ground_cap), progress))
+
+func get_air_population_cap() -> int:
+	if not encounter_config:
+		return 6
+	if elapsed_survival_time < encounter_config.warmup_duration:
+		return encounter_config.warmup_air_cap
+	var progress := clampf(elapsed_survival_time / encounter_config.escalation_duration, 0.0, 1.0)
+	return int(lerpf(float(encounter_config.warmup_air_cap), float(encounter_config.max_air_cap), progress))
 
 func get_target_active_count() -> int:
-	if elapsed_survival_time < 120.0:
-		return int(lerpf(16.0, 24.0, elapsed_survival_time / 120.0))
-	elif elapsed_survival_time < 300.0:
-		return int(lerpf(25.0, 38.0, (elapsed_survival_time - 120.0) / 180.0))
-	elif elapsed_survival_time < 480.0:
-		return int(lerpf(38.0, 50.0, (elapsed_survival_time - 300.0) / 180.0))
-	else:
-		return int(lerpf(50.0, 68.0, clampf((elapsed_survival_time - 480.0) / 360.0, 0.0, 1.0)))
+	if not encounter_config:
+		if elapsed_survival_time < 120.0:
+			return int(lerpf(16.0, 24.0, elapsed_survival_time / 120.0))
+		elif elapsed_survival_time < 300.0:
+			return int(lerpf(25.0, 38.0, (elapsed_survival_time - 120.0) / 180.0))
+		elif elapsed_survival_time < 480.0:
+			return int(lerpf(38.0, 50.0, (elapsed_survival_time - 300.0) / 180.0))
+		else:
+			return int(lerpf(50.0, 68.0, clampf((elapsed_survival_time - 480.0) / 360.0, 0.0, 1.0)))
+	var cap := get_active_population_cap()
+	if elapsed_survival_time < encounter_config.warmup_duration:
+		return maxi(2, int(float(cap) * 0.55))
+	return maxi(4, int(float(cap) * 0.85))
 
 func get_living_enemy_count() -> int:
 	if EnemyRegistry.instance:
@@ -714,48 +786,99 @@ func apply_elite_modifier(enemy: Node3D) -> void:
 func _process_continuous_survival(delta: float) -> void:
 	elapsed_survival_time += delta
 
-	# Surge calculation
-	var surge_active := false
-	if surge_timer_duration_active > 0.0:
-		surge_timer_duration_active -= delta
-		surge_active = true
-	elif elapsed_survival_time >= next_surge_time:
-		surge_timer_duration_active = surge_duration
-		surge_active = true
-		next_surge_time = elapsed_survival_time + surge_interval + randf_range(-10.0, 15.0)
-		continuous_ground_budget += 45.0
-		continuous_air_budget += 25.0
-		if EventBus:
-			EventBus.wave_started.emit(current_wave, "⚠ WARNING: HOSTILE HORDE SURGE INBOUND ⚠")
+	var warmup_dur: float = encounter_config.warmup_duration if encounter_config else 25.0
+	var surge_dur: float = encounter_config.surge_duration if encounter_config else 15.0
+	var breather_dur: float = encounter_config.recovery_breather_duration if encounter_config else 10.0
+	var s_min: float = encounter_config.surge_interval_min if encounter_config else 75.0
+	var s_max: float = encounter_config.surge_interval_max if encounter_config else 90.0
 
+	# 1. Encounter State Machine: WARMUP -> STREAMING <-> SURGE -> RECOVERY -> STREAMING
+	match encounter_state:
+		EncounterState.WARMUP:
+			if elapsed_survival_time >= warmup_dur:
+				encounter_state = EncounterState.STREAMING
+				next_surge_time = elapsed_survival_time + randf_range(s_min, s_max)
+		EncounterState.STREAMING:
+			if elapsed_survival_time >= next_surge_time:
+				encounter_state = EncounterState.SURGE
+				surge_timer_duration_active = surge_dur
+				var bonus_g: float = encounter_config.surge_budget_bonus_ground if encounter_config else 50.0
+				var bonus_a: float = encounter_config.surge_budget_bonus_air if encounter_config else 30.0
+				continuous_ground_budget += bonus_g
+				continuous_air_budget += bonus_a
+				if EventBus:
+					EventBus.wave_started.emit(current_wave, "⚠ WARNING: HOSTILE HORDE SURGE INBOUND ⚠")
+		EncounterState.SURGE:
+			surge_timer_duration_active -= delta
+			if surge_timer_duration_active <= 0.0:
+				encounter_state = EncounterState.RECOVERY
+				recovery_timer_remaining = breather_dur
+				if EventBus:
+					EventBus.wave_started.emit(current_wave, "TACTICAL BREATHER // GATHER SALVAGE & REPOSITION")
+		EncounterState.RECOVERY:
+			recovery_timer_remaining -= delta
+			if recovery_timer_remaining <= 0.0:
+				encounter_state = EncounterState.STREAMING
+				next_surge_time = elapsed_survival_time + randf_range(s_min, s_max)
 
-	# Budget accumulation scaling
-	var time_mult := 1.0 + (elapsed_survival_time / 140.0)
-	if surge_active:
-		time_mult *= 2.5
+	# 2. Sector Rotation (preserves 2 active non-adjacent sectors for escape routes)
+	_sector_rotation_timer -= delta
+	if _sector_rotation_timer <= 0.0:
+		_rotate_active_sectors()
+		_sector_rotation_timer = randf_range(7.0, 11.0)
+
+	# 3. Power-curve budget accumulation scaling
+	var esc_dur: float = encounter_config.escalation_duration if encounter_config else 300.0
+	var power_val: float = encounter_config.budget_growth_power if encounter_config else 1.35
+	var progress := elapsed_survival_time / esc_dur
+	var time_mult := pow(1.0 + progress, power_val)
+
+	var state_mult := 1.0
+	match encounter_state:
+		EncounterState.WARMUP:
+			state_mult = 0.55
+		EncounterState.SURGE:
+			state_mult = 2.2
+		EncounterState.RECOVERY:
+			state_mult = encounter_config.recovery_budget_rate_mult if encounter_config else 0.30
+		EncounterState.STREAMING:
+			state_mult = 1.0
 
 	var diff_scale := 1.0
-	var gm := get_tree().get_first_node_in_group("game_manager")
+	var gm := get_tree().get_first_node_in_group("game_manager") if is_inside_tree() else null
 	if gm and "difficulty_scale" in gm:
 		diff_scale = float(gm.difficulty_scale)
 
-	continuous_ground_budget += base_ground_budget_rate * time_mult * diff_scale * delta
-	continuous_air_budget += base_air_budget_rate * time_mult * diff_scale * delta
+	continuous_ground_budget += base_ground_budget_rate * time_mult * state_mult * diff_scale * delta
+	continuous_air_budget += base_air_budget_rate * time_mult * state_mult * diff_scale * delta
 
-	# Dynamic CombatDirector attack slot scaling
+	# Cap accumulated budget to prevent runaway stockpiles during peaceful lulls
+	var max_ground_b: float = 120.0 * time_mult
+	var max_air_b: float = 60.0 * time_mult
+	continuous_ground_budget = minf(continuous_ground_budget, max_ground_b)
+	continuous_air_budget = minf(continuous_air_budget, max_air_b)
+
+	# 4. Offscreen distant enemy cleanup (every ~2 seconds)
+	var cleanup_interval: float = encounter_config.offscreen_cleanup_check_interval if encounter_config else 2.0
+	_offscreen_cleanup_timer -= delta
+	if _offscreen_cleanup_timer <= 0.0:
+		_offscreen_cleanup_timer = cleanup_interval
+		_process_offscreen_cleanup()
+
+	# 5. Dynamic CombatDirector attack slot scaling
 	if CombatDirector.instance:
 		var stage := get_survival_stage()
 		var g_slots := mini(3 + stage, 6)
 		var a_slots := 1 if stage == 1 else mini(1 + stage, 4)
 		CombatDirector.instance.set_wave_limits(g_slots, a_slots)
 
-	# Check scheduled encounters
+	# 6. Check scheduled encounters
 	_check_scheduled_events()
 
-	# Process periodic authored pickup spawning
+	# 7. Process periodic authored pickup spawning
 	_process_pickup_spawning(delta)
 
-	# Periodic rooftop threat check
+	# 8. Periodic rooftop threat check
 	_rooftop_check_timer -= delta
 	if _rooftop_check_timer <= 0.0:
 		_rooftop_check_timer = randf_range(22.0, 32.0)
@@ -763,9 +886,278 @@ func _process_continuous_survival(delta: float) -> void:
 		var p_pos := player.global_position if player else Vector3.ZERO
 		spawn_rooftop_threat(get_survival_stage(), p_pos)
 
-	# Process continuous spawning of formations and streams (fallback when timers are not used)
+	# 9. Process continuous spawning of formations and streams (fallback when timers are not used)
 	if not stream_timer and not formation_timer:
 		_process_continuous_spawning(delta)
+
+func _rotate_active_sectors() -> void:
+	var old_first := _active_sectors[0] if _active_sectors.size() > 0 else 0
+	var new_first := (old_first + randi_range(2, 6)) % 8
+	var offsets: Array[int] = [2, 3, 4, 5]
+	var offset: int = offsets.pick_random()
+	var new_second: int = (new_first + offset) % 8
+	_active_sectors = [new_first, new_second]
+
+func is_position_in_camera_view(pos: Vector3, margin_px: float = 100.0) -> bool:
+	if not is_inside_tree():
+		return false
+	var vp := get_viewport()
+	if not vp:
+		return false
+	var cam := vp.get_camera_3d()
+	if not cam:
+		return false
+	if cam.is_position_behind(pos):
+		return false
+
+	var cam_fwd := -cam.global_transform.basis.z
+	var near_dist: float = maxf(cam.near, 0.1)
+	if cam_fwd.dot(pos - cam.global_position) <= near_dist:
+		return false
+
+	var vp_rect := vp.get_visible_rect()
+	var expanded_rect := Rect2(
+		-margin_px,
+		-margin_px,
+		vp_rect.size.x + margin_px * 2.0,
+		vp_rect.size.y + margin_px * 2.0
+	)
+	var screen_pos := cam.unproject_position(pos)
+	if expanded_rect.has_point(screen_pos):
+		return true
+
+	# Check lateral/vertical bounding extents of vehicles/aircraft to prevent pop-in of vehicle edges
+	var bounding_offsets: Array[Vector3] = [
+		Vector3(4.0, 0.0, 0.0),
+		Vector3(-4.0, 0.0, 0.0),
+		Vector3(0.0, 0.0, 4.0),
+		Vector3(0.0, 0.0, -4.0),
+		Vector3(0.0, 3.0, 0.0)
+	]
+	for off: Vector3 in bounding_offsets:
+		var p: Vector3 = pos + off
+		if not cam.is_position_behind(p) and cam_fwd.dot(p - cam.global_position) > near_dist:
+			var sp := cam.unproject_position(p)
+			if expanded_rect.has_point(sp):
+				return true
+	return false
+
+func _get_world_direct_space_state() -> PhysicsDirectSpaceState3D:
+	if is_inside_tree():
+		var vp := get_viewport()
+		if vp and vp.find_world_3d() and vp.find_world_3d().direct_space_state:
+			return vp.find_world_3d().direct_space_state
+	return null
+
+func _validate_ground_clearance(pos: Vector3) -> Dictionary:
+	var space := _get_world_direct_space_state()
+	var ground_y := 0.0
+	if space:
+		var ray_query := PhysicsRayQueryParameters3D.new()
+		ray_query.from = Vector3(pos.x, 60.0, pos.z)
+		ray_query.to = Vector3(pos.x, -10.0, pos.z)
+		ray_query.collision_mask = 1 # World geometry / terrain / buildings
+		var hit := space.intersect_ray(ray_query)
+		if not hit.is_empty():
+			ground_y = float(hit.position.y)
+			# If hit object is higher than 4.5m, it's a rooftop/structure, not walkable ground
+			if ground_y > 4.5:
+				return { "valid": false, "position": Vector3(pos.x, ground_y, pos.z) }
+		else:
+			ground_y = 0.0
+
+	var checked_pos := Vector3(pos.x, ground_y, pos.z)
+	if not is_spawn_position_clear(checked_pos, false):
+		return { "valid": false, "position": checked_pos }
+
+	return { "valid": true, "position": checked_pos }
+
+func _validate_air_clearance(pos: Vector3) -> bool:
+	if not is_spawn_position_clear(pos, true):
+		return false
+	var space := _get_world_direct_space_state()
+	if space:
+		var shape_query := PhysicsShapeQueryParameters3D.new()
+		var sphere := SphereShape3D.new()
+		sphere.radius = 3.5
+		shape_query.shape = sphere
+		shape_query.transform = Transform3D(Basis(), pos)
+		shape_query.collision_mask = 1
+		var hits := space.intersect_shape(shape_query, 1)
+		if not hits.is_empty():
+			return false
+	return true
+
+func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_dist: float = -1.0, max_dist: float = -1.0) -> Dictionary:
+	if min_dist < 0.0:
+		min_dist = encounter_config.spawn_distance_min if encounter_config else 38.0
+	if max_dist < 0.0:
+		max_dist = encounter_config.spawn_distance_max if encounter_config else 68.0
+
+	# 1. Velocity lead calculation
+	var player := _get_player()
+	var p_vel := Vector3.ZERO
+	if player:
+		if "velocity" in player:
+			p_vel = player.velocity
+		elif "linear_velocity" in player:
+			p_vel = player.linear_velocity
+	p_vel.y = 0.0
+
+	var lead_time: float = encounter_config.velocity_lead_time if encounter_config else 1.2
+	var ref_center := player_pos + (p_vel * lead_time)
+
+	# 2. Check arena edge proximity for boundary redistribution
+	var margin: float = encounter_config.boundary_redistribution_margin if encounter_config else 25.0
+	var safe_limit := arena_half_extents - margin
+	var near_boundary := absf(ref_center.x) > safe_limit or absf(ref_center.z) > safe_limit
+	var inward_dir := Vector2.ZERO
+	if near_boundary:
+		inward_dir = -Vector2(ref_center.x, ref_center.z).normalized()
+
+	var margin_px: float = encounter_config.camera_frustum_margin_px if encounter_config else 100.0
+	var arena_bound := arena_half_extents - 8.0
+
+	# 3. Sample from current 2 active non-adjacent sectors
+	for attempt in range(16):
+		var sector: int = _active_sectors.pick_random() if _active_sectors.size() > 0 else (randi() % 8)
+		var base_angle := float(sector) * (TAU / 8.0)
+		var angle := base_angle + randf_range(-PI / 8.0, PI / 8.0)
+
+		# Edge redistribution: blend sector angle inward if facing boundary wall
+		if near_boundary and inward_dir.length_squared() > 0.01:
+			var inward_angle := atan2(inward_dir.y, inward_dir.x)
+			var angle_diff := absf(angle_difference(angle, inward_angle))
+			if angle_diff > (PI * 0.5):
+				angle = lerp_angle(angle, inward_angle, 0.75)
+
+		var dist := randf_range(min_dist, max_dist)
+		var cand_x := ref_center.x + cos(angle) * dist
+		var cand_z := ref_center.z + sin(angle) * dist
+
+		# Reject if candidate is beyond playable boundary (no edge clumping)
+		if absf(cand_x) > arena_bound or absf(cand_z) > arena_bound:
+			continue
+
+		var cand_alt := 0.0
+		if is_air:
+			cand_alt = clampf(_get_player_altitude() + randf_range(-2.0, 3.5), 13.0, 24.0)
+
+		var cand_pos := Vector3(cand_x, cand_alt, cand_z)
+
+		# Reject if inside visible camera view (strict pop-in protection)
+		if is_position_in_camera_view(cand_pos, margin_px):
+			continue
+
+		if not is_air:
+			var g_res := _validate_ground_clearance(cand_pos)
+			if not g_res["valid"]:
+				continue
+			var final_pos: Vector3 = g_res["position"]
+			var hd := (player_pos - final_pos)
+			hd.y = 0.0
+			_record_spawn_sector(sector)
+			last_spawn_source = "EncounterSector_%d" % sector
+			return { "position": final_pos, "heading": hd.normalized(), "source_name": "Sector_%d" % sector }
+		else:
+			if not _validate_air_clearance(cand_pos):
+				continue
+			var hd := (player_pos - cand_pos)
+			hd.y = 0.0
+			_record_spawn_sector(sector)
+			last_spawn_source = "EncounterAirSector_%d" % sector
+			return { "position": cand_pos, "heading": hd.normalized(), "source_name": "AirSector_%d" % sector }
+
+	# 4. Fallback pass: check authored spawn nodes that are off-screen
+	if is_air:
+		for a_node in get_air_spawn_nodes():
+			var p := a_node.global_position
+			var d := player_pos.distance_to(p)
+			if d >= min_dist and not is_position_in_camera_view(p, margin_px) and is_spawn_position_clear(p, true):
+				var hd := (player_pos - p)
+				hd.y = 0.0
+				last_spawn_source = a_node.name + " (EncounterFallback)"
+				return { "position": p, "heading": hd.normalized(), "source_name": a_node.name }
+	else:
+		for g_node in get_ground_spawn_nodes():
+			var p := g_node.global_position
+			var d := player_pos.distance_to(p)
+			if d >= min_dist and not is_position_in_camera_view(p, margin_px) and is_spawn_position_clear(p, false):
+				var hd := (player_pos - p)
+				hd.y = 0.0
+				last_spawn_source = g_node.name + " (EncounterFallback)"
+				return { "position": p, "heading": hd.normalized(), "source_name": g_node.name }
+
+	# 5. Final safe fallback
+	failed_spawn_attempts += 1
+	var safe_pos := _get_safe_perimeter_fallback(player_pos)
+	var safe_hd := (player_pos - safe_pos)
+	safe_hd.y = 0.0
+	if is_air:
+		safe_pos.y = clampf(_get_player_altitude(), 14.0, 22.0)
+	last_spawn_source = "Safe Perimeter Fallback"
+	return { "position": safe_pos, "heading": safe_hd.normalized(), "source_name": "SafePerimeter" }
+
+func _process_offscreen_cleanup() -> void:
+	var player := _get_player()
+	if not is_instance_valid(player):
+		return
+	var player_pos := player.global_position
+
+	var despawn_dist: float = encounter_config.despawn_distance_threshold if encounter_config else 115.0
+	var time_threshold: float = encounter_config.despawn_offscreen_time_threshold if encounter_config else 25.0
+	var check_interval: float = encounter_config.offscreen_cleanup_check_interval if encounter_config else 2.0
+
+	var living_enemies: Array[Node3D] = []
+	for enemy in _wave_enemies:
+		if is_instance_valid(enemy) and not enemy.is_queued_for_deletion():
+			living_enemies.append(enemy)
+
+	for enemy in living_enemies:
+		if enemy.is_in_group("bosses") or enemy.is_in_group("objective") or enemy.name.begins_with("Boss") or enemy.name.begins_with("Radar"):
+			continue
+		if "is_alive" in enemy and not enemy.is_alive:
+			continue
+
+		var dist := player_pos.distance_to(enemy.global_position)
+		var is_viewable := is_position_in_camera_view(enemy.global_position, 60.0)
+
+		if dist > 150.0 and not is_viewable:
+			_despawn_enemy_quietly(enemy)
+			continue
+
+		if dist > despawn_dist and not is_viewable:
+			var cur_time: float = _enemy_offscreen_durations.get(enemy, 0.0) + check_interval
+			_enemy_offscreen_durations[enemy] = cur_time
+			if cur_time >= time_threshold:
+				_despawn_enemy_quietly(enemy)
+		else:
+			if _enemy_offscreen_durations.has(enemy):
+				_enemy_offscreen_durations.erase(enemy)
+
+func _despawn_enemy_quietly(enemy: Node3D) -> void:
+	if not is_instance_valid(enemy):
+		return
+	_enemy_offscreen_durations.erase(enemy)
+	total_despawns += 1
+
+	if enemy.tree_exited.is_connected(_on_spawned_enemy_tree_exited):
+		enemy.tree_exited.disconnect(_on_spawned_enemy_tree_exited)
+
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.unregister_enemy(enemy)
+
+	_wave_enemies.erase(enemy)
+
+	var is_air := _is_air_enemy(enemy)
+	var recycle_ratio: float = encounter_config.recycle_budget_ratio if encounter_config else 0.5
+	if is_air:
+		continuous_air_budget += 4.0 * recycle_ratio
+	else:
+		continuous_ground_budget += 15.0 * recycle_ratio
+
+	enemy.queue_free()
+	_notify_progress()
 
 func _check_scheduled_events() -> void:
 	# 1. Transport Reinforcement Drop at ~150s (2.5m)
@@ -939,6 +1331,22 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 	if current_living >= cap:
 		return
 
+	var ground_living := 0
+	var air_living := 0
+	if EnemyRegistry.instance:
+		ground_living = EnemyRegistry.instance.ground_enemies.size()
+		air_living = EnemyRegistry.instance.air_enemies.size()
+	else:
+		for e in _wave_enemies:
+			if is_instance_valid(e) and not e.is_queued_for_deletion():
+				if _is_air_enemy(e):
+					air_living += 1
+				else:
+					ground_living += 1
+
+	var ground_cap := get_ground_population_cap()
+	var air_cap := get_air_population_cap()
+
 	# Minimum budget guarantee when below target count to prevent starving
 	if current_living < target_count:
 		continuous_ground_budget = maxf(continuous_ground_budget, 15.0)
@@ -946,7 +1354,7 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			continuous_air_budget = maxf(continuous_air_budget, 4.0)
 
 	# Ground stream with time-based unlocks and tactical caps
-	if continuous_ground_budget >= 15.0:
+	if ground_living < ground_cap and continuous_ground_budget >= 15.0:
 		var chosen_scene: PackedScene = _scene_infantry
 		var cost: float = 15.0
 
@@ -986,21 +1394,22 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 
 	# Air stream with time-based unlocks and tactical caps
 	var p_y := clampf(_get_player_altitude(), 11.0, 17.0)
-	if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and randf() > 0.45:
-		_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
-		continuous_air_budget -= 9.0
-	elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and randf() > 0.6:
-		_spawn_continuous_enemy(_scene_air_jammer, p_pos, p_y + 3.0)
-		continuous_air_budget -= 8.0
-	elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
-		_spawn_continuous_enemy(_scene_air_transport, p_pos, p_y)
-		continuous_air_budget -= 7.0
-	elif elapsed_survival_time >= 120.0 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and randf() > 0.4:
-		_spawn_continuous_enemy(_scene_air_raider, p_pos, p_y + 2.0)
-		continuous_air_budget -= 6.0
-	elif continuous_air_budget >= 4.0 and get_active_unit_count("scout") < cap_scout:
-		_spawn_continuous_enemy(_scene_air_scout, p_pos, p_y)
-		continuous_air_budget -= 4.0
+	if air_living < air_cap:
+		if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and randf() > 0.45:
+			_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
+			continuous_air_budget -= 9.0
+		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and randf() > 0.6:
+			_spawn_continuous_enemy(_scene_air_jammer, p_pos, p_y + 3.0)
+			continuous_air_budget -= 8.0
+		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
+			_spawn_continuous_enemy(_scene_air_transport, p_pos, p_y)
+			continuous_air_budget -= 7.0
+		elif elapsed_survival_time >= 120.0 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and randf() > 0.4:
+			_spawn_continuous_enemy(_scene_air_raider, p_pos, p_y + 2.0)
+			continuous_air_budget -= 6.0
+		elif continuous_air_budget >= 4.0 and get_active_unit_count("scout") < cap_scout:
+			_spawn_continuous_enemy(_scene_air_scout, p_pos, p_y)
+			continuous_air_budget -= 4.0
 
 func _is_air_enemy(enemy: Node) -> bool:
 	if not is_instance_valid(enemy):
@@ -1033,27 +1442,17 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 	var is_air: bool = _is_air_enemy(enemy)
 
 	if spawn_pos == Vector3.INF:
+		var spawn_data := get_dynamic_encounter_spawn_point(is_air, player_pos)
+		spawn_pos = spawn_data["position"]
+		heading = spawn_data["heading"]
 		if is_air:
-			var air_entry := get_air_corridor_entry(player_pos)
-			spawn_pos = air_entry["position"]
-			heading = air_entry["heading"]
 			altitude = clampf(spawn_pos.y, 11.0, 22.0)
 		else:
-			var tag := "infantry"
-			if enemy is Tank:
-				tag = "tank"
-			elif enemy is GroundTurret:
-				tag = "turret"
-			elif enemy is SAMSite or enemy.name.begins_with("SAM"):
-				tag = "sam"
-			var ground_entry := get_authored_ground_spawn(tag, player_pos)
-			spawn_pos = ground_entry["position"]
-			heading = ground_entry["heading"]
-			altitude = 0.0
+			altitude = spawn_pos.y
 
-	# Ground units must strictly stay on ground level (y = 0.0)
+	# Ground units must strictly stay on ground level (hit surface y)
 	if not is_air:
-		altitude = 0.0
+		altitude = spawn_pos.y
 
 	enemy.transform.origin = Vector3(spawn_pos.x, altitude, spawn_pos.z)
 
@@ -1610,61 +2009,8 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 	return { "position": safe_pt, "heading": safe_hd.normalized(), "source_name": "SafeRoadFallback" }
 
 func get_frustum_safe_spawn_pos(center_ref: Vector3, min_dist: float = 32.0, max_dist: float = 68.0) -> Vector3:
-	var cam := get_viewport().get_camera_3d() if get_viewport() else null
-
-	# 1. First priority: Check authored GroundSpawnZones Marker3D nodes
-	var g_nodes := get_ground_spawn_nodes()
-	if not g_nodes.is_empty():
-		var candidates := g_nodes.duplicate()
-		candidates.shuffle()
-		for marker in candidates:
-			var pos: Vector3 = marker.global_position
-			var dist := center_ref.distance_to(pos)
-			if dist >= min_dist and dist <= (max_dist + 35.0):
-				if is_spawn_position_clear(pos, false):
-					if not cam or cam.is_position_behind(pos) or not cam.is_position_in_frustum(pos):
-						last_spawn_source = marker.name
-						return pos
-		# Secondary pass on authored nodes: relax frustum check if needed
-		for marker in candidates:
-			var pos: Vector3 = marker.global_position
-			var dist := center_ref.distance_to(pos)
-			if dist >= min_dist and dist <= (max_dist + 40.0):
-				if is_spawn_position_clear(pos, false):
-					last_spawn_source = marker.name + " (Frustum Override)"
-					return pos
-
-	# 2. Second priority: Directional sector rotation
-	var preferred_sector := _get_next_spawn_sector()
-	for attempt in range(12):
-		var base_angle := float(preferred_sector) * (TAU / 8.0)
-		var angle_offset := randf_range(-PI / 4.0, PI / 4.0) if attempt < 6 else randf_range(-PI, PI)
-		var angle := base_angle + angle_offset
-		var dist := randf_range(min_dist, max_dist)
-		var candidate := Vector3(
-			clampf(center_ref.x + cos(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0),
-			0.0,
-			clampf(center_ref.z + sin(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0)
-		)
-
-		if not is_spawn_position_clear(candidate, false):
-			continue
-
-		if cam:
-			var is_offscreen := cam.is_position_behind(candidate) or not cam.is_position_in_frustum(candidate)
-			if is_offscreen or attempt > 8:
-				_record_spawn_sector(preferred_sector)
-				last_spawn_source = "Sector_%d" % preferred_sector
-				return candidate
-		else:
-			_record_spawn_sector(preferred_sector)
-			last_spawn_source = "Sector_%d" % preferred_sector
-			return candidate
-
-	# 3. Third priority: Safe perimeter fallback
-	failed_spawn_attempts += 1
-	last_spawn_source = "Safe Perimeter Fallback"
-	return _get_safe_perimeter_fallback(center_ref)
+	var res := get_dynamic_encounter_spawn_point(false, center_ref, min_dist, max_dist)
+	return res["position"]
 
 ## Selects an authored air entry (AirEntry_North, AirEntry_East, AirEntry_South, AirEntry_West)
 ## and returns inward flight heading toward player. Never spawns directly above the player.

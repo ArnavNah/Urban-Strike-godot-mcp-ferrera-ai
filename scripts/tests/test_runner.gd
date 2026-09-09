@@ -78,10 +78,17 @@ func _ready() -> void:
 	success = test_limited_missile_ammo_and_pickups(log_lines) and success
 	append_log("Running test 29 (level-up pacing & continuous randomized spawning)...", log_lines)
 	success = test_level_up_pacing_and_continuous_spawning(log_lines) and success
+	append_log("Running test 30 (survival encounter director & frustum safety)...", log_lines)
+	success = test_survival_encounter_director_and_frustum_safety(log_lines) and success
+	append_log("Running test 31 (xp collection & progression integrity)...", log_lines)
+	success = test_xp_collection_and_progression_integrity(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
 	else:
+		for l in log_lines:
+			if "FAIL:" in l:
+				append_log(l, log_lines)
 		append_log("=== SOME TESTS FAILED! ===", log_lines)
 
 	get_tree().quit(0 if success else 1)
@@ -1606,38 +1613,38 @@ func test_environment_districts_and_playable_boundary(logs: Array[String]) -> bo
 
 	EventBus.border_warning_changed.connect(warning_cb)
 
-	# Place player in safe zone (<125m)
-	append_log("[TEST 22] Sub-step 1.3: Testing safe zone (50m)...", logs)
-	dummy_player.position = Vector3(50.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(50.0, 10.0, 0.0)
+	# Place player in safe zone (<185m)
+	append_log("[TEST 22] Sub-step 1.3: Testing safe zone (100m)...", logs)
+	dummy_player.position = Vector3(100.0, 10.0, 0.0)
+	dummy_player.global_position = Vector3(100.0, 10.0, 0.0)
 	pa._physics_process(0.016)
 	if warning_state["received"]:
-		logs.append("FAIL: Boundary warning triggered inside safe zone at 50m")
+		logs.append("FAIL: Boundary warning triggered inside safe zone at 100m")
 		EventBus.border_warning_changed.disconnect(warning_cb)
 		dummy_player.free()
 		pa.free()
 		return false
 
-	# Place player in warning zone (135m, between 125m and 145m)
-	append_log("[TEST 22] Sub-step 1.4: Testing warning zone (135m)...", logs)
-	dummy_player.position = Vector3(135.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(135.0, 10.0, 0.0)
+	# Place player in warning zone (200m, between 185m and 215m)
+	append_log("[TEST 22] Sub-step 1.4: Testing warning zone (200m)...", logs)
+	dummy_player.position = Vector3(200.0, 10.0, 0.0)
+	dummy_player.global_position = Vector3(200.0, 10.0, 0.0)
 	pa._physics_process(0.016)
 	if not warning_state["received"]:
-		logs.append("FAIL: Boundary warning NOT triggered in warning zone at 135m (target_player=%s, pos=%s, is_warn=%s, safe=%s)" % [str(pa.target_player), str(pa.target_player.global_position if pa.target_player else Vector3.ZERO), str(pa.get("_is_currently_warning")), str(pa.safe_half_extent)])
+		logs.append("FAIL: Boundary warning NOT triggered in warning zone at 200m (target_player=%s, pos=%s, is_warn=%s, safe=%s)" % [str(pa.target_player), str(pa.target_player.global_position if pa.target_player else Vector3.ZERO), str(pa.get("_is_currently_warning")), str(pa.safe_half_extent)])
 		EventBus.border_warning_changed.disconnect(warning_cb)
 		dummy_player.free()
 		pa.free()
 		return false
 
-	# Place player past hard boundary (>148m) with outward velocity
+	# Place player past hard boundary (>222m) with outward velocity
 	append_log("[TEST 22] Sub-step 1.5: Testing hard boundary clamping...", logs)
-	dummy_player.position = Vector3(150.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(150.0, 10.0, 0.0)
+	dummy_player.position = Vector3(225.0, 10.0, 0.0)
+	dummy_player.global_position = Vector3(225.0, 10.0, 0.0)
 	dummy_player.velocity = Vector3(25.0, 0.0, 0.0)
 	pa._physics_process(0.016)
-	if dummy_player.global_position.x > 148.01:
-		logs.append("FAIL: Hard boundary did not clamp position to <= 148m (got %.2f)" % dummy_player.global_position.x)
+	if dummy_player.global_position.x > pa.hard_half_extent + 0.01:
+		logs.append("FAIL: Hard boundary did not clamp position to <= %.1fm (got %.2f)" % [pa.hard_half_extent, dummy_player.global_position.x])
 		EventBus.border_warning_changed.disconnect(warning_cb)
 		dummy_player.free()
 		pa.free()
@@ -2126,8 +2133,41 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 		root_node.queue_free()
 		return false
 
+	# 9. Test Bounded Horizontal Acceleration (No instant velocity snaps)
+	scout.global_position = Vector3(0.0, 16.0, 0.0)
+	dummy_player.global_position = Vector3(0.0, 16.0, 50.0)
+	scout.set("_player", dummy_player)
+	scout.set("current_state", AirEnemyController.State.APPROACH)
+	scout_body.velocity = Vector3.ZERO
+	scout.set("_lod_frame_counter", 1)
+	scout_body.call("_physics_process", 0.05)
+	if scout_body.velocity.z > 2.5:
+		append_log("FAIL: Air enemy snapped velocity instantly instead of bounded acceleration (vel.z: %.2f)" % scout_body.velocity.z, logs)
+		root_node.queue_free()
+		return false
+
+	# 10. Test Rooftop Clearance and Altitude Banding
+	scout.set("_ground_ray_timer", 2.0)
+	scout.set("_cached_ground_y", 25.0) # Simulate a 25m tall skyscraper beneath helicopter
+	scout.call("_update_altitude", 0.05)
+	var tgt_y: float = float(scout.get("_current_target_y"))
+	if tgt_y < 29.5: # 25m + 4.5m clearance
+		append_log("FAIL: Air enemy did not enforce minimum 4.5m rooftop altitude clearance (target_y: %.2f)" % tgt_y, logs)
+		root_node.queue_free()
+		return false
+
+	# 11. Test Stuck Detection and Recovery Trigger
+	scout.set("current_state", AirEnemyController.State.APPROACH)
+	scout.set("_stuck_timer", 1.75)
+	scout.set("_last_stuck_pos", scout.global_position)
+	scout.call("_check_stuck_condition", 0.1) # Exceeds 1.8s threshold
+	if int(scout.get("current_state")) != AirEnemyController.State.RECOVER:
+		append_log("FAIL: Air enemy failed to trigger State.RECOVER when stuck against obstacle", logs)
+		root_node.queue_free()
+		return false
+
 	root_node.queue_free()
-	append_log("  -> Ground approach, fire loops, turret/SAM timings, air approach/break-away/separation verified.", logs)
+	append_log("  -> Ground approach, fire loops, turret/SAM timings, air approach/break-away/separation, bounded accel, roof clearance, and stuck recovery verified.", logs)
 	return true
 
 func test_enemy_roster_and_procedural_formations(logs: Array[String]) -> bool:
@@ -2919,8 +2959,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	var req_l3 := mgr.get_required_xp_for_level(3)
 	var req_l4 := mgr.get_required_xp_for_level(4)
 
-	if req_l1 != 35 or req_l2 != 65 or req_l3 != 105 or req_l4 != 160:
-		append_log("FAIL: Configurable XP curve values mismatch (expected 35, 65, 105, 160; got %d, %d, %d, %d)" % [req_l1, req_l2, req_l3, req_l4], logs)
+	if req_l1 != 50 or req_l2 != 90 or req_l3 != 140 or req_l4 != 200:
+		append_log("FAIL: Configurable XP curve values mismatch (expected 50, 90, 140, 200; got %d, %d, %d, %d)" % [req_l1, req_l2, req_l3, req_l4], logs)
 		root_node.queue_free()
 		return false
 
@@ -2934,38 +2974,38 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	EventBus.xp_updated.connect(on_xp_sig)
 
 	mgr.reset_run()
-	if mgr.xp_needed != 35 or mgr.current_level != 1:
-		append_log("FAIL: reset_run failed to set base xp_needed to 35 (got %d, level %d)" % [mgr.xp_needed, mgr.current_level], logs)
+	if mgr.xp_needed != 50 or mgr.current_level != 1:
+		append_log("FAIL: reset_run failed to set base xp_needed to 50 (got %d, level %d)" % [mgr.xp_needed, mgr.current_level], logs)
 		EventBus.xp_updated.disconnect(on_xp_sig)
 		root_node.queue_free()
 		return false
 
-	# Add 35 XP -> reaches Level 2
-	mgr.add_xp(35)
-	if mgr.current_level != 2 or mgr.xp_needed != 65:
-		append_log("FAIL: add_xp(35) did not reach Level 2 with 65 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+	# Add 50 XP -> reaches Level 2
+	mgr.add_xp(50)
+	if mgr.current_level != 2 or mgr.xp_needed != 90:
+		append_log("FAIL: add_xp(50) did not reach Level 2 with 90 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
 		EventBus.xp_updated.disconnect(on_xp_sig)
 		root_node.queue_free()
 		return false
 
-	if notified_xp.is_empty() or notified_xp[1] != 65 or notified_xp[2] != 2:
+	if notified_xp.is_empty() or notified_xp[1] != 90 or notified_xp[2] != 2:
 		append_log("FAIL: EventBus.xp_updated not emitted immediately on level-up (got %s)" % str(notified_xp), logs)
 		EventBus.xp_updated.disconnect(on_xp_sig)
 		root_node.queue_free()
 		return false
 
-	# Add 65 XP -> reaches Level 3
-	mgr.add_xp(65)
-	if mgr.current_level != 3 or mgr.xp_needed != 105:
-		append_log("FAIL: add_xp(65) did not reach Level 3 with 105 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+	# Add 90 XP -> reaches Level 3
+	mgr.add_xp(90)
+	if mgr.current_level != 3 or mgr.xp_needed != 140:
+		append_log("FAIL: add_xp(90) did not reach Level 3 with 140 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
 		EventBus.xp_updated.disconnect(on_xp_sig)
 		root_node.queue_free()
 		return false
 
-	# Add 105 XP -> reaches Level 4
-	mgr.add_xp(105)
-	if mgr.current_level != 4 or mgr.xp_needed != 160:
-		append_log("FAIL: add_xp(105) did not reach Level 4 with 160 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
+	# Add 140 XP -> reaches Level 4
+	mgr.add_xp(140)
+	if mgr.current_level != 4 or mgr.xp_needed != 200:
+		append_log("FAIL: add_xp(140) did not reach Level 4 with 200 needed (level: %d, needed: %d)" % [mgr.current_level, mgr.xp_needed], logs)
 		EventBus.xp_updated.disconnect(on_xp_sig)
 		root_node.queue_free()
 		return false
@@ -2974,18 +3014,18 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 
 	# 3. Test Differentiated Enemy XP Drop Values & Archetypes
 	var enemy_reward_checks: Array[Dictionary] = [
-		{"path": "res://scenes/enemies/ground_scout_buggy.tscn", "expected_xp": 8},
-		{"path": "res://scenes/enemies/ground_rocket_technical.tscn", "expected_xp": 12},
-		{"path": "res://scenes/enemies/air_scout_helicopter.tscn", "expected_xp": 12},
-		{"path": "res://scenes/enemies/ground_assault_ifv.tscn", "expected_xp": 20},
-		{"path": "res://scenes/enemies/ground_troop_carrier_apc.tscn", "expected_xp": 20},
-		{"path": "res://scenes/enemies/air_transport_helicopter.tscn", "expected_xp": 22},
-		{"path": "res://scenes/enemies/ground_mortar_carrier.tscn", "expected_xp": 30},
-		{"path": "res://scenes/enemies/air_rocket_raider.tscn", "expected_xp": 30},
-		{"path": "res://scenes/enemies/ground_jammer_vehicle.tscn", "expected_xp": 45},
-		{"path": "res://scenes/enemies/air_jammer_helicopter.tscn", "expected_xp": 48},
-		{"path": "res://scenes/enemies/air_attack_gunship.tscn", "expected_xp": 55},
-		{"path": "res://scenes/enemies/air_ace_gunship.tscn", "expected_xp": 60}
+		{"path": "res://scenes/enemies/ground_scout_buggy.tscn", "expected_xp": 5},
+		{"path": "res://scenes/enemies/ground_rocket_technical.tscn", "expected_xp": 6},
+		{"path": "res://scenes/enemies/air_scout_helicopter.tscn", "expected_xp": 6},
+		{"path": "res://scenes/enemies/ground_assault_ifv.tscn", "expected_xp": 10},
+		{"path": "res://scenes/enemies/ground_troop_carrier_apc.tscn", "expected_xp": 10},
+		{"path": "res://scenes/enemies/air_transport_helicopter.tscn", "expected_xp": 12},
+		{"path": "res://scenes/enemies/ground_mortar_carrier.tscn", "expected_xp": 16},
+		{"path": "res://scenes/enemies/air_rocket_raider.tscn", "expected_xp": 16},
+		{"path": "res://scenes/enemies/ground_jammer_vehicle.tscn", "expected_xp": 20},
+		{"path": "res://scenes/enemies/air_jammer_helicopter.tscn", "expected_xp": 22},
+		{"path": "res://scenes/enemies/air_attack_gunship.tscn", "expected_xp": 25},
+		{"path": "res://scenes/enemies/air_ace_gunship.tscn", "expected_xp": 30}
 	]
 
 	for item in enemy_reward_checks:
@@ -3012,8 +3052,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	# Test Infantry Cluster XP reward
 	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
 	var inf := inf_scene.instantiate() as InfantryCluster
-	if inf.xp_reward != 6:
-		append_log("FAIL: InfantryCluster xp_reward is not 6 (got %d)" % inf.xp_reward, logs)
+	if inf.xp_reward != 3:
+		append_log("FAIL: InfantryCluster xp_reward is not 3 (got %d)" % inf.xp_reward, logs)
 		inf.queue_free()
 		root_node.queue_free()
 		return false
@@ -3022,8 +3062,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	# Test Tank XP reward
 	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
 	var tank := tank_scene.instantiate() as Tank
-	if tank.xp_reward != 30:
-		append_log("FAIL: Tank baseline xp_reward is not 30 (got %d)" % tank.xp_reward, logs)
+	if tank.xp_reward != 16:
+		append_log("FAIL: Tank baseline xp_reward is not 16 (got %d)" % tank.xp_reward, logs)
 		tank.queue_free()
 		root_node.queue_free()
 		return false
@@ -3032,8 +3072,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	# Test SAM Site XP reward
 	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
 	var sam := sam_scene.instantiate() as SAMSite
-	if sam.xp_reward != 50:
-		append_log("FAIL: SAMSite xp_reward is not 50 (got %d)" % sam.xp_reward, logs)
+	if sam.xp_reward != 25:
+		append_log("FAIL: SAMSite xp_reward is not 25 (got %d)" % sam.xp_reward, logs)
 		sam.queue_free()
 		root_node.queue_free()
 		return false
@@ -3042,8 +3082,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	# Test Ground Turret XP reward
 	var turret_scene := load("res://scenes/enemies/ground_turret.tscn") as PackedScene
 	var turret := turret_scene.instantiate() as GroundTurret
-	if turret.xp_reward != 22:
-		append_log("FAIL: GroundTurret xp_reward is not 22 (got %d)" % turret.xp_reward, logs)
+	if turret.xp_reward != 12:
+		append_log("FAIL: GroundTurret xp_reward is not 12 (got %d)" % turret.xp_reward, logs)
 		turret.queue_free()
 		root_node.queue_free()
 		return false
@@ -3052,8 +3092,8 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	# Test Hunter Helicopter XP reward
 	var hunter_scene := load("res://scenes/enemies/hunter_helicopter.tscn") as PackedScene
 	var hunter := hunter_scene.instantiate() as HunterHelicopter
-	if hunter.xp_reward != 28:
-		append_log("FAIL: HunterHelicopter xp_reward is not 28 (got %d)" % hunter.xp_reward, logs)
+	if hunter.xp_reward != 15:
+		append_log("FAIL: HunterHelicopter xp_reward is not 15 (got %d)" % hunter.xp_reward, logs)
 		hunter.queue_free()
 		root_node.queue_free()
 		return false
@@ -3172,3 +3212,360 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 	root_node.queue_free()
 	append_log("  -> Level-up pacing curve, differentiated enemy XP drops, continuous stream intervals, formation staggering queue, and entrance standoff verified.", logs)
 	return true
+
+func test_survival_encounter_director_and_frustum_safety(logs: Array[String]) -> bool:
+	append_log("[TEST 30] Starting Survival Encounter Director & Frustum Safety tests...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test30Root"
+	add_child(root_node)
+
+	# 1. Test EncounterConfig Resource definition and serialized default
+	if not ResourceLoader.exists("res://resources/directors/default_encounter_config.tres"):
+		append_log("FAIL: res://resources/directors/default_encounter_config.tres does not exist", logs)
+		root_node.queue_free()
+		return false
+
+	var cfg := load("res://resources/directors/default_encounter_config.tres") as EncounterConfig
+	if not cfg:
+		append_log("FAIL: Failed to load default_encounter_config.tres as EncounterConfig", logs)
+		root_node.queue_free()
+		return false
+
+	if cfg.warmup_ground_cap != 5 or cfg.warmup_air_cap != 2:
+		append_log("FAIL: EncounterConfig warmup caps mismatch (G:%d, A:%d)" % [cfg.warmup_ground_cap, cfg.warmup_air_cap], logs)
+		root_node.queue_free()
+		return false
+
+	if cfg.max_ground_cap != 14 or cfg.max_air_cap != 6 or cfg.global_active_cap != 20:
+		append_log("FAIL: EncounterConfig peak caps mismatch (G:%d, A:%d, Total:%d)" % [cfg.max_ground_cap, cfg.max_air_cap, cfg.global_active_cap], logs)
+		root_node.queue_free()
+		return false
+
+	if cfg.recovery_duration < 8.0 or cfg.recovery_spawn_rate_mult > 0.40:
+		append_log("FAIL: EncounterConfig recovery breather settings mismatch", logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Test SpawnDirector with EncounterConfig integration
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: SpawnDirector = sd_script.new() as SpawnDirector
+	sd.encounter_config = cfg
+	root_node.add_child(sd)
+
+	sd.elapsed_survival_time = 5.0
+	if sd.get_ground_population_cap() != 5 or sd.get_air_population_cap() != 2 or sd.get_active_population_cap() != 7:
+		append_log("FAIL: Warmup population caps not enforced (G:%d, A:%d, Total:%d)" % [sd.get_ground_population_cap(), sd.get_air_population_cap(), sd.get_active_population_cap()], logs)
+		root_node.queue_free()
+		return false
+
+	sd.elapsed_survival_time = 480.0
+	if sd.get_ground_population_cap() != 14 or sd.get_air_population_cap() != 6 or sd.get_active_population_cap() != 20:
+		append_log("FAIL: Peak population caps not enforced (G:%d, A:%d, Total:%d)" % [sd.get_ground_population_cap(), sd.get_air_population_cap(), sd.get_active_population_cap()], logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Test Non-Adjacent Sector Rotation and Escape Routes
+	for r in range(5):
+		sd._rotate_active_sectors()
+		if sd._active_sectors.size() != 2:
+			append_log("FAIL: _active_sectors size is not 2 (got %d)" % sd._active_sectors.size(), logs)
+			root_node.queue_free()
+			return false
+		var s1: int = sd._active_sectors[0]
+		var s2: int = sd._active_sectors[1]
+		if s1 == s2:
+			append_log("FAIL: _active_sectors contains identical sectors (%d, %d)" % [s1, s2], logs)
+			root_node.queue_free()
+			return false
+		var diff: int = absi(s1 - s2)
+		if diff == 1 or diff == 7:
+			append_log("FAIL: _active_sectors are adjacent (%d, %d) - escape route compromised" % [s1, s2], logs)
+			root_node.queue_free()
+			return false
+
+	# 4. Test Boundary Inward Redistribution (No Edge Clamping)
+	var edge_player := Node3D.new()
+	edge_player.name = "EdgePlayer"
+	edge_player.add_to_group("player")
+	root_node.add_child(edge_player)
+	var edge_x: float = sd.arena_half_extents - 15.0 # Near outer boundary
+	edge_player.global_position = Vector3(edge_x, 14.0, 0.0)
+
+	for i in range(5):
+		var spawn_dict := sd.get_dynamic_encounter_spawn_point(false, edge_player.global_position, 38.0, 68.0)
+		var sp_pos: Vector3 = spawn_dict.get("position", Vector3.ZERO)
+		if absf(sp_pos.x) > sd.arena_half_extents or absf(sp_pos.z) > sd.arena_half_extents:
+			append_log("FAIL: get_dynamic_encounter_spawn_point spawned outside bounds (got %.1f, %.1f)" % [sp_pos.x, sp_pos.z], logs)
+			root_node.queue_free()
+			return false
+		if sp_pos.x >= edge_x:
+			append_log("FAIL: Spawn position was not redistributed inward away from boundary wall (got x=%.1f)" % sp_pos.x, logs)
+			root_node.queue_free()
+			return false
+
+	# 5. Test Camera Frustum Safety
+	var test_cam := Camera3D.new()
+	root_node.add_child(test_cam)
+	test_cam.global_position = Vector3(0.0, 10.0, 30.0)
+	test_cam.look_at(Vector3(0.0, 10.0, 0.0), Vector3.UP)
+	test_cam.current = true
+
+	var in_view_pos := Vector3(0.0, 10.0, 0.0)
+	var in_view_result := sd.is_position_in_camera_view(in_view_pos, 100.0)
+	if not in_view_result:
+		append_log("FAIL: is_position_in_camera_view failed to detect point directly in front of camera", logs)
+		root_node.queue_free()
+		return false
+
+	var behind_pos := Vector3(0.0, 10.0, 60.0)
+	var behind_result := sd.is_position_in_camera_view(behind_pos, 100.0)
+	if behind_result:
+		append_log("FAIL: is_position_in_camera_view falsely detected point behind camera as in view", logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Test Surge and Recovery State Machine
+	sd.is_wave_active = true
+	sd.encounter_state = SpawnDirector.EncounterState.STREAMING
+	sd.next_surge_time = 10.0
+	sd.elapsed_survival_time = 10.5
+	sd._process_continuous_survival(0.1)
+	if sd.encounter_state != SpawnDirector.EncounterState.SURGE:
+		append_log("FAIL: Encounter state failed to transition to SURGE upon surge trigger time", logs)
+		root_node.queue_free()
+		return false
+
+	sd.surge_timer_duration_active = 0.05
+	sd._process_continuous_survival(0.1)
+	if sd.encounter_state != SpawnDirector.EncounterState.RECOVERY:
+		append_log("FAIL: Encounter state failed to transition to RECOVERY after SURGE timeout", logs)
+		root_node.queue_free()
+		return false
+	if sd.recovery_timer_remaining <= 0.0:
+		append_log("FAIL: Recovery timer not set for tactical breather", logs)
+		root_node.queue_free()
+		return false
+
+	sd.recovery_timer_remaining = 0.05
+	sd._process_continuous_survival(0.1)
+	if sd.encounter_state != SpawnDirector.EncounterState.STREAMING:
+		append_log("FAIL: Encounter state failed to transition back to STREAMING after RECOVERY", logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Test Quiet Despawn (No XP, Salvage, or Kill Count Awarded)
+	var distant_enemy := Node3D.new()
+	distant_enemy.name = "DistantScout"
+	distant_enemy.add_to_group("enemies")
+	root_node.add_child(distant_enemy)
+	distant_enemy.global_position = Vector3(0.0, 0.0, 180.0)
+
+	sd._wave_enemies.append(distant_enemy)
+	var initial_despawns := sd.total_despawns
+	var initial_kills := sd.total_enemies_killed
+
+	sd._process_offscreen_cleanup()
+
+	if sd.total_despawns != (initial_despawns + 1):
+		append_log("FAIL: Offscreen cleanup failed to increment total_despawns", logs)
+		root_node.queue_free()
+		return false
+
+	if sd.total_enemies_killed != initial_kills:
+		append_log("FAIL: Offscreen quiet despawn incorrectly awarded kill count", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> EncounterConfig, separate population caps, non-adjacent sectors, boundary inward redistribution, camera frustum safety, surge/recovery cycle, and quiet despawn verified.", logs)
+	return true
+
+func test_xp_collection_and_progression_integrity(logs: Array[String]) -> bool:
+	append_log("[TEST 31] XP Collection, Volume Sweep & Progression Integrity...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test31Root"
+	add_child(root_node)
+
+	# 1. Single basic enemy kill does not trigger level-up
+	for existing in get_tree().get_nodes_in_group("upgrade_manager"):
+		existing.remove_from_group("upgrade_manager")
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr: UpgradeManager = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+	mgr.add_to_group("upgrade_manager")
+	mgr.reset_run()
+
+	if mgr.current_level != 1 or mgr.xp_needed != 50 or mgr.current_xp != 0:
+		append_log("FAIL: Initial UpgradeManager state invalid (level %d, xp %d/%d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed], logs)
+		root_node.queue_free()
+		return false
+
+	# Scout Buggy gives 5 XP (10% toward Level 2)
+	mgr.add_xp(5)
+	if mgr.current_level != 1 or mgr.current_xp != 5 or not mgr.pending_levels.is_empty():
+		append_log("FAIL: Single basic kill (5 XP) caused premature level-up or choice queue (level %d, pending %d)" % [mgr.current_level, mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	# Scout Helicopter gives 6 XP (total 11/50 XP = 22%)
+	mgr.add_xp(6)
+	if mgr.current_level != 1 or mgr.current_xp != 11 or not mgr.pending_levels.is_empty():
+		append_log("FAIL: Second basic kill caused premature level-up (level %d, xp %d/50)" % [mgr.current_level, mgr.current_xp], logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Boundary condition tests: 49 XP, 50 XP, 51 XP (overflow preservation)
+	mgr.reset_run()
+	mgr.add_xp(49)
+	if mgr.current_level != 1 or mgr.current_xp != 49 or not mgr.pending_levels.is_empty():
+		append_log("FAIL: 49 XP boundary failed (level %d, xp %d/50)" % [mgr.current_level, mgr.current_xp], logs)
+		root_node.queue_free()
+		return false
+
+	# 50 XP exact threshold -> Level 2, 0/90 XP, exactly 1 choice queued
+	mgr.add_xp(1)
+	if mgr.current_level != 2 or mgr.current_xp != 0 or mgr.xp_needed != 90 or mgr.pending_levels.size() != 1:
+		append_log("FAIL: Exact threshold 50 XP did not advance to Level 2 cleanly (level %d, xp %d/%d, pending %d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed, mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	# 1 overflow XP -> Level 2, 1/90 XP, pending choices still 1
+	mgr.add_xp(1)
+	if mgr.current_level != 2 or mgr.current_xp != 1 or mgr.xp_needed != 90 or mgr.pending_levels.size() != 1:
+		append_log("FAIL: Overflow XP not preserved at Level 2 (level %d, xp %d/%d, pending %d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed, mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Multi-threshold jump & Requisition decoupling
+	mgr.reset_run()
+	# 150 XP jump:
+	# Level 1 requires 50 XP -> reaches Level 2 with 100 XP remaining
+	# Level 2 requires 90 XP -> reaches Level 3 with 10 XP remaining
+	# Level 3 requires 140 XP -> final state: Level 3, 10/140 XP, exactly 2 choices queued
+	mgr.add_xp(150)
+	if mgr.current_level != 3 or mgr.current_xp != 10 or mgr.xp_needed != 140 or mgr.pending_levels.size() != 2:
+		append_log("FAIL: Multi-threshold jump failed (level %d, xp %d/%d, pending %d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed, mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	# Requisition point award MUST NOT trigger or queue level-up card selections
+	var pending_before := mgr.pending_levels.size()
+	mgr.award_requisition(2)
+	if mgr.requisition_points != 2 or mgr.pending_levels.size() != pending_before:
+		append_log("FAIL: award_requisition corrupted level progression queue (req %d, pending %d vs %d)" % [mgr.requisition_points, mgr.pending_levels.size(), pending_before], logs)
+		root_node.queue_free()
+		return false
+
+	# 4. Idempotent enemy death and reward guards
+	var death_events: Array[int] = [0]
+	var on_enemy_destroyed = func(_enemy: Node, _salvage: int) -> void:
+		death_events[0] += 1
+	EventBus.enemy_destroyed.connect(on_enemy_destroyed)
+
+	var tank_scene: PackedScene = load("res://scenes/enemies/tank.tscn")
+	var tank_inst: Tank = tank_scene.instantiate() as Tank
+	root_node.add_child(tank_inst)
+	tank_inst._die()
+	tank_inst._die()
+	if death_events[0] != 1:
+		append_log("FAIL: Tank._die() is not idempotent (emitted %d death events)" % death_events[0], logs)
+		EventBus.enemy_destroyed.disconnect(on_enemy_destroyed)
+		root_node.queue_free()
+		return false
+	tank_inst.queue_free()
+	death_events[0] = 0
+
+	var sam_scene: PackedScene = load("res://scenes/enemies/sam_site.tscn")
+	var sam_inst: SAMSite = sam_scene.instantiate() as SAMSite
+	root_node.add_child(sam_inst)
+	sam_inst._die()
+	sam_inst._die()
+	if death_events[0] != 1:
+		append_log("FAIL: SAMSite._die() is not idempotent (emitted %d death events)" % death_events[0], logs)
+		EventBus.enemy_destroyed.disconnect(on_enemy_destroyed)
+		root_node.queue_free()
+		return false
+	sam_inst.queue_free()
+	death_events[0] = 0
+
+	var hunter_scene: PackedScene = load("res://scenes/enemies/hunter_helicopter.tscn")
+	var hunter_inst: HunterHelicopter = hunter_scene.instantiate() as HunterHelicopter
+	root_node.add_child(hunter_inst)
+	hunter_inst._die()
+	hunter_inst._die()
+	if death_events[0] != 1:
+		append_log("FAIL: HunterHelicopter._die() is not idempotent (emitted %d death events)" % death_events[0], logs)
+		EventBus.enemy_destroyed.disconnect(on_enemy_destroyed)
+		root_node.queue_free()
+		return false
+	hunter_inst.queue_free()
+	EventBus.enemy_destroyed.disconnect(on_enemy_destroyed)
+
+	# 5. Continuous line-segment sweep & 3D altitude collection
+	var mock_player := CharacterBody3D.new()
+	mock_player.name = "MockPlayerHeli"
+	mock_player.add_to_group("player")
+	mock_player.velocity = Vector3(38.0, 0.0, 0.0)
+	var tracking_pt := Marker3D.new()
+	tracking_pt.name = "StableTrackingPoint"
+	mock_player.add_child(tracking_pt)
+	root_node.add_child(mock_player)
+	mock_player.global_position = Vector3(0.0, 24.0, 0.0)
+
+	var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
+	var gem: XPGem = gem_scene.instantiate() as XPGem
+	root_node.add_child(gem)
+	gem.global_position = Vector3(0.0, 0.4, 0.0)
+	gem.xp_value = 5
+
+	# 5a. Ground gem idle state: no collection shortcut across 23.6m altitude gap
+	gem._physics_process(0.016)
+	if gem._is_collected:
+		append_log("FAIL: XPGem prematurely collected across 23.6m altitude gap while idle", logs)
+		root_node.queue_free()
+		return false
+
+	# 5b. Magnetize gem: begins moving upward toward player
+	gem.magnetize_to(mock_player)
+	if gem.current_state != XPGem.State.MAGNETIZED:
+		append_log("FAIL: XPGem failed to transition to MAGNETIZED state", logs)
+		root_node.queue_free()
+		return false
+
+	# Process 1 tick while still far below
+	gem._physics_process(0.016)
+	if gem._is_collected or gem.global_position.y >= 20.0:
+		append_log("FAIL: XPGem prematurely collected during transit (Y=%.2f, collected=%s)" % [gem.global_position.y, str(gem._is_collected)], logs)
+		root_node.queue_free()
+		return false
+
+	# 5c. Move gem near the player within sweep distance: (0, 23.0, 0) -> target is (0, 24.0, 0)
+	gem.global_position = Vector3(0.0, 23.0, 0.0)
+	mgr.reset_run()
+	gem._physics_process(0.016)
+	if not gem._is_collected or mgr.current_xp != 5:
+		append_log("FAIL: XPGem failed sweep collection at player altitude (collected=%s, mgr_xp=%d)" % [str(gem._is_collected), mgr.current_xp], logs)
+		root_node.queue_free()
+		return false
+
+	# 5d. Verify idempotency on gem collection: calling _collect() again must not double XP
+	gem._collect()
+	if mgr.current_xp != 5:
+		append_log("FAIL: XPGem double collection occurred (mgr_xp=%d expected 5)" % mgr.current_xp, logs)
+		root_node.queue_free()
+		return false
+
+	mock_player.queue_free()
+	gem.queue_free()
+
+	# 6. Run reset integrity & teardown
+	mgr.reset_run()
+	if mgr.current_level != 1 or mgr.current_xp != 0 or mgr.xp_needed != 50 or not mgr.pending_levels.is_empty():
+		append_log("FAIL: Final reset_run failed clean reset (level %d, xp %d, needed %d, pending %d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed, mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Single-kill non-level, 49/50/51 XP boundary & overflow, multi-level jumps, requisition decoupling, idempotent death/drops, and 3D altitude sweep collection verified.", logs)
+	return true
+

@@ -30,6 +30,22 @@ size = Vector3(34, 0.12, 34)
 material = ExtResource("1_ssgul")
 size = Vector3(34, 0.12, 36)
 
+[sub_resource type="BoxMesh" id="BoxMesh_ssgul"]
+material = ExtResource("1_ssgul")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cs3po"]
+material = ExtResource("1_ssgul")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hv8ye"]
+material = ExtResource("4_jn80s")
+size = Vector3(38, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jn80s"]
+material = ExtResource("1_ssgul")
+size = Vector3(40, 0.12, 40)
+
 [node name="CentralUrbanDistrict" type="Node3D" unique_id=1610325910]
 
 [node name="CivicBlock" type="Node3D" parent="." unique_id=359026367]
@@ -118,3 +134,66 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 78, 0, -43)
 
 [node name="NorthGreen" parent="StreetFurniture" unique_id=1802881413 instance=ExtResource("5_qnq3g")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 105, 0, -111)
+
+[node name="FinancialPlaza" type="Node3D" parent="." unique_id=1480327699]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="FinancialPlaza" unique_id=935194867]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.06, -92)
+mesh = SubResource("BoxMesh_ssgul")
+
+[node name="TowerWest" parent="FinancialPlaza" unique_id=1445437435 instance=ExtResource("6_131bl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 0, -96)
+
+[node name="TowerEast" parent="FinancialPlaza" unique_id=1376861386 instance=ExtResource("6_131bl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 160, 0, -96)
+
+[node name="PlazaTrees" parent="FinancialPlaza" unique_id=1366883010 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.2, -78)
+
+[node name="PlazaLight" parent="FinancialPlaza" unique_id=127289317 instance=ExtResource("9_ec40w")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.1, -86)
+
+[node name="CommercialAvenue" type="Node3D" parent="." unique_id=1986053829]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="CommercialAvenue" unique_id=1620323825]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.06, -34)
+mesh = SubResource("BoxMesh_cs3po")
+
+[node name="CommercialOffice" parent="CommercialAvenue" unique_id=510267704 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 142, 0, -40)
+
+[node name="OfficeParking" parent="CommercialAvenue" unique_id=1541000646 instance=ExtResource("7_5d1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 154, 0, -24)
+
+[node name="ClientCar" parent="CommercialAvenue" unique_id=910403863 instance=ExtResource("8_1jxbc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 152, 0.2, -24)
+
+[node name="MetroCafe" parent="CommercialAvenue" unique_id=975470699 instance=ExtResource("3_hv8ye")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 162, 0, -42)
+
+[node name="TransitHub" type="Node3D" parent="." unique_id=1614028950]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="TransitHub" unique_id=642310296]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 92, 0.06, -150)
+mesh = SubResource("BoxMesh_hv8ye")
+
+[node name="TerminalBuilding" parent="TransitHub" unique_id=129887008 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 86, 0, -154)
+
+[node name="BusTurnaround" parent="TransitHub" unique_id=548306367 instance=ExtResource("7_5d1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 96, 0, -142)
+
+[node name="TerminalPark" parent="TransitHub" unique_id=873049332 instance=ExtResource("5_qnq3g")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 104, 0.2, -150)
+
+[node name="NorthSkylineBlock" type="Node3D" parent="." unique_id=213445478]
+
+[node name="PavedBlock" type="MeshInstance3D" parent="NorthSkylineBlock" unique_id=1047590983]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.06, -150)
+mesh = SubResource("BoxMesh_jn80s")
+
+[node name="AvenueHighrise" parent="NorthSkylineBlock" unique_id=1204218540 instance=ExtResource("6_131bl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -154)
+
+[node name="AvenueMidrise" parent="NorthSkylineBlock" unique_id=116020391 instance=ExtResource("2_cs3po")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, 0, -144)

@@ -21,8 +21,10 @@ enum State {
 @export var reload_time: float = 1.3
 @export var wait_time: float = 0.25
 @export var bullet_damage: float = 6.5
-@export var xp_reward: int = 22
+@export var xp_reward: int = 12
 
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 var current_health: float = 45.0
 var current_state: State = State.IDLE
 var is_alive: bool = true
@@ -223,6 +225,9 @@ func _flash_hit() -> void:
 		tween.tween_property(head, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	_release_slot()
 	if EnemyRegistry.instance:
@@ -231,15 +236,17 @@ func _die() -> void:
 	if eb and eb.has_signal("enemy_destroyed"):
 		eb.emit_signal("enemy_destroyed", self, 100)
 
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			if "xp_value" in gem:
-				gem.xp_value = xp_reward
-			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	if not _has_spawned_rewards:
+		_has_spawned_rewards = true
+		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_reward
+				gem.transform.origin = global_position + Vector3(0, 1.0, 0)
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)
 
 	var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 	if expl_scene:

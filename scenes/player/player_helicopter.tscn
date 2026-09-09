@@ -46,7 +46,7 @@ radius = 0.4
 height = 0.8
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_u2e65"]
-height = 50.0
+height = 75.0
 radius = 18.0
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_a8x1g"]
@@ -130,6 +130,7 @@ process_material = SubResource("ParticleProcessMaterial_Dust")
 draw_pass_1 = SubResource("Mesh_Dust")
 
 [node name="XPMagnetArea" type="Area3D" parent="." unique_id=2119638778]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -10, 0)
 collision_layer = 0
 collision_mask = 16
 monitorable = false

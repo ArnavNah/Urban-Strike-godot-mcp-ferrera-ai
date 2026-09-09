@@ -327,8 +327,8 @@ func _on_missile_warning(_source_pos: Vector3, is_active: bool) -> void:
 
 func _on_xp_updated(current: int, needed: int, level: int) -> void:
 	if xp_bar:
-		xp_bar.max_value = needed
-		xp_bar.value = current
+		xp_bar.max_value = maxf(1.0, float(needed))
+		xp_bar.value = clampf(float(current), 0.0, xp_bar.max_value)
 	if level_label:
 		level_label.text = "LVL %d" % level
 

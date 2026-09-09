@@ -21,8 +21,10 @@ enum State {
 @export var burst_interval: float = 0.11
 @export var reload_time: float = 1.3
 @export var damage_per_shot: float = 1.2 # GDD baseline
-@export var xp_reward: int = 6
+@export var xp_reward: int = 3
 
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 var current_health: float = 24.0
 var current_state: State = State.APPROACH
 var is_alive: bool = true
@@ -36,17 +38,23 @@ var _has_attack_slot: bool = false
 var _lod_frame_counter: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
+var _stuck_timer: float = 0.0
+var _last_pos: Vector3 = Vector3.ZERO
+var _is_recovering: bool = false
+var _recovery_timer: float = 0.0
 
 @onready var los_ray: RayCast3D = get_node_or_null("LOSRayCast")
 
 func _ready() -> void:
 	add_to_group("enemies")
-	floor_snap_length = 0.5
+	floor_snap_length = 0.6
 	floor_stop_on_slope = true
 	floor_max_angle = deg_to_rad(45.0)
 	up_direction = Vector3.UP
 	if global_position.y > 0.0 and global_position.y <= 1.0:
 		global_position.y = 0.0
+
+	_last_pos = global_position
 
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
@@ -135,6 +143,17 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 
 func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
+	if _is_recovering:
+		_recovery_timer -= delta
+		velocity.x = _reposition_dir.x * move_speed
+		velocity.z = _reposition_dir.z * move_speed
+		if _reposition_dir.length_squared() > 0.01:
+			var target_yaw := atan2(-_reposition_dir.x, -_reposition_dir.z)
+			rotation.y = lerp_angle(rotation.y, target_yaw, 6.0 * delta)
+		if _recovery_timer <= 0.0:
+			_is_recovering = false
+		return
+
 	var to_player := (_player.global_position - global_position)
 	to_player.y = 0.0
 	var dir := to_player.normalized()
@@ -147,6 +166,23 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 
 	# Obstacle avoidance steering
 	var move_dir := _steer_around_obstacles(dir)
+
+	# Stuck detection
+	var disp := (global_position - _last_pos).length()
+	if disp < 0.25 * delta * move_speed:
+		_stuck_timer += delta
+		if _stuck_timer >= 1.6:
+			_is_recovering = true
+			_recovery_timer = 0.8
+			_stuck_timer = 0.0
+			var rev := -move_dir
+			var perp := Vector3(-rev.z, 0.0, rev.x)
+			_reposition_dir = (rev * 0.5 + (perp if randf() > 0.5 else -perp) * 0.5).normalized()
+			move_dir = _reposition_dir
+	else:
+		_stuck_timer = 0.0
+		_last_pos = global_position
+
 	velocity.x = move_dir.x * move_speed
 	velocity.z = move_dir.z * move_speed
 
@@ -297,22 +333,43 @@ func _apply_separation() -> void:
 
 func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 	var space := get_world_3d().direct_space_state
+	if not space or desired_dir.length_squared() < 0.01:
+		return desired_dir
+
 	var origin := global_position + Vector3(0.0, 0.6, 0.0)
 	var forward_check := origin + desired_dir * 3.5
 	var query := PhysicsRayQueryParameters3D.create(origin, forward_check, 1) # Layer 1 = World
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
 	var hit := space.intersect_ray(query)
 
-	if hit.is_empty():
-		return desired_dir
+	if not hit.is_empty():
+		var normal: Vector3 = hit.get("normal", Vector3.UP)
+		normal.y = 0.0
+		if normal.length_squared() > 0.01:
+			var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
+			if tangent.dot(desired_dir) < 0.0:
+				tangent = -tangent
+			return (desired_dir * 0.4 + tangent * 0.6).normalized()
 
-	# Steer left or right of the obstacle normal
-	var normal: Vector3 = hit.get("normal", Vector3.UP)
-	normal.y = 0.0
-	if normal.length_squared() > 0.01:
-		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
-		if tangent.dot(desired_dir) < 0.0:
-			tangent = -tangent
-		return (desired_dir * 0.4 + tangent * 0.6).normalized()
+	# Whiskers for lateral corner detection
+	var left_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(30.0))
+	var right_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(-30.0))
+
+	var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 2.8, 1)
+	left_query.collide_with_areas = false
+	left_query.collide_with_bodies = true
+	var left_hit := space.intersect_ray(left_query)
+
+	var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 2.8, 1)
+	right_query.collide_with_areas = false
+	right_query.collide_with_bodies = true
+	var right_hit := space.intersect_ray(right_query)
+
+	if not left_hit.is_empty() and right_hit.is_empty():
+		return desired_dir.rotated(Vector3.UP, deg_to_rad(-25.0)).normalized()
+	elif not right_hit.is_empty() and left_hit.is_empty():
+		return desired_dir.rotated(Vector3.UP, deg_to_rad(25.0)).normalized()
 
 	return desired_dir
 
@@ -371,6 +428,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	_release_slot()
 	if EnemyRegistry.instance:
@@ -396,6 +456,9 @@ func _die() -> void:
 	queue_free()
 
 func _spawn_xp() -> void:
+	if _has_spawned_rewards:
+		return
+	_has_spawned_rewards = true
 	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D

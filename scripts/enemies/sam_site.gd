@@ -19,8 +19,10 @@ enum State {
 @export var reload_time: float = 3.5
 @export var missile_damage: float = 22.0 # GDD baseline
 @export var missile_scene: PackedScene
-@export var xp_reward: int = 50
+@export var xp_reward: int = 25
 
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 var current_health: float = 60.0
 var current_state: State = State.SEARCHING
 var is_alive: bool = true
@@ -236,6 +238,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	_warn_player(false)
 	_release_slot()
@@ -262,6 +267,9 @@ func _die() -> void:
 	queue_free()
 
 func _spawn_xp() -> void:
+	if _has_spawned_rewards:
+		return
+	_has_spawned_rewards = true
 	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D

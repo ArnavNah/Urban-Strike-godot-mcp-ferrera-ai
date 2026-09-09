@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://c3fmnwrt2gb5v" path="res://scenes/environment/props/tree_cluster.tscn" id="6_6bxcl"]
 [ext_resource type="PackedScene" uid="uid://diaewkf215q76" path="res://scenes/environment/props/sandbag.tscn" id="6_byhbq"]
 [ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="7_gmt77"]
+[ext_resource type="PackedScene" uid="uid://cdsq1pdmth2tl" path="res://scenes/environment/props/crate.tscn" id="10_byhbq"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_o21og"]
 material = ExtResource("1_fiukq")
@@ -41,6 +42,22 @@ bottom_radius = 2.8
 height = 1.5
 radial_segments = 12
 rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_mjwt7"]
+material = ExtResource("1_fiukq")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6bxcl"]
+material = ExtResource("1_fiukq")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gmt77"]
+material = ExtResource("1_fiukq")
+size = Vector3(40, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ei258"]
+material = ExtResource("7_gmt77")
+size = Vector3(40, 0.12, 40)
 
 [node name="CityOutskirts" type="Node3D" unique_id=131739001]
 
@@ -124,3 +141,57 @@ mesh = SubResource("CylinderMesh_xe6j0")
 [node name="RoadsideRock" type="MeshInstance3D" parent="RockOutcrops" unique_id=839740032]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -109, 0.6, 20)
 mesh = SubResource("CylinderMesh_vmyvs")
+
+[node name="SolarArrayFarm" type="Node3D" parent="." unique_id=1219968442]
+
+[node name="Court" type="MeshInstance3D" parent="SolarArrayFarm" unique_id=275756374]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, 35)
+mesh = SubResource("BoxMesh_mjwt7")
+
+[node name="SolarPerimeterTrees" parent="SolarArrayFarm" unique_id=2114586435 instance=ExtResource("6_6bxcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -158, 0.2, 28)
+
+[node name="MaintenanceUte" parent="SolarArrayFarm" unique_id=117630457 instance=ExtResource("4_byhbq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -142, 0.1, 42)
+
+[node name="GravelQuarry" type="Node3D" parent="." unique_id=265537578]
+
+[node name="Court" type="MeshInstance3D" parent="GravelQuarry" unique_id=1193640001]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, 95)
+mesh = SubResource("BoxMesh_6bxcl")
+
+[node name="QuarryMound" parent="GravelQuarry" unique_id=54833453 instance=ExtResource("5_mjwt7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -154, 0, 95)
+
+[node name="AbandonedExcavator" parent="GravelQuarry" unique_id=539606918 instance=ExtResource("5_ha8ys")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -142, 0.1, 92)
+
+[node name="ToolCache" parent="GravelQuarry" unique_id=1604591116 instance=ExtResource("10_byhbq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -144, 0, 104)
+
+[node name="OvergrownSettlement" type="Node3D" parent="." unique_id=619659734]
+
+[node name="Court" type="MeshInstance3D" parent="OvergrownSettlement" unique_id=1671629515]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 0.06, 150)
+mesh = SubResource("BoxMesh_gmt77")
+
+[node name="AbandonedCabin" parent="OvergrownSettlement" unique_id=1955292474 instance=ExtResource("3_ha8ys")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -98, 0, 154)
+
+[node name="SettlementWoods" parent="OvergrownSettlement" unique_id=430263550 instance=ExtResource("6_6bxcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -88, 0.2, 146)
+
+[node name="CabinSandbags" parent="OvergrownSettlement" unique_id=1057112391 instance=ExtResource("6_byhbq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -92, 0, 158)
+
+[node name="SouthwestScrubland" type="Node3D" parent="." unique_id=778042505]
+
+[node name="Court" type="MeshInstance3D" parent="SouthwestScrubland" unique_id=2019068783]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 0.06, 150)
+mesh = SubResource("BoxMesh_ei258")
+
+[node name="ScrublandKnoll" parent="SouthwestScrubland" unique_id=1555344968 instance=ExtResource("5_mjwt7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0, 152)
+
+[node name="ScrubTrees" parent="SouthwestScrubland" unique_id=2038172149 instance=ExtResource("6_6bxcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0.2, 146)

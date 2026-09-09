@@ -3,14 +3,14 @@ extends Node3D
 
 ## Manages the defined tactical mission boundary around the combat city.
 ## Features a 3-tier boundary:
-## 1. Inner Safe Area: Normal unhindered gameplay (default: 125m half-extent)
-## 2. Warning Border: HUD warning message + return direction + subtle inward steering resistance (125m - 145m)
-## 3. Hard Boundary: Physical collision + smooth position clamp and outward velocity zeroing (148m)
+## 1. Inner Safe Area: Normal unhindered gameplay (default: 185m half-extent)
+## 2. Warning Border: HUD warning message + return direction + smooth inward steering resistance (185m - 215m)
+## 3. Hard Boundary: Physical collision + smooth position clamp and outward velocity zeroing (222m)
 
-@export var safe_half_extent: float = 125.0
-@export var warning_half_extent: float = 145.0
-@export var hard_half_extent: float = 148.0
-@export var gentle_resistance: float = 14.0
+@export var safe_half_extent: float = 185.0
+@export var warning_half_extent: float = 215.0
+@export var hard_half_extent: float = 222.0
+@export var gentle_resistance: float = 18.0
 @export var target_player: Node3D = null
 
 var _is_currently_warning: bool = false
@@ -36,7 +36,8 @@ func _physics_process(delta: float) -> void:
 		var return_vec := -Vector3(p_pos.x, 0.0, p_pos.z)
 		return_vec.y = 0.0
 		var return_dir := return_vec.normalized() if return_vec.length_squared() > 0.01 else Vector3.ZERO
-		var ratio := clampf((max_coord - safe_half_extent) / maxf(1.0, warning_half_extent - safe_half_extent), 0.0, 1.0)
+		var linear_ratio := clampf((max_coord - safe_half_extent) / maxf(1.0, warning_half_extent - safe_half_extent), 0.0, 1.0)
+		var curved_ratio := linear_ratio * linear_ratio
 		var dist_to_edge := maxf(0.0, hard_half_extent - max_coord)
 
 		if not _is_currently_warning or Engine.get_physics_frames() % 6 == 0:
@@ -44,25 +45,26 @@ func _physics_process(delta: float) -> void:
 			if EventBus.has_signal("border_warning_changed"):
 				EventBus.border_warning_changed.emit(true, return_dir, dist_to_edge)
 
-		# Gentle inward resistance to help player turn around
+		# Smooth inward resistance to guide player back to the combat zone
 		if "velocity" in target_player and target_player.velocity is Vector3:
-			target_player.velocity += return_dir * (gentle_resistance * ratio * delta)
+			target_player.velocity += return_dir * (gentle_resistance * curved_ratio * delta)
 	else:
 		if _is_currently_warning:
 			_is_currently_warning = false
 			if EventBus.has_signal("border_warning_changed"):
 				EventBus.border_warning_changed.emit(false, Vector3.ZERO, 0.0)
 
-	# The authored StaticBody3D walls perform the hard stop through normal
-	# move_and_slide collision. Suppress outward velocity close to a wall,
-	# and smoothly clamp position to hard_half_extent if pushed beyond.
-	if max_coord >= hard_half_extent - 1.5:
+	# 2. Hard Boundary: Smooth progressive outward velocity dampening close to the wall
+	if max_coord >= hard_half_extent - 2.5:
 		if "velocity" in target_player and target_player.velocity is Vector3:
-			if abs_x >= hard_half_extent - 1.5 and target_player.velocity.x * p_pos.x > 0.0:
-				target_player.velocity.x = 0.0
-			if abs_z >= hard_half_extent - 1.5 and target_player.velocity.z * p_pos.z > 0.0:
-				target_player.velocity.z = 0.0
+			if abs_x >= hard_half_extent - 2.5 and target_player.velocity.x * p_pos.x > 0.0:
+				var wall_proximity: float = clampf((abs_x - (hard_half_extent - 2.5)) / 2.5, 0.0, 1.0)
+				target_player.velocity.x *= (1.0 - wall_proximity)
+			if abs_z >= hard_half_extent - 2.5 and target_player.velocity.z * p_pos.z > 0.0:
+				var wall_proximity: float = clampf((abs_z - (hard_half_extent - 2.5)) / 2.5, 0.0, 1.0)
+				target_player.velocity.z *= (1.0 - wall_proximity)
 
+	# Physical safety clamp prevents escaping outside the boundary without visual snapping
 	if max_coord > hard_half_extent:
 		target_player.global_position.x = clampf(p_pos.x, -hard_half_extent, hard_half_extent)
 		target_player.global_position.z = clampf(p_pos.z, -hard_half_extent, hard_half_extent)

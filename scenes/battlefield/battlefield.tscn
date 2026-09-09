@@ -47,15 +47,20 @@ tonemap_mode = 2
 glow_enabled = true
 glow_intensity = 0.4
 fog_enabled = true
-fog_light_color = Color(0.6313726, 0.6784314, 0.67058825, 1)
-fog_density = 0.0009
+fog_mode = 1
+fog_light_color = Color(0.65, 0.72, 0.78, 1)
+fog_density = 1.0
+fog_aerial_perspective = 0.5
+fog_sky_affect = 0.85
+fog_depth_begin = 180.0
+fog_depth_end = 450.0
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_42cih"]
 material = ExtResource("2_sg773")
-size = Vector2(900, 900)
+size = Vector2(1200, 1200)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Ground"]
-size = Vector3(340, 2, 340)
+size = Vector3(520, 2, 520)
 
 [sub_resource type="BoxMesh" id="BoxMesh_61f51"]
 material = ExtResource("27_oblmd")
@@ -232,7 +237,7 @@ transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0
 light_color = Color(1, 0.95, 0.88, 1)
 light_energy = 1.05
 shadow_enabled = true
-directional_shadow_max_distance = 115.0
+directional_shadow_max_distance = 180.0
 
 [node name="Terrain" type="Node3D" parent="." unique_id=1255328092]
 
@@ -319,112 +324,122 @@ script = ExtResource("18_kjtcb")
 [node name="PeripheralScenery" type="Node3D" parent="Environment" unique_id=1485438750]
 
 [node name="DistantSkylineSide0" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=24180550]
+transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
 cast_shadow = 0
 multimesh = SubResource("MultiMesh_p5wp6")
 
 [node name="DistantSkylineSide1" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1802562327]
+transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
 cast_shadow = 0
 multimesh = SubResource("MultiMesh_6dbsf")
 
 [node name="DistantSkylineSide2" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1253755814]
+transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
 cast_shadow = 0
 multimesh = SubResource("MultiMesh_0dhpt")
 
 [node name="DistantSkylineSide3" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1131548324]
+transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
 cast_shadow = 0
 multimesh = SubResource("MultiMesh_wrgpj")
 
 [node name="HorizonHill_0_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=164675978]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -165, 4.7, 285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -165, 4.7, 385)
 mesh = SubResource("CylinderMesh_vixb4")
 
 [node name="HorizonHill_0_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=485445086]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 6.7, 285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 6.7, 385)
 mesh = SubResource("CylinderMesh_d6e8j")
 
 [node name="HorizonHill_0_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=300355576]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 8.7, 285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 8.7, 385)
 mesh = SubResource("CylinderMesh_ivm54")
 
 [node name="HorizonHill_0_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=607721799]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 4.7, 285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 4.7, 385)
 mesh = SubResource("CylinderMesh_va7fe")
 
 [node name="HorizonHill_1_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1105760782]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 285, 4.7, 164.99998)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 4.7, 164.99998)
 mesh = SubResource("CylinderMesh_mq602")
 
 [node name="HorizonHill_1_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1965065410]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 285, 6.7, 59.99999)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 6.7, 59.99999)
 mesh = SubResource("CylinderMesh_nw58i")
 
 [node name="HorizonHill_1_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=288742038]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 285, 8.7, -45.00001)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 8.7, -45.00001)
 mesh = SubResource("CylinderMesh_ud71r")
 
 [node name="HorizonHill_1_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1454670084]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 285, 4.7, -150.00002)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 4.7, -150.00002)
 mesh = SubResource("CylinderMesh_kak68")
 
 [node name="HorizonHill_2_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1867230719]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 164.99997, 4.7, -285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 164.99997, 4.7, -385)
 mesh = SubResource("CylinderMesh_jh0dd")
 
 [node name="HorizonHill_2_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=2055849879]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59.999973, 6.7, -285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59.999973, 6.7, -385)
 mesh = SubResource("CylinderMesh_h1rfw")
 
 [node name="HorizonHill_2_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=650944460]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45.000027, 8.7, -285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45.000027, 8.7, -385)
 mesh = SubResource("CylinderMesh_rp5ym")
 
 [node name="HorizonHill_2_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=150170611]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150.00003, 4.7, -285)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150.00003, 4.7, -385)
 mesh = SubResource("CylinderMesh_d65e6")
 
 [node name="HorizonHill_3_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1871419109]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -285, 4.7, -165)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 4.7, -165)
 mesh = SubResource("CylinderMesh_hwvsa")
 
 [node name="HorizonHill_3_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1787107770]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -285, 6.7, -59.999996)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 6.7, -59.999996)
 mesh = SubResource("CylinderMesh_eiw41")
 
 [node name="HorizonHill_3_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1150891734]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -285, 8.7, 45.000004)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 8.7, 45.000004)
 mesh = SubResource("CylinderMesh_8orji")
 
 [node name="HorizonHill_3_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=2013039842]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -285, 4.7, 150)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 4.7, 150)
 mesh = SubResource("CylinderMesh_x4jty")
 
 [node name="GroundSpawnSources" type="Node3D" parent="." unique_id=1473496848]
 
 [node name="RoadEntrance_North" type="Marker3D" parent="GroundSpawnSources" unique_id=923967111]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -210)
 
 [node name="RoadEntrance_South" type="Marker3D" parent="GroundSpawnSources" unique_id=37266496]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 210)
 
 [node name="IndustrialEntrance" type="Marker3D" parent="GroundSpawnSources" unique_id=77240272]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120, 0.3, 66)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 180, 0.3, 90)
 
 [node name="MilitaryGate" type="Marker3D" parent="GroundSpawnSources" unique_id=451748911]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -180, 0.3, -90)
+
+[node name="RoadEntrance_East" type="Marker3D" parent="GroundSpawnSources" unique_id=1380686114]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 210, 0.3, 0)
+
+[node name="RoadEntrance_West" type="Marker3D" parent="GroundSpawnSources" unique_id=668285629]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -210, 0.3, 0)
 
 [node name="AirSpawnSources" type="Node3D" parent="." unique_id=1138359302]
 
 [node name="AirEntry_North" type="Marker3D" parent="AirSpawnSources" unique_id=2112862960]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, -140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, -220)
 
 [node name="AirEntry_East" type="Marker3D" parent="AirSpawnSources" unique_id=111839904]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 20, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 220, 20, 0)
 
 [node name="AirEntry_South" type="Marker3D" parent="AirSpawnSources" unique_id=126619933]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 220)
 
 [node name="AirEntry_West" type="Marker3D" parent="AirSpawnSources" unique_id=569918211]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 20, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -220, 20, 0)
 
 [node name="RooftopSpawnSources" type="Node3D" parent="." unique_id=845792284]
 
@@ -458,5 +473,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.3, 50)
 
 [node name="SupplyPoint_02" type="Marker3D" parent="PickupLocations" unique_id=507207279]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0.3, 24)
+
+[node name="SupplyPoint_03" type="Marker3D" parent="PickupLocations" unique_id=476419263]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 0.3, -80)
+
+[node name="SupplyPoint_04" type="Marker3D" parent="PickupLocations" unique_id=2144749231]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 0.3, -80)
+
+[node name="SupplyPoint_05" type="Marker3D" parent="PickupLocations" unique_id=1395139420]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 0.3, 80)
+
+[node name="SupplyPoint_06" type="Marker3D" parent="PickupLocations" unique_id=1754828247]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 0.3, 80)
 
 [node name="EnvironmentBounds" type="Node3D" parent="." unique_id=1606020095]

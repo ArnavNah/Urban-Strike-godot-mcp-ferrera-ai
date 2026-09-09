@@ -14,6 +14,8 @@ var _cannon_timer: float = 0.0
 var _rocket_timer: float = 0.0
 var _escort_spawned: bool = false
 var _player: Node3D = null
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 
 @onready var front_rotor: Node3D = $Visuals/FrontRotor
 @onready var rear_rotor: Node3D = $Visuals/RearRotor
@@ -229,6 +231,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
@@ -260,17 +265,19 @@ func _die() -> void:
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(crate)
 
-	# Spawn high-value Boss XP Gems (135 XP total: 3 x 45 XP)
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		for i in range(3):
-			var gem := xp_scene.instantiate() as Node3D
-			if gem:
-				if "xp_value" in gem:
-					gem.xp_value = 45
-				gem.transform.origin = global_position + Vector3(randf_range(-3, 3), 0.5, randf_range(-3, 3))
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(gem)
+	# Spawn high-value Boss XP Gems (75 XP total: 3 x 25 XP)
+	if not _has_spawned_rewards:
+		_has_spawned_rewards = true
+		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+		if xp_scene:
+			for i in range(3):
+				var gem := xp_scene.instantiate() as Node3D
+				if gem:
+					if "xp_value" in gem:
+						gem.xp_value = 25
+					gem.transform.origin = global_position + Vector3(randf_range(-3, 3), 0.5, randf_range(-3, 3))
+					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					p.add_child.call_deferred(gem)
 
 	# Multi-explosion sequence using VfxPool
 	for i in range(8):

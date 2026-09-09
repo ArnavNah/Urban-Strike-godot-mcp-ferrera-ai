@@ -51,6 +51,22 @@ height = 0.8
 radial_segments = 12
 rings = 1
 
+[sub_resource type="BoxMesh" id="BoxMesh_nvioq"]
+material = ExtResource("1_nvioq")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1rkuc"]
+material = ExtResource("5_b81xo")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2n1fc"]
+material = ExtResource("1_nvioq")
+size = Vector3(40, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wy3wq"]
+material = ExtResource("5_b81xo")
+size = Vector3(40, 0.12, 40)
+
 [node name="IndustrialDistrict" type="Node3D" unique_id=2014291378]
 
 [node name="FreightTerminal" type="Node3D" parent="." unique_id=255118104]
@@ -129,3 +145,60 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 109, 0, 53)
 
 [node name="DepotBarrier" parent="YardFurniture" unique_id=818320504 instance=ExtResource("14_6tw2u")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 82, 0, 52)
+
+[node name="ContainerTerminal" type="Node3D" parent="." unique_id=2051847485]
+
+[node name="Court" type="MeshInstance3D" parent="ContainerTerminal" unique_id=684280344]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.06, 35)
+mesh = SubResource("BoxMesh_nvioq")
+
+[node name="StackA" parent="ContainerTerminal" unique_id=1391154196 instance=ExtResource("8_jegy1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 142, 0, 28)
+
+[node name="StackB" parent="ContainerTerminal" unique_id=1000780475 instance=ExtResource("8_jegy1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 158, 0, 28)
+
+[node name="StackC" parent="ContainerTerminal" unique_id=1442827378 instance=ExtResource("8_jegy1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 142, 0, 42)
+
+[node name="YardTruck" parent="ContainerTerminal" unique_id=1276750370 instance=ExtResource("3_2n1fc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 156, 0.2, 42)
+
+[node name="ChemicalRefinery" type="Node3D" parent="." unique_id=1367422798]
+
+[node name="Court" type="MeshInstance3D" parent="ChemicalRefinery" unique_id=724851184]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0.06, 95)
+mesh = SubResource("BoxMesh_1rkuc")
+
+[node name="RefineryTanks" parent="ChemicalRefinery" unique_id=185368023 instance=ExtResource("6_i0jeq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 142, 0, 95)
+
+[node name="FuelDepot" parent="ChemicalRefinery" unique_id=2039910183 instance=ExtResource("7_ac1r5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 158, 0, 95)
+
+[node name="SecurityBarrier" parent="ChemicalRefinery" unique_id=1916150683 instance=ExtResource("14_6tw2u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 0, 78)
+
+[node name="PowerSubstation" type="Node3D" parent="." unique_id=93402471]
+
+[node name="Court" type="MeshInstance3D" parent="PowerSubstation" unique_id=1208009253]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 95, 0.06, 150)
+mesh = SubResource("BoxMesh_2n1fc")
+
+[node name="TransformerUnits" parent="PowerSubstation" unique_id=509091627 instance=ExtResource("6_i0jeq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 92, 0, 146)
+
+[node name="SparesCrate" parent="PowerSubstation" unique_id=1785678452 instance=ExtResource("4_wy3wq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 104, 0, 154)
+
+[node name="RailYardDepot" type="Node3D" parent="." unique_id=1274532250]
+
+[node name="Court" type="MeshInstance3D" parent="RailYardDepot" unique_id=612261588]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.06, 150)
+mesh = SubResource("BoxMesh_wy3wq")
+
+[node name="RailFreightShed" parent="RailYardDepot" unique_id=222995444 instance=ExtResource("2_1rkuc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 152)
+
+[node name="CargoStack" parent="RailYardDepot" unique_id=2003824161 instance=ExtResource("8_jegy1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0, 146)

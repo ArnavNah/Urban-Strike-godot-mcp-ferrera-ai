@@ -15,6 +15,7 @@
 [ext_resource type="Material" uid="uid://cub24u6v0a51h" path="res://resources/environment/line.tres" id="13_1hj03"]
 [ext_resource type="PackedScene" uid="uid://dfkeeo0ntvx68" path="res://scenes/environment/military/checkpoint.tscn" id="14_fxi31"]
 [ext_resource type="PackedScene" uid="uid://cuve5cme7mhsq" path="res://scenes/environment/props/parked_vehicle.tscn" id="15_jaf86"]
+[ext_resource type="PackedScene" uid="uid://diaewkf215q76" path="res://scenes/environment/props/sandbag.tscn" id="16_ljocd"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_cinse"]
 material = ExtResource("1_2ryw7")
@@ -226,6 +227,22 @@ size = Vector3(0.12, 0.12, 10)
 [sub_resource type="BoxMesh" id="BoxMesh_bsrd4"]
 material = ExtResource("10_ug7v3")
 size = Vector3(0.12, 0.12, 10)
+
+[sub_resource type="BoxMesh" id="BoxMesh_axwrp"]
+material = ExtResource("12_i3bq6")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_0u0da"]
+material = ExtResource("1_2ryw7")
+size = Vector3(44, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_uxqh3"]
+material = ExtResource("3_axwrp")
+size = Vector3(40, 0.12, 40)
+
+[sub_resource type="BoxMesh" id="BoxMesh_nrt8m"]
+material = ExtResource("1_2ryw7")
+size = Vector3(40, 0.12, 40)
 
 [node name="MilitaryDistrict" type="Node3D" unique_id=1219101787]
 
@@ -440,3 +457,54 @@ mesh = SubResource("BoxMesh_cj5yr")
 [node name="BottomRail" type="MeshInstance3D" parent="PerimeterFence/SouthCenter" unique_id=1990570380]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
 mesh = SubResource("BoxMesh_bsrd4")
+
+[node name="AirfieldRunway" type="Node3D" parent="." unique_id=1046232691]
+
+[node name="Court" type="MeshInstance3D" parent="AirfieldRunway" unique_id=441160206]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, -94)
+mesh = SubResource("BoxMesh_axwrp")
+
+[node name="AuxiliaryHangar" parent="AirfieldRunway" unique_id=1930475992 instance=ExtResource("2_ljocd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -154, 0, -98)
+
+[node name="FlightlineGate" parent="AirfieldRunway" unique_id=1127039425 instance=ExtResource("14_fxi31")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 0, -78)
+
+[node name="VehicleMotorPool" type="Node3D" parent="." unique_id=2097776629]
+
+[node name="Court" type="MeshInstance3D" parent="VehicleMotorPool" unique_id=2098389182]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, -35)
+mesh = SubResource("BoxMesh_0u0da")
+
+[node name="MaintenanceOffice" parent="VehicleMotorPool" unique_id=1280337893 instance=ExtResource("5_uxqh3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -158, 0, -42)
+
+[node name="ServiceTruck" parent="VehicleMotorPool" unique_id=1608737850 instance=ExtResource("15_jaf86")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -144, 0.2, -32)
+
+[node name="PerimeterSandbags" parent="VehicleMotorPool" unique_id=1014966009 instance=ExtResource("16_ljocd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -148, 0, -22)
+
+[node name="BunkerComplex" type="Node3D" parent="." unique_id=1896318723]
+
+[node name="Court" type="MeshInstance3D" parent="BunkerComplex" unique_id=1822779804]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 0.06, -150)
+mesh = SubResource("BoxMesh_uxqh3")
+
+[node name="AuxiliaryRadar" parent="BunkerComplex" unique_id=18124236 instance=ExtResource("7_4ve2s")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -92, 0, -154)
+
+[node name="MunitionsCrates" parent="BunkerComplex" unique_id=595678999 instance=ExtResource("6_nrt8m")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -104, 0, -146)
+
+[node name="NorthwestOutpost" type="Node3D" parent="." unique_id=909210526]
+
+[node name="Court" type="MeshInstance3D" parent="NorthwestOutpost" unique_id=1651744201]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 0.06, -150)
+mesh = SubResource("BoxMesh_nrt8m")
+
+[node name="NorthernCheckpoint" parent="NorthwestOutpost" unique_id=1231068247 instance=ExtResource("14_fxi31")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 0, -150)
+
+[node name="GuardPost" parent="NorthwestOutpost" unique_id=261367078 instance=ExtResource("5_uxqh3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -46, 0, -154)

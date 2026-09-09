@@ -12,7 +12,8 @@ enum State {
 	ATTACK,
 	BREAK_AWAY,
 	REPOSITION,
-	COOLDOWN
+	COOLDOWN,
+	RECOVER
 }
 
 @export var max_health: float = 50.0
@@ -20,8 +21,10 @@ enum State {
 @export var attack_speed: float = 34.0 # High-speed commit speed
 @export var damage_per_shot: float = 2.4
 @export var fire_rate: float = 8.0 # RPS during attack window
-@export var xp_reward: int = 28
+@export var xp_reward: int = 15
 
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 var current_health: float = 50.0
 var current_state: State = State.APPROACH
 var is_alive: bool = true
@@ -35,6 +38,14 @@ var _player: Node3D = null
 var _has_air_slot: bool = false
 var _lod_frame_counter: int = 0
 
+# Steering physics & 3D altitude banding
+var _max_horizontal_accel: float = 26.0 # m/s²
+var _stuck_timer: float = 0.0
+var _last_stuck_pos: Vector3 = Vector3.ZERO
+var _recovery_vector: Vector3 = Vector3.FORWARD
+var _ground_ray_timer: float = 0.0
+var _cached_ground_y: float = 0.0
+
 @onready var visuals: Node3D = $Visuals
 @onready var main_rotor: Node3D = $Visuals/MainRotor
 
@@ -47,6 +58,7 @@ func _ready() -> void:
 	_player = get_tree().get_first_node_in_group("player")
 	if is_instance_valid(_player):
 		global_position.y = _player.global_position.y
+	_last_stuck_pos = global_position
 	_pick_approach_waypoint()
 
 func _exit_tree() -> void:
@@ -80,20 +92,23 @@ func _physics_process(delta: float) -> void:
 			return # LOD 1: 30 Hz
 		step_delta = delta * 2.0
 
-	# Keep altitude matched with player in all states
+	# Keep altitude matched with player with rooftop clearance
 	_match_player_altitude(step_delta)
 
 	var dist_flat := Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
 
 	# Safety check: Never hover directly over player or ram
-	if dist_flat < 14.0 and current_state != State.BREAK_AWAY:
+	if dist_flat < 14.0 and current_state != State.BREAK_AWAY and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.BREAK_AWAY)
 
 	# Active pursuit: follow when player travels across city
-	if dist_flat > 52.0 and current_state != State.APPROACH:
+	if dist_flat > 52.0 and current_state != State.APPROACH and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.APPROACH)
+
+	# Stuck detection
+	_check_stuck_condition(step_delta)
 
 	match current_state:
 		State.APPROACH:
@@ -113,7 +128,10 @@ func _physics_process(delta: float) -> void:
 			_attack_vector.y = 0.0
 			_attack_vector = _attack_vector.normalized()
 			var target_yaw := atan2(-_attack_vector.x, -_attack_vector.z)
-			rotation.y = lerp_angle(rotation.y, target_yaw, 5.0 * step_delta)
+			rotation.y = lerp_angle(rotation.y, target_yaw, clampf(5.0 * step_delta, 0.0, 1.0))
+			# Slow slightly while aligning
+			velocity.x = move_toward(velocity.x, 0.0, _max_horizontal_accel * step_delta)
+			velocity.z = move_toward(velocity.z, 0.0, _max_horizontal_accel * step_delta)
 			_state_timer -= step_delta
 			if _state_timer <= 0.0:
 				if _request_air_slot():
@@ -122,17 +140,17 @@ func _physics_process(delta: float) -> void:
 					_state_timer = 0.35 # Wait for air slot
 
 		State.COMMIT:
-			velocity.x = _attack_vector.x * attack_speed
-			velocity.z = _attack_vector.z * attack_speed
-			move_and_slide()
+			var target_vec := _steer_around_air_obstacles(_attack_vector)
+			velocity.x = move_toward(velocity.x, target_vec.x * attack_speed, _max_horizontal_accel * step_delta)
+			velocity.z = move_toward(velocity.z, target_vec.z * attack_speed, _max_horizontal_accel * step_delta)
 			if dist_flat <= 35.0 or _state_timer <= 0.0:
 				_transition_to(State.ATTACK)
 			_state_timer -= step_delta
 
 		State.ATTACK:
-			velocity.x = _attack_vector.x * attack_speed
-			velocity.z = _attack_vector.z * attack_speed
-			move_and_slide()
+			var target_vec := _steer_around_air_obstacles(_attack_vector)
+			velocity.x = move_toward(velocity.x, target_vec.x * attack_speed, _max_horizontal_accel * step_delta)
+			velocity.z = move_toward(velocity.z, target_vec.z * attack_speed, _max_horizontal_accel * step_delta)
 			_attack_timer -= step_delta
 			_shot_cooldown -= step_delta
 			if _shot_cooldown <= 0.0:
@@ -144,9 +162,9 @@ func _physics_process(delta: float) -> void:
 
 		State.BREAK_AWAY:
 			var break_vec := (_attack_vector + Vector3(0.7, 0.0, 0.35)).normalized()
-			velocity.x = break_vec.x * (cruise_speed * 1.15)
-			velocity.z = break_vec.z * (cruise_speed * 1.15)
-			move_and_slide()
+			break_vec = _steer_around_air_obstacles(break_vec)
+			velocity.x = move_toward(velocity.x, break_vec.x * (cruise_speed * 1.15), _max_horizontal_accel * step_delta)
+			velocity.z = move_toward(velocity.z, break_vec.z * (cruise_speed * 1.15), _max_horizontal_accel * step_delta)
 			_state_timer -= step_delta
 			if _state_timer <= 0.0:
 				_release_air_slot()
@@ -163,13 +181,25 @@ func _physics_process(delta: float) -> void:
 			_state_timer -= step_delta
 
 		State.COOLDOWN:
+			velocity.x = move_toward(velocity.x, 0.0, _max_horizontal_accel * step_delta)
+			velocity.z = move_toward(velocity.z, 0.0, _max_horizontal_accel * step_delta)
 			_state_timer -= step_delta
 			if _state_timer <= 0.0:
 				_pick_approach_waypoint()
 				_transition_to(State.APPROACH)
 
+		State.RECOVER:
+			_state_timer -= step_delta
+			_fly_toward(global_position + _recovery_vector * 25.0, cruise_speed * 1.1, step_delta)
+			velocity.y = move_toward(velocity.y, 6.0, 18.0 * step_delta)
+			if _state_timer <= 0.0:
+				_transition_to(State.REPOSITION)
+
 	# Aircraft separation steering so helicopters never stack
 	_apply_separation()
+
+	# Single physics move call per frame
+	move_and_slide()
 
 	# Visual banking into turns
 	if visuals:
@@ -177,15 +207,83 @@ func _physics_process(delta: float) -> void:
 		if horiz_vel.length_squared() > 0.5:
 			var target_yaw := atan2(-velocity.x, -velocity.z)
 			var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, clampf(-yaw_diff * 1.5, -deg_to_rad(30.0), deg_to_rad(30.0)), 6.0 * delta)
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, clampf(-yaw_diff * 1.5, -deg_to_rad(30.0), deg_to_rad(30.0)), clampf(6.0 * delta, 0.0, 1.0))
 		else:
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, 4.0 * delta)
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, clampf(4.0 * delta, 0.0, 1.0))
 
 func _match_player_altitude(delta: float) -> void:
-	if is_instance_valid(_player):
-		var target_y := _player.global_position.y
-		global_position.y = move_toward(global_position.y, target_y, 14.0 * delta)
-		velocity.y = 0.0
+	if not is_instance_valid(_player):
+		return
+
+	_ground_ray_timer -= delta
+	if _ground_ray_timer <= 0.0:
+		_ground_ray_timer = 0.15
+		_cached_ground_y = _query_ground_or_roof_height()
+
+	var target_y := _player.global_position.y
+	# Ensure clearance over rooftops
+	var min_clearance_y := _cached_ground_y + 4.5
+	target_y = maxf(target_y, min_clearance_y)
+
+	var y_diff := target_y - global_position.y
+	var target_vy := clampf(y_diff * 3.5, -5.0, 7.0)
+	velocity.y = move_toward(velocity.y, target_vy, 18.0 * delta)
+
+func _query_ground_or_roof_height() -> float:
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return 0.0
+	var from_pos := global_position + Vector3(0.0, 4.0, 0.0)
+	var to_pos := from_pos + Vector3(0.0, -80.0, 0.0)
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return 0.0
+	return hit.get("position", Vector3.ZERO).y
+
+func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	if not space or desired_dir.length_squared() < 0.01:
+		return desired_dir
+
+	var origin := global_position
+	var lookahead: float = 16.0
+	var target := origin + desired_dir.normalized() * lookahead
+	var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var hit := space.intersect_ray(query)
+
+	if hit.is_empty():
+		return desired_dir
+
+	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
+	normal.y = 0.0
+	if normal.length_squared() > 0.01:
+		normal = normal.normalized()
+		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
+		if tangent.dot(desired_dir) < 0.0:
+			tangent = -tangent
+		return (desired_dir.normalized() * 0.35 + tangent * 0.65).normalized()
+
+	return desired_dir
+
+func _check_stuck_condition(delta: float) -> void:
+	if current_state == State.BREAK_AWAY or current_state == State.RECOVER:
+		_stuck_timer = 0.0
+		_last_stuck_pos = global_position
+		return
+
+	var disp := (global_position - _last_stuck_pos).length()
+	if disp < 0.4:
+		_stuck_timer += delta
+		if _stuck_timer >= 1.8:
+			_transition_to(State.RECOVER)
+	else:
+		_stuck_timer = 0.0
+		_last_stuck_pos = global_position
 
 func _transition_to(new_state: State) -> void:
 	current_state = new_state
@@ -206,17 +304,25 @@ func _transition_to(new_state: State) -> void:
 			_state_timer = 2.5
 		State.COOLDOWN:
 			_state_timer = 1.0
+		State.RECOVER:
+			_state_timer = 1.4
+			_stuck_timer = 0.0
+			var perp := Vector3(-global_transform.basis.z.z, 0.0, global_transform.basis.z.x)
+			if randf() > 0.5:
+				perp = -perp
+			_recovery_vector = perp.normalized()
 
 func _fly_toward(dest: Vector3, speed: float, delta: float) -> void:
 	var to_dest := dest - global_position
 	to_dest.y = 0.0
-	var dir := to_dest.normalized()
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
-	move_and_slide()
+	var dir := to_dest.normalized() if to_dest.length_squared() > 0.01 else Vector3.ZERO
+	dir = _steer_around_air_obstacles(dir)
+	var target_vel := dir * speed
+	velocity.x = move_toward(velocity.x, target_vel.x, _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, target_vel.z, _max_horizontal_accel * delta)
 	if Vector2(dir.x, dir.z).length_squared() > 0.01:
 		var target_yaw := atan2(-dir.x, -dir.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, 4.5 * delta)
+		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(4.5 * delta, 0.0, 1.0))
 
 func _pick_approach_waypoint() -> void:
 	if not is_instance_valid(_player):
@@ -270,8 +376,16 @@ func _apply_separation() -> void:
 				var weight: float = (search_radius - d) / search_radius
 				avoidance += (diff / d) * weight * 16.0
 
+	avoidance = avoidance.limit_length(16.0)
 	velocity.x += avoidance.x
 	velocity.z += avoidance.z
+
+	var max_horiz: float = maxf(attack_speed, cruise_speed) * 1.3
+	var horiz := Vector2(velocity.x, velocity.z)
+	if horiz.length() > max_horiz:
+		horiz = horiz.limit_length(max_horiz)
+		velocity.x = horiz.x
+		velocity.z = horiz.y
 
 func _fire_pass_shot() -> void:
 	if not is_instance_valid(_player):
@@ -324,6 +438,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	_release_air_slot()
 	if EnemyRegistry.instance:
@@ -349,6 +466,9 @@ func _die() -> void:
 	queue_free()
 
 func _spawn_xp() -> void:
+	if _has_spawned_rewards:
+		return
+	_has_spawned_rewards = true
 	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D

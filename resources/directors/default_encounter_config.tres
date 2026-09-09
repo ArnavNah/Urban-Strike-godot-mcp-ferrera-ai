@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="EncounterConfig" format=3 uid="uid://bmwi4mv70b3ng"]
+
+[ext_resource type="Script" uid="uid://f41eseadbkn0" path="res://scripts/resources/encounter_config.gd" id="1_ecfg"]
+
+[resource]
+script = ExtResource("1_ecfg")
+despawn_distance = 240.0

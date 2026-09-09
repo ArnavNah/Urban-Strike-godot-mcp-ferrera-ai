@@ -39,6 +39,8 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_destroy_radar()
 
 func _destroy_radar() -> void:
+	if not is_active:
+		return
 	is_active = false
 	if EventBus:
 		EventBus.radar_status_changed.emit(false)
@@ -63,14 +65,14 @@ func _destroy_radar() -> void:
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(crate)
 
-	# Spawn multiple XP pickups (125 XP total: 5 x 25 XP)
-	for i in range(5):
+	# Spawn multiple XP pickups (60 XP total: 4 x 15 XP)
+	for i in range(4):
 		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 		if xp_scene:
 			var gem: Node3D = xp_scene.instantiate() as Node3D
 			if gem:
 				if "xp_value" in gem:
-					gem.xp_value = 25
+					gem.xp_value = 15
 				var offset := Vector3(randf_range(-2.0, 2.0), 0.5, randf_range(-2.0, 2.0))
 				gem.transform.origin = global_position + offset
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root

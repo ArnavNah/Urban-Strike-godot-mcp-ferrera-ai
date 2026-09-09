@@ -50,6 +50,8 @@ func _destroy_prop() -> void:
 		if gem_scene:
 			var gem := gem_scene.instantiate() as Node3D
 			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = 5
 				gem.transform.origin = global_position + Vector3(0, 0.4, 0)
 				var parent := get_parent() if get_parent() else get_tree().root
 				parent.add_child.call_deferred(gem)

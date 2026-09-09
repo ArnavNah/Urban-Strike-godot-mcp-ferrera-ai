@@ -497,15 +497,15 @@ func _handle_magnet() -> void:
 			elif area.has_method("set_magnet_target"):
 				area.set_magnet_target(self)
 
-	# Direct fallback ensures pickups spawn-inside or flat-ground gems are never missed
+	# Direct fallback ensures pickups spawn-inside or flat-ground gems are never missed across supported altitudes
 	var rad_sq := magnet_radius * magnet_radius
 	var gems := get_tree().get_nodes_in_group("xp_gems")
 	for g in gems:
 		if not is_instance_valid(g) or g.is_queued_for_deletion():
 			continue
 		var offset: Vector3 = g.global_position - global_position
-		offset.y = 0.0
-		if offset.length_squared() <= rad_sq:
+		var flat_offset := Vector2(offset.x, offset.z)
+		if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
 			if g.has_method("magnetize_to"):
 				g.magnetize_to(self)
 			elif g.has_method("set_magnet_target"):
@@ -516,8 +516,8 @@ func _handle_magnet() -> void:
 		if not is_instance_valid(c) or c.is_queued_for_deletion():
 			continue
 		var offset: Vector3 = c.global_position - global_position
-		offset.y = 0.0
-		if offset.length_squared() <= rad_sq:
+		var flat_offset := Vector2(offset.x, offset.z)
+		if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
 			if c.has_method("magnetize_to"):
 				c.magnetize_to(self)
 			elif c.has_method("set_magnet_target"):

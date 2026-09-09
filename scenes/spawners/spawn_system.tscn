@@ -1,9 +1,11 @@
 [gd_scene format=3 uid="uid://cfqhdlseeosdk"]
 
 [ext_resource type="Script" uid="uid://c6rc6647nu1dk" path="res://scripts/directors/spawn_director.gd" id="1_dhq36"]
+[ext_resource type="Resource" path="res://resources/directors/default_encounter_config.tres" id="2_ecfg"]
 
 [node name="SpawnSystem" type="Node3D" unique_id=696647088 node_paths=PackedStringArray("ground_zones_node", "air_zones_node", "rooftop_zones_node", "stream_timer", "formation_timer", "surge_timer")]
 script = ExtResource("1_dhq36")
+encounter_config = ExtResource("2_ecfg")
 ground_zones_node = NodePath("GroundSpawnZones")
 air_zones_node = NodePath("AirSpawnZones")
 rooftop_zones_node = NodePath("RooftopSpawnZones")

@@ -18,7 +18,8 @@ enum State {
 	REPOSITION,
 	DISENGAGE,
 	RETREAT,
-	DEATH
+	DEATH,
+	RECOVER
 }
 
 @export var archetype: AirEnemyArchetype:
@@ -26,8 +27,10 @@ enum State {
 		archetype = value
 		_apply_archetype_config()
 @export var custom_threat_cost: int = -1
-@export var xp_reward: int = 28
+@export var xp_reward: int = 12
 
+var _is_dead: bool = false
+var _has_spawned_rewards: bool = false
 var current_state: State = State.APPROACH
 var current_health: float = 30.0
 var is_alive: bool = true
@@ -53,6 +56,16 @@ var _is_telegraphing: bool = false
 var _burst_shots_remaining: int = 0
 var _evasion_cooldown: float = 0.0
 
+# Steering physics & 3D altitude banding
+var _instance_alt_offset: float = 0.0
+var _stuck_timer: float = 0.0
+var _last_stuck_pos: Vector3 = Vector3.ZERO
+var _recovery_vector: Vector3 = Vector3.FORWARD
+var _max_horizontal_accel: float = 24.0 # m/s²
+var _ground_ray_timer: float = 0.0
+var _cached_ground_y: float = 0.0
+var _current_target_y: float = 14.0
+
 @onready var visuals: Node3D = get_node_or_null("Visuals")
 @onready var main_rotor: Node3D = get_node_or_null("Visuals/MainRotor")
 @onready var los_ray: RayCast3D = get_node_or_null("LOSRayCast")
@@ -69,10 +82,14 @@ func _ready() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, true)
 
+	_instance_alt_offset = (float(get_instance_id() % 7) - 3.0) * 0.75
+	_last_stuck_pos = global_position
+
 	_player = get_tree().get_first_node_in_group("player")
 	if is_instance_valid(_player):
-		var init_y: float = clampf(_player.global_position.y, _get_alt_min(), _get_alt_max())
+		var init_y: float = clampf(_get_preferred_altitude() + _instance_alt_offset, _get_alt_min(), _get_alt_max())
 		global_position.y = init_y
+		_current_target_y = init_y
 
 	_orbit_direction = 1.0 if randf() > 0.5 else -1.0
 	_orbit_angle = randf() * TAU
@@ -145,20 +162,23 @@ func _physics_process(delta: float) -> void:
 			return # LOD 1: 30 Hz
 		step_delta = delta * 2.0
 
-	# Smooth altitude band compliance (no vertical bouncing)
+	# Smooth altitude band compliance and rooftop clearance
 	_update_altitude(step_delta)
 
 	var flat_dist := Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
 
 	# Safety check: Never hover directly over player or ram
-	if flat_dist < 14.0 and current_state != State.BREAK_AWAY and current_state != State.DISENGAGE and current_state != State.RETREAT:
+	if flat_dist < 14.0 and current_state != State.BREAK_AWAY and current_state != State.DISENGAGE and current_state != State.RETREAT and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.BREAK_AWAY)
 
 	# Active pursuit check: If player travels away across the city, resume approach
-	if flat_dist > archetype.preferred_distance * 1.6 and current_state != State.APPROACH and current_state != State.ENTER and current_state != State.RETREAT:
+	if flat_dist > archetype.preferred_distance * 1.6 and current_state != State.APPROACH and current_state != State.ENTER and current_state != State.RETREAT and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.APPROACH)
+
+	# Stuck detection against obstacles or buildings
+	_check_stuck_condition(step_delta)
 
 	match current_state:
 		State.ENTER:
@@ -179,6 +199,8 @@ func _physics_process(delta: float) -> void:
 			_tick_reposition(step_delta, flat_dist)
 		State.RETREAT:
 			_tick_retreat(step_delta)
+		State.RECOVER:
+			_tick_recover(step_delta)
 
 	# Lightweight aircraft separation steering so helicopters never stack
 	_apply_separation()
@@ -190,14 +212,113 @@ func _physics_process(delta: float) -> void:
 func _update_altitude(delta: float) -> void:
 	if not is_instance_valid(_player):
 		return
-	var target_y := clampf(_player.global_position.y + 3.0, _get_alt_min(), _get_alt_max())
-	# If Transport is actively landing at LZ, descend toward ground level
-	if archetype.weapon_type == AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
-		if current_state == State.ATTACK:
-			target_y = 3.5 # Near ground hover for drop
 
-	global_position.y = move_toward(global_position.y, target_y, 8.0 * delta)
-	velocity.y = 0.0
+	_ground_ray_timer -= delta
+	if _ground_ray_timer <= 0.0:
+		_ground_ray_timer = 0.15
+		_cached_ground_y = _query_ground_or_roof_height()
+
+	var base_alt: float = _get_preferred_altitude()
+	# If Transport is actively landing at LZ, descend toward ground level
+	if archetype and archetype.weapon_type == AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
+		if current_state == State.ATTACK:
+			base_alt = 3.5
+
+	# Maintain at least 4.5m clearance above rooftops or ground terrain
+	var min_clearance_y: float = _cached_ground_y + 4.5
+	var target_y: float = maxf(base_alt + _instance_alt_offset, min_clearance_y)
+	if min_clearance_y <= _get_alt_max():
+		target_y = clampf(target_y, _get_alt_min(), _get_alt_max() + 8.0)
+	_current_target_y = target_y
+
+	# Vertical velocity approach with bounded climb/descent rate
+	var y_diff: float = target_y - global_position.y
+	var max_climb: float = 7.0
+	var max_descent: float = 5.0
+	var target_vy: float = clampf(y_diff * 3.5, -max_descent, max_climb)
+	velocity.y = move_toward(velocity.y, target_vy, 18.0 * delta)
+
+func _query_ground_or_roof_height() -> float:
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return 0.0
+	var from_pos := global_position + Vector3(0.0, 4.0, 0.0)
+	var to_pos := from_pos + Vector3(0.0, -80.0, 0.0)
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1) # Layer 1 = World
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return 0.0
+	return hit.get("position", Vector3.ZERO).y
+
+func _get_preferred_altitude() -> float:
+	if not archetype:
+		return 14.0
+	match archetype.weapon_type:
+		AirEnemyArchetype.WeaponType.MACHINE_GUN:
+			return archetype.altitude_min + 1.5
+		AirEnemyArchetype.WeaponType.ROCKET_SALVO:
+			return archetype.altitude_min + 3.0
+		AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
+			return archetype.altitude_min + 2.5
+		AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
+			return archetype.altitude_max - 1.0
+		AirEnemyArchetype.WeaponType.ACE_ARSENAL:
+			return archetype.altitude_min + 3.0
+		AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
+			return archetype.altitude_min + 2.0
+		_:
+			return (archetype.altitude_min + archetype.altitude_max) * 0.5
+
+func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	if not space or desired_dir.length_squared() < 0.01:
+		return desired_dir
+
+	var origin := global_position
+	var lookahead: float = 16.0
+	var target := origin + desired_dir.normalized() * lookahead
+	var query := PhysicsRayQueryParameters3D.create(origin, target, 1) # Layer 1 = World
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var hit := space.intersect_ray(query)
+
+	if hit.is_empty():
+		return desired_dir
+
+	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
+	normal.y = 0.0
+	if normal.length_squared() > 0.01:
+		normal = normal.normalized()
+		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
+		if tangent.dot(desired_dir) < 0.0:
+			tangent = -tangent
+		return (desired_dir.normalized() * 0.35 + tangent * 0.65).normalized()
+
+	return desired_dir
+
+func _check_stuck_condition(delta: float) -> void:
+	if current_state == State.ENTER or current_state == State.DISENGAGE or current_state == State.RETREAT or current_state == State.RECOVER or current_state == State.DEATH:
+		_stuck_timer = 0.0
+		_last_stuck_pos = global_position
+		return
+
+	var disp := (global_position - _last_stuck_pos).length()
+	if disp < 0.4:
+		_stuck_timer += delta
+		if _stuck_timer >= 1.8:
+			_transition_to(State.RECOVER)
+	else:
+		_stuck_timer = 0.0
+		_last_stuck_pos = global_position
+
+func _tick_recover(delta: float) -> void:
+	_state_timer -= delta
+	_fly_toward(global_position + _recovery_vector * 25.0, archetype.cruise_speed * 1.1, delta)
+	velocity.y = move_toward(velocity.y, 6.5, 20.0 * delta)
+	if _state_timer <= 0.0:
+		_transition_to(State.REPOSITION)
 
 func _apply_separation() -> void:
 	var avoidance := Vector3.ZERO
@@ -220,37 +341,47 @@ func _apply_separation() -> void:
 				var weight: float = (search_radius - d) / search_radius
 				avoidance += (diff / d) * weight * 16.0
 
+	avoidance = avoidance.limit_length(16.0)
 	velocity.x += avoidance.x
 	velocity.z += avoidance.z
+
+	# Clamp maximum horizontal speed to prevent runaway accumulation from separation
+	if archetype:
+		var max_horiz := maxf(archetype.attack_speed, archetype.cruise_speed) * 1.3
+		var horiz := Vector2(velocity.x, velocity.z)
+		if horiz.length() > max_horiz:
+			horiz = horiz.limit_length(max_horiz)
+			velocity.x = horiz.x
+			velocity.z = horiz.y
 
 func _update_visual_orientation(delta: float) -> void:
 	var horiz_vel := Vector2(velocity.x, velocity.z)
 	if horiz_vel.length_squared() > 0.5:
 		var target_yaw := atan2(-velocity.x, -velocity.z)
 		var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
-		rotation.y = lerp_angle(rotation.y, target_yaw, archetype.turn_speed * delta)
+		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(archetype.turn_speed * delta, 0.0, 1.0))
 
 		if visuals:
 			# Roll into turns (banking)
 			var max_bank := deg_to_rad(30.0)
 			var target_bank := clampf(-yaw_diff * 1.5, -max_bank, max_bank)
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, target_bank, 6.0 * delta)
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, target_bank, clampf(6.0 * delta, 0.0, 1.0))
 
 			# Readable forward pitch based on speed
 			var max_pitch := deg_to_rad(14.0)
 			var speed_ratio := clampf(horiz_vel.length() / maxf(archetype.attack_speed, 1.0), 0.0, 1.0)
 			var target_pitch := speed_ratio * max_pitch
-			visuals.rotation.x = lerp_angle(visuals.rotation.x, target_pitch, 5.0 * delta)
+			visuals.rotation.x = lerp_angle(visuals.rotation.x, target_pitch, clampf(5.0 * delta, 0.0, 1.0))
 	else:
 		if visuals:
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, 4.0 * delta)
-			visuals.rotation.x = lerp_angle(visuals.rotation.x, 0.0, 4.0 * delta)
+			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, clampf(4.0 * delta, 0.0, 1.0))
+			visuals.rotation.x = lerp_angle(visuals.rotation.x, 0.0, clampf(4.0 * delta, 0.0, 1.0))
 
 func _tick_enter(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 	# Move toward battlefield center or player
 	var target_pos := _player.global_position if is_instance_valid(_player) else Vector3.ZERO
-	_fly_toward(target_pos, archetype.cruise_speed)
+	_fly_toward(target_pos, archetype.cruise_speed, delta)
 
 	if flat_dist <= 75.0 or _state_timer <= 0.0:
 		_transition_to(State.APPROACH)
@@ -268,7 +399,7 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 	if flat_dist > 50.0:
 		approach_speed *= 1.35 # Catch-up speed so aircraft never get permanently left behind
 
-	_fly_toward(approach_dest, approach_speed)
+	_fly_toward(approach_dest, approach_speed, delta)
 
 	if flat_dist <= archetype.preferred_distance + 3.0 or _state_timer <= 0.0:
 		match archetype.weapon_type:
@@ -291,12 +422,15 @@ func _tick_attack_setup(delta: float, flat_dist: float) -> void:
 	to_player.y = 0.0
 	if to_player.length_squared() > 0.01:
 		var target_yaw := atan2(-to_player.x, -to_player.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, archetype.turn_speed * delta)
+		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(archetype.turn_speed * delta, 0.0, 1.0))
 
-	# Slow slightly to line up committed vector
+	# Slow slightly to line up committed vector with bounded deceleration
 	var prep_speed: float = archetype.cruise_speed * 0.7
-	velocity.x = -global_transform.basis.z.x * prep_speed
-	velocity.z = -global_transform.basis.z.z * prep_speed
+	var fwd_vec := -global_transform.basis.z
+	fwd_vec.y = 0.0
+	fwd_vec = fwd_vec.normalized()
+	velocity.x = move_toward(velocity.x, fwd_vec.x * prep_speed, _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, fwd_vec.z * prep_speed, _max_horizontal_accel * delta)
 
 	if _state_timer <= 0.0:
 		# Lock attack vector
@@ -326,9 +460,9 @@ func _tick_orbit(delta: float, flat_dist: float) -> void:
 
 	var orbit_offset := Vector3(cos(_orbit_angle), 0.0, sin(_orbit_angle)) * archetype.orbit_distance
 	var orbit_target := _player.global_position + orbit_offset
-	orbit_target.y = global_position.y
+	orbit_target.y = _current_target_y
 
-	_fly_toward(orbit_target, archetype.cruise_speed)
+	_fly_toward(orbit_target, archetype.cruise_speed, delta)
 
 	# Periodically break orbit and initiate an attack run
 	if _state_timer <= 0.0:
@@ -348,8 +482,9 @@ func _tick_strafe(delta: float, flat_dist: float) -> void:
 	var perp := Vector3(-fwd.z, 0.0, fwd.x) * _orbit_direction
 
 	var strafe_vec := (perp * 0.85 + fwd * 0.25).normalized()
-	velocity.x = strafe_vec.x * archetype.attack_speed
-	velocity.z = strafe_vec.z * archetype.attack_speed
+	strafe_vec = _steer_around_air_obstacles(strafe_vec)
+	velocity.x = move_toward(velocity.x, strafe_vec.x * archetype.attack_speed, _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, strafe_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
 
 	# Frequent machine gun bursts during strafe pass
 	if _shot_cooldown <= 0.0:
@@ -364,9 +499,28 @@ func _tick_attack(delta: float, flat_dist: float) -> void:
 	_attack_timer -= delta
 	_shot_cooldown -= delta
 
-	# Committed flight run along attack vector
-	velocity.x = _attack_vector.x * archetype.attack_speed
-	velocity.z = _attack_vector.z * archetype.attack_speed
+	# Committed flight run along attack vector with bounded steering
+	var atk_vec := _steer_around_air_obstacles(_attack_vector)
+	velocity.x = move_toward(velocity.x, atk_vec.x * archetype.attack_speed, _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, atk_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
+
+	match archetype.weapon_type:
+		AirEnemyArchetype.WeaponType.MACHINE_GUN:
+			_exec_machine_gun_attack(delta)
+		AirEnemyArchetype.WeaponType.ROCKET_SALVO:
+			_exec_rocket_salvo_attack(delta)
+		AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
+			_exec_gunship_attack(delta)
+		AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
+			_exec_jammer_attack(delta)
+		AirEnemyArchetype.WeaponType.ACE_ARSENAL:
+			_exec_ace_attack(delta)
+		AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
+			_exec_transport_drop(delta)
+
+	if _attack_timer <= 0.0 or flat_dist < 14.0:
+		_release_air_slot()
+		_transition_to(State.BREAK_AWAY)
 
 	match archetype.weapon_type:
 		AirEnemyArchetype.WeaponType.MACHINE_GUN:
@@ -441,8 +595,9 @@ func _tick_break_away(delta: float) -> void:
 	_state_timer -= delta
 	# Break away sharply at 50 to 75 degrees away from attack heading
 	var break_vec := (_attack_vector + Vector3(0.85 * _orbit_direction, 0.0, 0.35)).normalized()
-	velocity.x = break_vec.x * (archetype.cruise_speed * 1.2)
-	velocity.z = break_vec.z * (archetype.cruise_speed * 1.2)
+	break_vec = _steer_around_air_obstacles(break_vec)
+	velocity.x = move_toward(velocity.x, break_vec.x * (archetype.cruise_speed * 1.2), _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, break_vec.z * (archetype.cruise_speed * 1.2), _max_horizontal_accel * delta)
 
 	if _state_timer <= 0.0:
 		if archetype.weapon_type == AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY and has_deployed_cargo:
@@ -463,19 +618,21 @@ func _tick_reposition(delta: float, flat_dist: float) -> void:
 	if to_wp.length() < 12.0 or _state_timer <= 0.0:
 		_transition_to(State.APPROACH)
 	else:
-		_fly_toward(_target_waypoint, archetype.cruise_speed)
+		_fly_toward(_target_waypoint, archetype.cruise_speed, delta)
 
-func _tick_retreat(_delta: float) -> void:
+func _tick_retreat(delta: float) -> void:
 	var center_dir := (global_position - Vector3.ZERO)
 	center_dir.y = 0.0
 	var exit_vec := center_dir.normalized()
 	if exit_vec.length_squared() < 0.01:
 		exit_vec = Vector3.FORWARD
 
-	velocity.x = exit_vec.x * archetype.cruise_speed
-	velocity.z = exit_vec.z * archetype.cruise_speed
+	var target_x: float = exit_vec.x * archetype.cruise_speed
+	var target_z: float = exit_vec.z * archetype.cruise_speed
+	velocity.x = move_toward(velocity.x, target_x, _max_horizontal_accel * delta)
+	velocity.z = move_toward(velocity.z, target_z, _max_horizontal_accel * delta)
 
-	if global_position.length() > 142.0:
+	if global_position.length() > 240.0:
 		queue_free()
 
 func _transition_to(new_state: State) -> void:
@@ -509,13 +666,26 @@ func _transition_to(new_state: State) -> void:
 			_pick_reposition_waypoint()
 		State.RETREAT:
 			_state_timer = 10.0
+		State.RECOVER:
+			_state_timer = 1.4
+			_stuck_timer = 0.0
+			var perp := Vector3(-global_transform.basis.z.z, 0.0, global_transform.basis.z.x)
+			if randf() > 0.5:
+				perp = -perp
+			_recovery_vector = perp.normalized()
 
-func _fly_toward(dest: Vector3, speed: float) -> void:
+func _fly_toward(dest: Vector3, speed: float, delta: float = 0.0) -> void:
 	var to_dest := dest - global_position
 	to_dest.y = 0.0
-	var dir := to_dest.normalized()
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
+	var dir := to_dest.normalized() if to_dest.length_squared() > 0.01 else Vector3.ZERO
+	dir = _steer_around_air_obstacles(dir)
+	var target_vel := dir * speed
+	if delta > 0.0:
+		velocity.x = move_toward(velocity.x, target_vel.x, _max_horizontal_accel * delta)
+		velocity.z = move_toward(velocity.z, target_vel.z, _max_horizontal_accel * delta)
+	else:
+		velocity.x = target_vel.x
+		velocity.z = target_vel.z
 
 func _pick_reposition_waypoint() -> void:
 	if not is_instance_valid(_player):
@@ -523,7 +693,7 @@ func _pick_reposition_waypoint() -> void:
 	var angle := randf() * TAU
 	var offset := Vector3(cos(angle), 0.0, sin(angle)) * (archetype.preferred_distance * 1.3)
 	_target_waypoint = _player.global_position + offset
-	_target_waypoint.y = global_position.y
+	_target_waypoint.y = _current_target_y
 
 func _fire_bullet(damage_mult: float = 1.0) -> void:
 	if not is_instance_valid(_player):
@@ -656,6 +826,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _die() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
 	is_alive = false
 	_release_air_slot()
 	if EnemyRegistry.instance:
@@ -682,11 +855,14 @@ func _die() -> void:
 	queue_free()
 
 func _spawn_rewards() -> void:
+	if _has_spawned_rewards:
+		return
+	_has_spawned_rewards = true
 	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
 	if xp_scene:
 		var gem := xp_scene.instantiate() as Node3D
 		if gem:
-			var xp_val: int = archetype.xp_reward if archetype else 28
+			var xp_val: int = archetype.xp_reward if archetype else xp_reward
 			if "xp_value" in gem:
 				gem.xp_value = xp_val
 			gem.transform.origin = global_position

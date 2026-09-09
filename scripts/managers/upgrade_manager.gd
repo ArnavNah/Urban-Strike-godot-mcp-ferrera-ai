@@ -5,7 +5,7 @@ extends Node
 
 var current_xp: int = 0
 var current_level: int = 1
-var xp_needed: int = 35
+var xp_needed: int = 50
 var requisition_points: int = 0
 
 var acquired_upgrades: Array[String] = []
@@ -237,19 +237,19 @@ func get_definition(upgrade_id: String) -> UpgradeDefinition:
 	return upgrade_definitions.get(upgrade_id, null)
 
 ## Smooth configurable XP curve balancing early progression and mid/late geometric scaling
-## Target timings: L2: ~25-35s (35 XP), L3: ~45-65s (65 XP), L4: ~75-100s (105 XP)
+## Target timings: L2: ~25-35s (50 XP, ~9 basic kills), L3: ~45-65s (90 XP), L4: ~75-100s (140 XP), L5: ~105-135s (200 XP)
 func get_required_xp_for_level(level: int) -> int:
 	match level:
 		1:
-			return 35
+			return 50
 		2:
-			return 65
+			return 90
 		3:
-			return 105
+			return 140
 		4:
-			return 160
+			return 200
 		_:
-			return int(160.0 * pow(1.32, float(level - 4)))
+			return int(200.0 * pow(1.28, float(level - 4)))
 
 func reset_run() -> void:
 	current_xp = 0
@@ -269,6 +269,14 @@ func reset_run() -> void:
 	var player := get_tree().get_first_node_in_group("player") as PlayerHelicopter
 	if is_instance_valid(player) and player.missile_pod and player.missile_pod.has_method("reset_ammo"):
 		player.missile_pod.reset_ammo()
+	var menu := get_tree().get_first_node_in_group("level_up_menu")
+	if is_instance_valid(menu):
+		menu.visible = false
+		menu.set("_selection_ready", false)
+		menu.set("_closing", false)
+	var run := get_tree().get_first_node_in_group("run_state_controller")
+	if is_instance_valid(run):
+		run.set_pause_reason(&"upgrade", false)
 	_notify_xp()
 
 func add_xp(amount: int) -> void:
@@ -286,8 +294,6 @@ func add_xp(amount: int) -> void:
 func award_requisition(amount: int = 1) -> void:
 	requisition_points += amount
 	emit_signal("requisition_awarded", requisition_points)
-	pending_levels.append(current_level)
-	_present_next_choice.call_deferred()
 
 func _notify_xp() -> void:
 	if EventBus:
