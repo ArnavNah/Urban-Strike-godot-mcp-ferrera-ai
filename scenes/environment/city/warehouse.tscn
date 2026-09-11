@@ -1,93 +1,36 @@
-[gd_scene format=3 uid="uid://dcvwdf754343h"]
+[gd_scene format=3 uid="uid://bsww1a65ibuij"]
 
-[ext_resource type="Material" uid="uid://c08tyu1wvxfxp" path="res://resources/environment/metal.tres" id="1_45yik"]
-[ext_resource type="Material" uid="uid://dvake1pijcevk" path="res://resources/environment/roof.tres" id="2_liwkt"]
-[ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="3_rphwl"]
-[ext_resource type="Material" uid="uid://dbm38g6dacn80" path="res://resources/environment/glass.tres" id="4_e8ejg"]
+[ext_resource type="PackedScene" uid="uid://cypmgwb7s8fpm" path="res://assets/Models/GLB format/building-r.glb" id="1_6sl3h"]
+[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/Models/GLB format/solar-panel-landscape-group.glb" id="3_liwkt"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_5eqp8"]
-material = ExtResource("1_45yik")
-size = Vector3(32, 8, 22)
+[sub_resource type="BoxShape3D" id="BoxShape3D_v61ox"]
+size = Vector3(15.646606, 7.6615, 8.013601)
 
-[sub_resource type="BoxMesh" id="BoxMesh_fs1q4"]
-material = ExtResource("2_liwkt")
-size = Vector3(32.25, 0.4, 22.25)
-
-[sub_resource type="BoxMesh" id="BoxMesh_tt6yk"]
-material = ExtResource("2_liwkt")
-size = Vector3(32.15, 0.6, 22.15)
-
-[sub_resource type="BoxMesh" id="BoxMesh_flijq"]
-material = ExtResource("2_liwkt")
-size = Vector3(19.84, 5.76, 0.15)
-
-[sub_resource type="BoxMesh" id="BoxMesh_u7h2r"]
-material = ExtResource("3_rphwl")
-size = Vector3(0.18, 0.15, 22)
-
-[sub_resource type="MultiMesh" id="MultiMesh_pvru4"]
-transform_format = 1
-instance_count = 8
-mesh = SubResource("BoxMesh_u7h2r")
-buffer = PackedFloat32Array(1, 0, 0, -14.5, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, -10.357142, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, -6.214286, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, -2.0714285, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, 2.0714285, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, 6.214286, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, 10.357142, 0, 1, 0, 8.48, 0, 0, 1, 0, 1, 0, 0, 14.5, 0, 1, 0, 8.48, 0, 0, 1, 0)
-
-[sub_resource type="BoxMesh" id="BoxMesh_t3fov"]
-material = ExtResource("4_e8ejg")
-size = Vector3(19.2, 0.15, 3)
-
-[sub_resource type="BoxMesh" id="BoxMesh_qc12y"]
-material = ExtResource("1_45yik")
-size = Vector3(3, 0.8, 2)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_1s21i"]
-size = Vector3(32, 8.4, 22)
-
-[node name="Warehouse" type="StaticBody3D" unique_id=1421401752]
+[node name="Warehouse" type="StaticBody3D" unique_id=1578328685]
 collision_mask = 0
 
-[node name="Intact" type="Node3D" parent="." unique_id=1329372086]
+[node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=1598229481]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 7.7815, 0)
 
-[node name="Facade" type="MeshInstance3D" parent="Intact" unique_id=43243764]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
-mesh = SubResource("BoxMesh_5eqp8")
+[node name="Intact" type="Node3D" parent="." unique_id=1120197243]
 
-[node name="RoofCap" type="MeshInstance3D" parent="Intact" unique_id=137792869]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.2, 0)
-mesh = SubResource("BoxMesh_fs1q4")
+[node name="WarehouseModel" parent="Intact" unique_id=1580449893 instance=ExtResource("1_6sl3h")]
+transform = Transform3D(6.3, 0, 0, 0, 5.5, 0, 0, 0, 6.3, -7.5101855e-07, 0, 1.5020371e-06)
 
-[node name="Foundation" type="MeshInstance3D" parent="Intact" unique_id=1010610124]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
-mesh = SubResource("BoxMesh_tt6yk")
+[node name="RoofSolarArray" parent="Intact" unique_id=919583206 instance=ExtResource("3_liwkt")]
+transform = Transform3D(2.1, 0, 0, 0, 2.1, 0, 0, 0, 2.1, -3.0000005, 7.6615005, 4.380941e-07)
 
-[node name="ClosedLoadingDoor" type="MeshInstance3D" parent="Intact" unique_id=622787918]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.88, 11.1)
-mesh = SubResource("BoxMesh_flijq")
+[node name="CollisionWarehouseModel" type="CollisionShape3D" parent="." unique_id=1173223770]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.83075, 0)
+shape = SubResource("BoxShape3D_v61ox")
 
-[node name="RoofSeams" type="MultiMeshInstance3D" parent="Intact" unique_id=630414475]
-cast_shadow = 0
-multimesh = SubResource("MultiMesh_pvru4")
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=1464589175]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 7.7815, 0)
 
-[node name="RoofSkylight" type="MeshInstance3D" parent="Intact" unique_id=673396549]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.55, 0)
-mesh = SubResource("BoxMesh_t3fov")
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=1213373873]
 
-[node name="RoofFixtures" type="Node3D" parent="Intact" unique_id=1280025980]
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=1457174889]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8, 7.7815, 0)
 
-[node name="VentilationUnit" type="MeshInstance3D" parent="Intact/RoofFixtures" unique_id=37233919]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.6, 8.8, -6.16)
-mesh = SubResource("BoxMesh_qc12y")
-
-[node name="StructureCollision" type="CollisionShape3D" parent="." unique_id=794403502]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 0)
-shape = SubResource("BoxShape3D_1s21i")
-
-[node name="RooftopPoints" type="Node3D" parent="." unique_id=1516661184]
-
-[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=1608798769]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.32, 8.42, -5.5)
-
-[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=110231620]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.32, 8.42, 5.5)
-
-[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=1213626188]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.42, 0)
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=282651386]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 7.7815, 0)

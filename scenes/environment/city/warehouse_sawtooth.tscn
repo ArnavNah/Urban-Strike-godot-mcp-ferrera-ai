@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://dx7napa1shieq"]
+
+[ext_resource type="PackedScene" uid="uid://b4anvwa44s8vc" path="res://assets/Models/GLB format/building-c.glb" id="1_8mj6i"]
+[ext_resource type="PackedScene" uid="uid://sewgj6775l54" path="res://assets/Models/GLB format/chimney-medium.glb" id="2_7ekhl"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0mj4p"]
+size = Vector3(13.131544, 7.5, 14.756148)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_357tr"]
+size = Vector3(0.9000001, 3.8500004, 0.9000001)
+
+[node name="WarehouseSawtooth" type="StaticBody3D" unique_id=968418856]
+collision_mask = 0
+
+[node name="Intact" type="Node3D" parent="." unique_id=1341809779]
+
+[node name="WarehouseModel" parent="Intact" unique_id=1183175093 instance=ExtResource("1_8mj6i")]
+transform = Transform3D(7, 0, 0, 0, 6, 0, 0, 0, 7, -0.67321426, 1.3654278e-14, -1.0010743)
+
+[node name="RoofChimney" parent="Intact" unique_id=45607629 instance=ExtResource("2_7ekhl")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 3, 7.5, 2)
+
+[node name="CollisionWarehouseModel" type="CollisionShape3D" parent="." unique_id=205983156]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.75, 0)
+shape = SubResource("BoxShape3D_0mj4p")
+
+[node name="CollisionRoofChimney" type="CollisionShape3D" parent="." unique_id=1472271186]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 9.425, 2)
+shape = SubResource("BoxShape3D_357tr")
+
+[node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=1720531640]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.62, 0)
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=1472284555]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.62, 0)
+
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=418703039]
+
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=1057894429]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 7.62, 0)
+
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=1130974850]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 7.62, 0)

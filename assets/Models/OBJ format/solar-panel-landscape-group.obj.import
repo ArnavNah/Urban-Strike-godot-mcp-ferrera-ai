@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dornpb3n5wbss"
+path="res://.godot/imported/solar-panel-landscape-group.obj-e3d297758990ba64da1739730182d7cb.mesh"
+
+[deps]
+
+files=["res://.godot/imported/solar-panel-landscape-group.obj-e3d297758990ba64da1739730182d7cb.mesh"]
+
+source_file="res://assets/Models/OBJ format/solar-panel-landscape-group.obj"
+dest_files=["res://.godot/imported/solar-panel-landscape-group.obj-e3d297758990ba64da1739730182d7cb.mesh", "res://.godot/imported/solar-panel-landscape-group.obj-e3d297758990ba64da1739730182d7cb.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

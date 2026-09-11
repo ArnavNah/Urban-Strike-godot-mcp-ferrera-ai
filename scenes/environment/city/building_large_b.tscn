@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://8ner1vxmx6iv"]
+
+[ext_resource type="PackedScene" uid="uid://c765l1fn08oyn" path="res://assets/Models/GLB format/building-skyscraper-b.glb" id="1_7h1yt"]
+[ext_resource type="PackedScene" uid="uid://ce24q4m4j4iqa" path="res://assets/Models/GLB format/building-skyscraper-e.glb" id="3_27fh6"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_isse3"]
+size = Vector3(6.799999, 22.4, 6.799999)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_7h1yt"]
+size = Vector3(5.8274994, 18.36, 5.589001)
+
+[node name="BuildingLargeB" type="StaticBody3D" unique_id=1311608355]
+collision_mask = 0
+
+[node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=1267532032]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 22.52, 0)
+
+[node name="Intact" type="Node3D" parent="." unique_id=1929807915]
+
+[node name="TowerMain" parent="Intact" unique_id=523564835 instance=ExtResource("1_7h1yt")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, -3.9999964, 0, 0)
+
+[node name="TowerAnnex" parent="Intact" unique_id=1236978 instance=ExtResource("3_27fh6")]
+transform = Transform3D(4.5, 0, 0, 0, 4.5, 0, 0, 0, 4.5, 3.9999995, 0, -2.682209e-07)
+
+[node name="CollisionTowerMain" type="CollisionShape3D" parent="." unique_id=845388092]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 11.2, 0)
+shape = SubResource("BoxShape3D_isse3")
+
+[node name="CollisionTowerAnnex" type="CollisionShape3D" parent="." unique_id=247114523]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 9.18, 0)
+shape = SubResource("BoxShape3D_7h1yt")
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=284324848]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 22.52, 0)
+
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=844396619]
+
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=221174117]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 22.52, 0)
+
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=641795615]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 22.52, 0)

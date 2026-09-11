@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://d7okn1j3kgwv"]
+
+[ext_resource type="PackedScene" uid="uid://bx2d66eo041id" path="res://assets/Models/GLB format/low-detail-building-wide-a.glb" id="1_xmyyq"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_clbol"]
+size = Vector3(5.2, 5.5, 4.2)
+
+[node name="TownHouseA" type="StaticBody3D" unique_id=1936124923]
+collision_mask = 0
+
+[node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=142819877]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.62, 0)
+
+[node name="Intact" type="Node3D" parent="." unique_id=782119602]
+
+[node name="TownModel" parent="Intact" unique_id=122285872 instance=ExtResource("1_xmyyq")]
+transform = Transform3D(5.2, 0, 0, 0, 5, 0, 0, 0, 8.4, 0, 0, 0)
+
+[node name="CollisionTownModel" type="CollisionShape3D" parent="." unique_id=976315597]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.75, 0)
+shape = SubResource("BoxShape3D_clbol")
+
+[node name="RooftopSpawnPoint" type="Marker3D" parent="." unique_id=177817472]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.62, 0)
+
+[node name="RooftopPoints" type="Node3D" parent="." unique_id=211346304]
+
+[node name="Equipment" type="Marker3D" parent="RooftopPoints" unique_id=828868776]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 5.62, 0)
+
+[node name="Lookout" type="Marker3D" parent="RooftopPoints" unique_id=1709577586]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 5.62, 0)

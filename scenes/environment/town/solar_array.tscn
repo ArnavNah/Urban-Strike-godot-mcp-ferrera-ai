@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://dnikottc7uupj"]
+
+[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/Models/GLB format/solar-panel-landscape-group.glb" id="1_0yffx"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jqmkq"]
+size = Vector3(5.2969027, 0.91826296, 3.1326754)
+
+[node name="SolarArray" type="StaticBody3D" unique_id=523157290]
+collision_mask = 0
+
+[node name="Intact" type="Node3D" parent="." unique_id=274609631]
+
+[node name="SolarModel" parent="Intact" unique_id=919583206 instance=ExtResource("1_0yffx")]
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, -6.2584877e-07, 5.110207e-07, 7.301569e-07)
+
+[node name="CollisionSolarModel" type="CollisionShape3D" parent="." unique_id=441453346]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3841858e-07, 0.45913148, 0)
+shape = SubResource("BoxShape3D_jqmkq")

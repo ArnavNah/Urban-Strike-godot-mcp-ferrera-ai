@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://dls5gqs0wucop"]
+
+[ext_resource type="PackedScene" uid="uid://e2a3u2js4vdh" path="res://assets/Models/GLB format/water-tower.glb" id="1_gfsx0"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_p54hs"]
+size = Vector3(2.9827552, 7.495829, 2.9112985)
+
+[node name="WaterTower" type="StaticBody3D" unique_id=1133154453]
+collision_mask = 0
+
+[node name="Intact" type="Node3D" parent="." unique_id=2094814953]
+
+[node name="WaterTowerModel" parent="Intact" unique_id=831872438 instance=ExtResource("1_gfsx0")]
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, -1.5646219e-06, 2.2691166e-23, -1.0430813e-07)
+
+[node name="CollisionWaterTowerModel" type="CollisionShape3D" parent="." unique_id=1523928911]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.7479146, 0)
+shape = SubResource("BoxShape3D_p54hs")

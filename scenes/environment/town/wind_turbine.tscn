@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://cnj5mxhxv6ael"]
+
+[ext_resource type="PackedScene" uid="uid://f8cbql7wtv3q" path="res://assets/Models/GLB format/windmill.glb" id="1_ubjre"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_b44yd"]
+size = Vector3(2.4187508, 9.255413, 4.5074596)
+
+[node name="WindTurbine" type="StaticBody3D" unique_id=321006991]
+collision_mask = 0
+
+[node name="Intact" type="Node3D" parent="." unique_id=62071208]
+
+[node name="WindmillModel" parent="Intact" unique_id=1233513260 instance=ExtResource("1_ubjre")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 0.052051544, 0, 0.012942314)
+
+[node name="CollisionWindmillModel" type="CollisionShape3D" parent="." unique_id=257496096]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6277065, 0)
+shape = SubResource("BoxShape3D_b44yd")

@@ -1,8 +1,7 @@
-[gd_scene format=3 uid="uid://tavrpmtj6l7s"]
+[gd_scene format=3 uid="uid://ct5wenk34v8my"]
 
 [ext_resource type="Material" uid="uid://st4ltur1twda" path="res://resources/environment/dirt.tres" id="1_fiukq"]
 [ext_resource type="PackedScene" uid="uid://bjb6ppqiv84ie" path="res://scenes/environment/military/radio_tower.tscn" id="2_estr6"]
-[ext_resource type="PackedScene" uid="uid://ccdd05o0ekmwc" path="res://scenes/environment/city/building_small.tscn" id="3_ha8ys"]
 [ext_resource type="PackedScene" uid="uid://cuve5cme7mhsq" path="res://scenes/environment/props/parked_vehicle.tscn" id="4_byhbq"]
 [ext_resource type="PackedScene" uid="uid://dtmn3fbenamhh" path="res://scenes/environment/props/wrecked_vehicle.tscn" id="5_ha8ys"]
 [ext_resource type="PackedScene" uid="uid://dcrqevbc5a5v1" path="res://scenes/environment/terrain/gentle_hill.tscn" id="5_mjwt7"]
@@ -10,6 +9,12 @@
 [ext_resource type="PackedScene" uid="uid://diaewkf215q76" path="res://scenes/environment/props/sandbag.tscn" id="6_byhbq"]
 [ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="7_gmt77"]
 [ext_resource type="PackedScene" uid="uid://cdsq1pdmth2tl" path="res://scenes/environment/props/crate.tscn" id="10_byhbq"]
+[ext_resource type="PackedScene" uid="uid://d7okn1j3kgwv" path="res://scenes/environment/town/town_house_a.tscn" id="16_2lsox"]
+[ext_resource type="PackedScene" uid="uid://bgu5a0ihmy5c7" path="res://scenes/environment/town/town_workshop.tscn" id="18_7m5cd"]
+[ext_resource type="PackedScene" uid="uid://dls5gqs0wucop" path="res://scenes/environment/town/water_tower.tscn" id="20_vd3e0"]
+[ext_resource type="PackedScene" uid="uid://cnj5mxhxv6ael" path="res://scenes/environment/town/wind_turbine.tscn" id="24_t3j1r"]
+[ext_resource type="PackedScene" uid="uid://dnikottc7uupj" path="res://scenes/environment/town/solar_array.tscn" id="28_ioqs5"]
+[ext_resource type="PackedScene" uid="uid://co6i4r1k046o3" path="res://scenes/environment/town/town_cabin.tscn" id="32_8eapw"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_o21og"]
 material = ExtResource("1_fiukq")
@@ -70,7 +75,7 @@ mesh = SubResource("BoxMesh_o21og")
 [node name="RadioLandmark" parent="RelayStation" unique_id=780360771 instance=ExtResource("2_estr6")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -36, 0, 30)
 
-[node name="UtilityOffice" parent="RelayStation" unique_id=993975150 instance=ExtResource("3_ha8ys")]
+[node name="UtilityOffice" parent="RelayStation" unique_id=2132004083 instance=ExtResource("18_7m5cd")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27, 0, 48)
 
 [node name="UtilityTruck" parent="RelayStation" unique_id=1841633813 instance=ExtResource("4_byhbq")]
@@ -82,10 +87,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 0.1, 26)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -96, 0.06, 31)
 mesh = SubResource("BoxMesh_m41dd")
 
-[node name="RoadsideHouse" parent="RuralServiceStop" unique_id=806692536 instance=ExtResource("3_ha8ys")]
+[node name="RoadsideHouse" parent="RuralServiceStop" unique_id=1936124923 instance=ExtResource("16_2lsox")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 0, 29)
 
-[node name="RepairShop" parent="RuralServiceStop" unique_id=616764915 instance=ExtResource("3_ha8ys")]
+[node name="RepairShop" parent="RuralServiceStop" unique_id=1187291297 instance=ExtResource("18_7m5cd")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -102, 0, 48)
 
 [node name="RoadsideWreck" parent="RuralServiceStop" unique_id=1045891485 instance=ExtResource("5_ha8ys")]
@@ -94,38 +99,47 @@ transform = Transform3D(0.81915206, 0, 0.57357645, 0, 1, 0, -0.57357645, 0, 0.81
 [node name="OutpostSandbag" parent="RuralServiceStop" unique_id=1014966009 instance=ExtResource("6_byhbq")]
 transform = Transform3D(0.90630776, 0, -0.42261827, 0, 1, 0, 0.42261827, 0, 0.90630776, 14, 0, -9)
 
+[node name="ServiceWaterTower" parent="RuralServiceStop" unique_id=1133154453 instance=ExtResource("20_vd3e0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -108, 0, 42)
+
 [node name="LowRollingGround" type="Node3D" parent="." unique_id=1210969005]
 
 [node name="WesternKnoll" parent="LowRollingGround" unique_id=867661173 instance=ExtResource("5_mjwt7")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -96, 0, 95)
 
-[node name="SouthernKnoll" parent="LowRollingGround" unique_id=1764324758 instance=ExtResource("5_mjwt7")]
+[node name="SouthernKnoll" parent="LowRollingGround" unique_id=1241195411 instance=ExtResource("5_mjwt7")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0, 97)
+
+[node name="TurbineWest" parent="LowRollingGround" unique_id=321006991 instance=ExtResource("24_t3j1r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -96, 3, 95)
+
+[node name="TurbineSouth" parent="LowRollingGround" unique_id=1717814844 instance=ExtResource("24_t3j1r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 3, 97)
 
 [node name="SparseVegetation" type="Node3D" parent="." unique_id=1010537251]
 
 [node name="RidgePine" parent="SparseVegetation" unique_id=1750774211 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -98, 2.95, 93)
 
-[node name="RidgePineEast" parent="SparseVegetation" unique_id=1159094977 instance=ExtResource("6_6bxcl")]
+[node name="RidgePineEast" parent="SparseVegetation" unique_id=661029794 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -91, 2.95, 96)
 
-[node name="SouthPine" parent="SparseVegetation" unique_id=1552672730 instance=ExtResource("6_6bxcl")]
+[node name="SouthPine" parent="SparseVegetation" unique_id=1953101268 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 2.95, 96)
 
-[node name="RoadsidePine" parent="SparseVegetation" unique_id=1365573991 instance=ExtResource("6_6bxcl")]
+[node name="RoadsidePine" parent="SparseVegetation" unique_id=638123596 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 0, 42)
 
-[node name="WestPine" parent="SparseVegetation" unique_id=1246048539 instance=ExtResource("6_6bxcl")]
+[node name="WestPine" parent="SparseVegetation" unique_id=384174699 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -110, 0, 82)
 
-[node name="RelayPine" parent="SparseVegetation" unique_id=199299834 instance=ExtResource("6_6bxcl")]
+[node name="RelayPine" parent="SparseVegetation" unique_id=412185860 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19, 0, 34)
 
-[node name="FarmPine" parent="SparseVegetation" unique_id=702934157 instance=ExtResource("6_6bxcl")]
+[node name="FarmPine" parent="SparseVegetation" unique_id=1361402797 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -83, 0, 39)
 
-[node name="SouthernPine" parent="SparseVegetation" unique_id=159214115 instance=ExtResource("6_6bxcl")]
+[node name="SouthernPine" parent="SparseVegetation" unique_id=979731011 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -46, 0, 111)
 
 [node name="RockOutcrops" type="Node3D" parent="." unique_id=923831612]
@@ -148,11 +162,23 @@ mesh = SubResource("CylinderMesh_vmyvs")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, 35)
 mesh = SubResource("BoxMesh_mjwt7")
 
-[node name="SolarPerimeterTrees" parent="SolarArrayFarm" unique_id=2114586435 instance=ExtResource("6_6bxcl")]
+[node name="SolarPerimeterTrees" parent="SolarArrayFarm" unique_id=360698891 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -158, 0.2, 28)
 
-[node name="MaintenanceUte" parent="SolarArrayFarm" unique_id=117630457 instance=ExtResource("4_byhbq")]
+[node name="MaintenanceUte" parent="SolarArrayFarm" unique_id=2080755613 instance=ExtResource("4_byhbq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -142, 0.1, 42)
+
+[node name="SolarBank_01" parent="SolarArrayFarm" unique_id=523157290 instance=ExtResource("28_ioqs5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -155, 0.1, 28)
+
+[node name="SolarBank_02" parent="SolarArrayFarm" unique_id=342313838 instance=ExtResource("28_ioqs5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -145, 0.1, 28)
+
+[node name="SolarBank_03" parent="SolarArrayFarm" unique_id=43667286 instance=ExtResource("28_ioqs5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -155, 0.1, 38)
+
+[node name="SolarBank_04" parent="SolarArrayFarm" unique_id=855412569 instance=ExtResource("28_ioqs5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -145, 0.1, 38)
 
 [node name="GravelQuarry" type="Node3D" parent="." unique_id=265537578]
 
@@ -160,10 +186,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -142, 0.1, 42)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150, 0.06, 95)
 mesh = SubResource("BoxMesh_6bxcl")
 
-[node name="QuarryMound" parent="GravelQuarry" unique_id=54833453 instance=ExtResource("5_mjwt7")]
+[node name="QuarryMound" parent="GravelQuarry" unique_id=1590877801 instance=ExtResource("5_mjwt7")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -154, 0, 95)
 
-[node name="AbandonedExcavator" parent="GravelQuarry" unique_id=539606918 instance=ExtResource("5_ha8ys")]
+[node name="AbandonedExcavator" parent="GravelQuarry" unique_id=1509519338 instance=ExtResource("5_ha8ys")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -142, 0.1, 92)
 
 [node name="ToolCache" parent="GravelQuarry" unique_id=1604591116 instance=ExtResource("10_byhbq")]
@@ -175,13 +201,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -144, 0, 104)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 0.06, 150)
 mesh = SubResource("BoxMesh_gmt77")
 
-[node name="AbandonedCabin" parent="OvergrownSettlement" unique_id=1955292474 instance=ExtResource("3_ha8ys")]
+[node name="AbandonedCabin" parent="OvergrownSettlement" unique_id=1909146049 instance=ExtResource("32_8eapw")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -98, 0, 154)
 
-[node name="SettlementWoods" parent="OvergrownSettlement" unique_id=430263550 instance=ExtResource("6_6bxcl")]
+[node name="SettlementWoods" parent="OvergrownSettlement" unique_id=753033536 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -88, 0.2, 146)
 
-[node name="CabinSandbags" parent="OvergrownSettlement" unique_id=1057112391 instance=ExtResource("6_byhbq")]
+[node name="CabinSandbags" parent="OvergrownSettlement" unique_id=1550520751 instance=ExtResource("6_byhbq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -92, 0, 158)
 
 [node name="SouthwestScrubland" type="Node3D" parent="." unique_id=778042505]
@@ -190,8 +216,34 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -92, 0, 158)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 0.06, 150)
 mesh = SubResource("BoxMesh_ei258")
 
-[node name="ScrublandKnoll" parent="SouthwestScrubland" unique_id=1555344968 instance=ExtResource("5_mjwt7")]
+[node name="ScrublandKnoll" parent="SouthwestScrubland" unique_id=2034944535 instance=ExtResource("5_mjwt7")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0, 152)
 
-[node name="ScrubTrees" parent="SouthwestScrubland" unique_id=2038172149 instance=ExtResource("6_6bxcl")]
+[node name="ScrubTrees" parent="SouthwestScrubland" unique_id=876739140 instance=ExtResource("6_6bxcl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0.2, 146)
+
+[node name="AdditionalBuildings" type="Node3D" parent="." unique_id=1758749951]
+
+[node name="ServiceStopHouseWest" parent="AdditionalBuildings" unique_id=765185799 instance=ExtResource("16_2lsox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -105, 0, 30)
+
+[node name="ServiceStopHouseEast" parent="AdditionalBuildings" unique_id=382423770 instance=ExtResource("32_8eapw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -83, 0, 24)
+
+[node name="VillageWorkshop" parent="AdditionalBuildings" unique_id=1045497452 instance=ExtResource("18_7m5cd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0, 48)
+
+[node name="RelayCottage" parent="AdditionalBuildings" unique_id=302769024 instance=ExtResource("16_2lsox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, 25)
+
+[node name="SolarMaintenance" parent="AdditionalBuildings" unique_id=984263539 instance=ExtResource("18_7m5cd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -164, 0, 48)
+
+[node name="SettlementHouseWest" parent="AdditionalBuildings" unique_id=1558724607 instance=ExtResource("16_2lsox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -106, 0, 143)
+
+[node name="SettlementHouseNorth" parent="AdditionalBuildings" unique_id=877712498 instance=ExtResource("32_8eapw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -94, 0, 133)
+
+[node name="SettlementHouseEast" parent="AdditionalBuildings" unique_id=419054371 instance=ExtResource("18_7m5cd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -81, 0, 160)

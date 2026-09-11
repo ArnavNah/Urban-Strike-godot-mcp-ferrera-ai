@@ -1,112 +1,39 @@
-[gd_scene format=3 uid="uid://cssvykcndyt6a"]
+[gd_scene format=3 uid="uid://b1pkcmfrr8oti"]
 
-[ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="1_1ftx6"]
-[ext_resource type="Material" uid="uid://exlbal345ujf" path="res://resources/environment/concrete.tres" id="2_gpotk"]
-[ext_resource type="Material" uid="uid://c08tyu1wvxfxp" path="res://resources/environment/metal.tres" id="3_j5b13"]
-[ext_resource type="Material" uid="uid://ck2jsxjec5j0i" path="res://resources/environment/rust.tres" id="4_cy6c5"]
+[ext_resource type="PackedScene" uid="uid://f046bijgad7i" path="res://assets/Models/GLB format/detail-tank-large.glb" id="1_6h8wr"]
+[ext_resource type="PackedScene" uid="uid://c8ju6vmbcjelx" path="res://assets/Models/GLB format/detail-tank.glb" id="3_gpotk"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_ie4gh"]
-material = ExtResource("1_1ftx6")
-size = Vector3(25, 0.12, 24)
+[sub_resource type="BoxShape3D" id="BoxShape3D_5ptnt"]
+size = Vector3(6.7878723, 4.327227, 7.4178715)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_5tbi7"]
-material = ExtResource("2_gpotk")
-top_radius = 4.8
-bottom_radius = 4.8
-height = 9.0
-radial_segments = 12
-rings = 1
+[sub_resource type="BoxShape3D" id="BoxShape3D_6h8wr"]
+size = Vector3(6.7878723, 4.327227, 7.4178715)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_7onef"]
-material = ExtResource("3_j5b13")
-top_radius = 3.5
-bottom_radius = 4.9
-height = 0.6
-radial_segments = 12
-rings = 1
+[sub_resource type="BoxShape3D" id="BoxShape3D_1ftx6"]
+size = Vector3(3.3920016, 1.6611826, 2.0611825)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_xt6bn"]
-material = ExtResource("4_cy6c5")
-top_radius = 4.84
-bottom_radius = 4.84
-height = 0.75
-radial_segments = 12
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_vwrt7"]
-material = ExtResource("2_gpotk")
-top_radius = 4.8
-bottom_radius = 4.8
-height = 9.0
-radial_segments = 12
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_k0ibu"]
-material = ExtResource("3_j5b13")
-top_radius = 3.5
-bottom_radius = 4.9
-height = 0.6
-radial_segments = 12
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_ipxv2"]
-material = ExtResource("4_cy6c5")
-top_radius = 4.84
-bottom_radius = 4.84
-height = 0.75
-radial_segments = 12
-rings = 1
-
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_h5a03"]
-height = 9.4
-radius = 4.8
-
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_biia5"]
-height = 9.4
-radius = 4.8
-
-[node name="StorageTanks" type="Node3D" unique_id=1005871085]
-
-[node name="Intact" type="Node3D" parent="." unique_id=521963495]
-
-[node name="ContainmentPad" type="MeshInstance3D" parent="Intact" unique_id=224814382]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
-mesh = SubResource("BoxMesh_ie4gh")
-
-[node name="Tank-6_0" type="MeshInstance3D" parent="Intact" unique_id=1795462988]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 4.5, 0)
-mesh = SubResource("CylinderMesh_5tbi7")
-
-[node name="TankRoof-6_0" type="MeshInstance3D" parent="Intact" unique_id=150009109]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 9.2, 0)
-mesh = SubResource("CylinderMesh_7onef")
-
-[node name="WarningBand-6_0" type="MeshInstance3D" parent="Intact" unique_id=678750714]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 7, 0)
-mesh = SubResource("CylinderMesh_xt6bn")
-
-[node name="Tank6_0" type="MeshInstance3D" parent="Intact" unique_id=82343286]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 4.5, 0)
-mesh = SubResource("CylinderMesh_vwrt7")
-
-[node name="TankRoof6_0" type="MeshInstance3D" parent="Intact" unique_id=809440216]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 9.2, 0)
-mesh = SubResource("CylinderMesh_k0ibu")
-
-[node name="WarningBand6_0" type="MeshInstance3D" parent="Intact" unique_id=1785749487]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 7, 0)
-mesh = SubResource("CylinderMesh_ipxv2")
-
-[node name="TankBody-6_0" type="StaticBody3D" parent="." unique_id=1628915925]
+[node name="StorageTanks" type="StaticBody3D" unique_id=633620619]
 collision_mask = 0
 
-[node name="CylinderCollision" type="CollisionShape3D" parent="TankBody-6_0" unique_id=32620753]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 4.7, 0)
-shape = SubResource("CylinderShape3D_h5a03")
+[node name="Intact" type="Node3D" parent="." unique_id=744430939]
 
-[node name="TankBody6_0" type="StaticBody3D" parent="." unique_id=699061674]
-collision_mask = 0
+[node name="TankLargeA" parent="Intact" unique_id=494541474 instance=ExtResource("1_6h8wr")]
+transform = Transform3D(4.5, 0, 0, 0, 4.5, 0, 0, 0, 4.5, -4.5, 2.436451e-15, 0.31499997)
 
-[node name="CylinderCollision" type="CollisionShape3D" parent="TankBody6_0" unique_id=1855320259]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 4.7, 0)
-shape = SubResource("CylinderShape3D_biia5")
+[node name="TankLargeB" parent="Intact" unique_id=318880848 instance=ExtResource("1_6h8wr")]
+transform = Transform3D(4.5, 0, 0, 0, 4.5, 0, 0, 0, 4.5, 4.5, 2.436451e-15, 0.31499997)
+
+[node name="TankHorizontal" parent="Intact" unique_id=781278754 instance=ExtResource("3_gpotk")]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 1.1920929e-07, 1.1279866e-17, 3.999999)
+
+[node name="CollisionTankLargeA" type="CollisionShape3D" parent="." unique_id=1050811163]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 2.1636136, 0)
+shape = SubResource("BoxShape3D_5ptnt")
+
+[node name="CollisionTankLargeB" type="CollisionShape3D" parent="." unique_id=100679364]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 2.1636136, 0)
+shape = SubResource("BoxShape3D_6h8wr")
+
+[node name="CollisionTankHorizontal" type="CollisionShape3D" parent="." unique_id=1197067598]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8305913, 3.9999998)
+shape = SubResource("BoxShape3D_1ftx6")
