@@ -4,6 +4,40 @@ A 3D arcade helicopter combat roguelike built in **Godot 4.7.2** with the **Comp
 
 Combines the tactical flight maneuverability and mission structure of classic Strike games (*Desert Strike*, *Jungle Strike*, *Urban Strike*) with modern continuous horde survival pressure (*Vampire Survivors*, *Megabonk*).
 
+<p align="center">
+  <img src="docs/images/gameplay_tactical_skyline.png" alt="Urban Strike Tactical Skyline Gameplay" width="100%"/>
+  <br>
+  <em>Tactical surveillance and combat over the 340m modular urban operations theater with Kenney 3D road networks, dynamic shadows, and combat HUD.</em>
+</p>
+
+---
+
+## 📸 Gameplay Showcase
+
+### 🚁 Tactical Flight & High-Speed Combat
+Combat in *Urban Strike* merges momentum-based flight dynamics with high-intensity arcade dogfighting and strafing runs.
+
+| High-Speed Avenue Strafing (137 KPH) | Kinetic Chaingun & Rocket Saturation |
+| :---: | :---: |
+| <img src="docs/images/gameplay_forward_combat.png" width="100%" alt="Forward Combat Run"/> | <img src="docs/images/gameplay_autocannon_engagement.png" width="100%" alt="Autocannon Engagement"/> |
+| *Locking onto armored vehicles and infantry clusters at low altitude* | *Autocannon tracers, impact smoke, and missile lock engagement* |
+
+### 🏙️ Modular Urban Districts & Kenney 3D Road Networks
+The expanded 340m × 340m operations theater features high-rise skyscrapers, industrial depots, military revetments, and modular Kenney road tiles with intersections, road markings, curbs, trees, and street furniture.
+
+| Urban Canyon Maneuvering | Helipad Operations & Road Infrastructure |
+| :---: | :---: |
+| <img src="docs/images/gameplay_skyscraper_canyon.png" width="100%" alt="Skyscraper Canyon Flight"/> | <img src="docs/images/gameplay_helipad_takeoff.png" width="100%" alt="Helipad Deployment"/> |
+| *Precision flight between commercial skyscrapers and industrial plants* | *Operational LZ deployment, rotor wash, and Kenney road network* |
+
+### ⚡ Roguelike Synergies & Hangar Meta-Progression
+Survive continuous procedural hordes, gather magnetized XP gems, and build game-breaking weapon synergies with mid-run upgrade cards and persistent hangar retrofits.
+
+| In-Run 3-Card Tactical Upgrades | Tactical Hangar & Retrofit Systems |
+| :---: | :---: |
+| <img src="docs/images/gameplay_roguelike_upgrade.png" width="100%" alt="Roguelike Level Up Cards"/> | <img src="docs/images/menu_tactical_hangar.png" width="100%" alt="Tactical Hangar Menu"/> |
+| *Build-altering weapon synergies, escort drones, and flight trade-offs* | *Banked salvage investment for permanent airframe upgrades* |
+
 ---
 
 ## 🎮 Core Features
@@ -23,6 +57,7 @@ Expansive 340m $\times$ 340m urban operations theater divided into 4 tactical zo
 2. **Industrial District**: Heavy logistics warehouses, container yards, parking depots, and destructible fuel tanks.
 3. **Military District**: Aircraft hangars, early-warning radar arrays, fortified SAM revetments, and security checkpoints.
 4. **Outskirts**: Open terrain, dirt roads, scattered structures, and natural perimeter approaches.
+- **Kenney 3D Road Tiles Integration**: Modular multi-lane avenues, 4-way cross intersections, straight thoroughfares, curbs, realistic road markings, streetlamps, pine trees, and parked civilian vehicles.
 
 ### 🛑 3-Tier Playable Area Boundary
 - **Inner Safe Area ($\pm 125\text{m}$)**: Free-flight tactical maneuvering zone.
@@ -74,6 +109,9 @@ Expansive 340m $\times$ 340m urban operations theater divided into 4 tactical zo
 
 ```text
 res://
+├── docs/                    # Documentation and media
+│   ├── images/              # High-resolution in-engine gameplay screenshots
+│   └── kenney-environment.md# Modular environment & road tile specifications
 ├── scenes/
 │   ├── battlefield/         # Main combat theater (battlefield.tscn)
 │   ├── camera/              # Tactical follow camera rig (camera_rig.tscn)
@@ -83,7 +121,7 @@ res://
 │   │   ├── city/            # Buildings, warehouses, plazas, parking lots
 │   │   ├── military/        # Hangars, checkpoints, radar, SAM revetments
 │   │   ├── props/           # Destructible fuel tanks, crates, barriers, fences
-│   │   └── roads/           # Intersections, straights, corner avenues
+│   │   └── roads/           # Intersections, straights, corner avenues (Kenney 3D Tiles)
 │   ├── hangar/              # Meta-progression hangar shop (hangar.tscn)
 │   ├── menu/                # Main menu with 3D backdrop (main_menu.tscn)
 │   ├── pickups/             # XP gems and salvage crates

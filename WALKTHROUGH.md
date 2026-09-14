@@ -227,3 +227,17 @@ Running test 22 (environment districts & boundary)...
 - `main_menu.tscn`: Validated with Fennara `validate_scene` (3s headless run: 0 crashes, 0 errors, 0 warnings).
 - `battlefield.tscn`: Validated with Fennara `validate_scene` (3s headless run: 0 crashes, 0 errors, 0 warnings).
 - `test_runner.tscn`: All 22 automated test suites passed at 100% (0 errors, 0 warnings).
+
+---
+
+## 8. In-Engine Visual Evidence & Gameplay Gallery
+
+| View | Screenshot | Description |
+| :--- | :---: | :--- |
+| **Tactical Skyline & Kenney Roads** | ![Tactical Skyline](docs/images/gameplay_tactical_skyline.png) | High-altitude surveillance view over the 340m city theater showing multi-lane avenues, cross intersections, curbs, trees, and HUD. |
+| **Low-Altitude Combat Run** | ![Forward Combat](docs/images/gameplay_forward_combat.png) | 137 KPH high-speed strafing run down the main avenue locking onto an armored battle tank and infantry cluster. |
+| **Autocannon Engagement** | ![Autocannon Combat](docs/images/gameplay_autocannon_engagement.png) | Kinetic chaingun autocannon tracers, muzzle impacts, smoke particles, active lock reticle, and mission objective card. |
+| **Roguelike Synergies** | ![Roguelike Upgrades](docs/images/gameplay_roguelike_upgrade.png) | Mid-run upgrade selection card menu displaying rare escort support drones, weapon feed rates, and airframe tradeoffs. |
+| **Urban Canyon Maneuvers** | ![Skyscraper Canyon](docs/images/gameplay_skyscraper_canyon.png) | Low-altitude bank between high-rise office towers and industrial smokestacks. |
+| **Tactical Hangar & Retrofit** | ![Tactical Hangar](docs/images/menu_tactical_hangar.png) | 3D hangar menu backdrop with attack helicopter, lighting, and retro CRT aesthetics. |
+
