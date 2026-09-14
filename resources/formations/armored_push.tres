@@ -20,12 +20,12 @@ units = Array[Dictionary]([{
 "cap_tag": "ifv",
 "count": 1,
 "is_air": false,
-"offset": Vector3(-4.5, 0, 2),
+"offset": Vector3(-5.1749997, 0, 2.3),
 "scene_path": "res://scenes/enemies/ground_assault_ifv.tscn"
 }, {
 "cap_tag": "buggy",
 "count": 1,
 "is_air": false,
-"offset": Vector3(4.5, 0, -2),
+"offset": Vector3(5.1749997, 0, -2.3),
 "scene_path": "res://scenes/enemies/ground_scout_buggy.tscn"
 }])

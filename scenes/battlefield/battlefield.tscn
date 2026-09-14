@@ -20,12 +20,7 @@
 [ext_resource type="PackedScene" uid="uid://c8m4x1v7w2rap" path="res://scenes/managers/wave_manager.tscn" id="17_kjtcb"]
 [ext_resource type="Script" uid="uid://25apokobcvu6" path="res://scripts/common/run_state_controller.gd" id="18_kjtcb"]
 [ext_resource type="PackedScene" uid="uid://sgu660fhujxv" path="res://scenes/environment/boundary/playable_area.tscn" id="21_61f51"]
-[ext_resource type="PackedScene" uid="uid://bvtmp3twpe1bj" path="res://scenes/environment/roads/connected_network.tscn" id="22_j65gt"]
-[ext_resource type="PackedScene" uid="uid://ckticmgaamvph" path="res://scenes/environment/districts/central_urban.tscn" id="23_f22i4"]
-[ext_resource type="PackedScene" uid="uid://befm4uenqlsm1" path="res://scenes/environment/districts/industrial.tscn" id="24_45bbw"]
-[ext_resource type="PackedScene" uid="uid://rimtc8uw0nj7" path="res://scenes/environment/districts/military.tscn" id="25_pl44h"]
-[ext_resource type="PackedScene" uid="uid://ct5wenk34v8my" path="res://scenes/environment/districts/outskirts.tscn" id="26_l0wik"]
-[ext_resource type="Material" uid="uid://chjmx7rfvucvx" path="res://resources/environment/sage.tres" id="27_oblmd"]
+[ext_resource type="PackedScene" uid="uid://dqvnv5bajlw4o" path="res://scenes/environment/city/city_world_streamer.tscn" id="22_sv6pa"]
 [ext_resource type="PackedScene" uid="uid://cfqhdlseeosdk" path="res://scenes/spawners/spawn_system.tscn" id="28_6dbsf"]
 [ext_resource type="Script" uid="uid://3iwsy7o222gw" path="res://scripts/directors/mission_director.gd" id="28_j65gt"]
 
@@ -42,190 +37,30 @@ sky_material = SubResource("ProceduralSkyMaterial_1")
 background_mode = 2
 sky = SubResource("Sky_1")
 ambient_light_source = 2
-ambient_light_color = Color(0.52, 0.56, 0.62, 1)
-ambient_light_energy = 0.58
+ambient_light_color = Color(0.38, 0.44, 0.52, 1)
+ambient_light_energy = 0.6
 tonemap_mode = 3
+tonemap_exposure = 0.9
 glow_enabled = true
-glow_intensity = 0.45
+glow_intensity = 0.2
 fog_enabled = true
 fog_mode = 1
-fog_light_color = Color(0.72, 0.78, 0.84, 1)
+fog_light_color = Color(0.5, 0.56, 0.64, 1)
 fog_density = 1.0
-fog_aerial_perspective = 0.5
-fog_sky_affect = 0.6
-fog_depth_begin = 220.0
-fog_depth_end = 560.0
+fog_aerial_perspective = 0.45
+fog_sky_affect = 0.25
+fog_depth_begin = 190.0
+fog_depth_end = 600.0
+adjustment_enabled = true
+adjustment_contrast = 1.04
+adjustment_saturation = 1.05
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_42cih"]
 material = ExtResource("2_sg773")
-size = Vector2(1200, 1200)
+size = Vector2(2400, 2400)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Ground"]
-size = Vector3(520, 2, 520)
-
-[sub_resource type="BoxMesh" id="BoxMesh_61f51"]
-material = ExtResource("27_oblmd")
-
-[sub_resource type="MultiMesh" id="MultiMesh_p5wp6"]
-transform_format = 1
-instance_count = 13
-mesh = SubResource("BoxMesh_61f51")
-buffer = PackedFloat32Array(16, 0, 0, -216, 0, 9, 0, 4.5, 0, 0, 16, 210, 20, 0, 0, -180, 0, 16, 0, 8, 0, 0, 16, 226, 24, 0, 0, -144, 0, 23, 0, 11.5, 0, 0, 16, 242, 16, 0, 0, -108, 0, 9, 0, 4.5, 0, 0, 16, 210, 20, 0, 0, -72, 0, 16, 0, 8, 0, 0, 16, 226, 24, 0, 0, -36, 0, 23, 0, 11.5, 0, 0, 16, 242, 16, 0, 0, 0, 0, 9, 0, 4.5, 0, 0, 16, 210, 20, 0, 0, 36, 0, 16, 0, 8, 0, 0, 16, 226, 24, 0, 0, 72, 0, 23, 0, 11.5, 0, 0, 16, 242, 16, 0, 0, 108, 0, 9, 0, 4.5, 0, 0, 16, 210, 20, 0, 0, 144, 0, 16, 0, 8, 0, 0, 16, 226, 24, 0, 0, 180, 0, 23, 0, 11.5, 0, 0, 16, 242, 16, 0, 0, 216, 0, 9, 0, 4.5, 0, 0, 16, 210)
-
-[sub_resource type="BoxMesh" id="BoxMesh_2km1u"]
-material = ExtResource("27_oblmd")
-
-[sub_resource type="MultiMesh" id="MultiMesh_6dbsf"]
-transform_format = 1
-instance_count = 13
-mesh = SubResource("BoxMesh_2km1u")
-buffer = PackedFloat32Array(16, 0, 0, 210.00002, 0, 12, 0, 6, 0, 0, 16, 215.99998, 20, 0, 0, 226.00002, 0, 19, 0, 9.5, 0, 0, 16, 179.99998, 24, 0, 0, 242, 0, 26, 0, 13, 0, 0, 16, 143.99998, 16, 0, 0, 210, 0, 12, 0, 6, 0, 0, 16, 107.99999, 20, 0, 0, 226, 0, 19, 0, 9.5, 0, 0, 16, 71.99999, 24, 0, 0, 242, 0, 26, 0, 13, 0, 0, 16, 35.99999, 16, 0, 0, 210, 0, 12, 0, 6, 0, 0, 16, -9.179392e-06, 20, 0, 0, 226, 0, 19, 0, 9.5, 0, 0, 16, -36.00001, 24, 0, 0, 242, 0, 26, 0, 13, 0, 0, 16, -72.00001, 16, 0, 0, 210, 0, 12, 0, 6, 0, 0, 16, -108.00001, 20, 0, 0, 226, 0, 19, 0, 9.5, 0, 0, 16, -144.00002, 24, 0, 0, 241.99998, 0, 26, 0, 13, 0, 0, 16, -180.00002, 16, 0, 0, 209.99998, 0, 12, 0, 6, 0, 0, 16, -216.00002)
-
-[sub_resource type="BoxMesh" id="BoxMesh_nv5t8"]
-material = ExtResource("27_oblmd")
-
-[sub_resource type="MultiMesh" id="MultiMesh_0dhpt"]
-transform_format = 1
-instance_count = 13
-mesh = SubResource("BoxMesh_nv5t8")
-buffer = PackedFloat32Array(16, 0, 0, 215.99998, 0, 15, 0, 7.5, 0, 0, 16, -210.00002, 20, 0, 0, 179.99998, 0, 22, 0, 11, 0, 0, 16, -226.00002, 24, 0, 0, 143.99998, 0, 29, 0, 14.5, 0, 0, 16, -242.00002, 16, 0, 0, 107.999985, 0, 15, 0, 7.5, 0, 0, 16, -210.00002, 20, 0, 0, 71.99998, 0, 22, 0, 11, 0, 0, 16, -226, 24, 0, 0, 35.999977, 0, 29, 0, 14.5, 0, 0, 16, -242, 16, 0, 0, -1.8358784e-05, 0, 15, 0, 7.5, 0, 0, 16, -210, 20, 0, 0, -36.00002, 0, 22, 0, 11, 0, 0, 16, -226, 24, 0, 0, -72.00002, 0, 29, 0, 14.5, 0, 0, 16, -242, 16, 0, 0, -108.000015, 0, 15, 0, 7.5, 0, 0, 16, -209.99998, 20, 0, 0, -144.00002, 0, 22, 0, 11, 0, 0, 16, -225.99998, 24, 0, 0, -180.00002, 0, 29, 0, 14.5, 0, 0, 16, -241.99998, 16, 0, 0, -216.00002, 0, 15, 0, 7.5, 0, 0, 16, -209.99998)
-
-[sub_resource type="BoxMesh" id="BoxMesh_o7u17"]
-material = ExtResource("27_oblmd")
-
-[sub_resource type="MultiMesh" id="MultiMesh_wrgpj"]
-transform_format = 1
-instance_count = 13
-mesh = SubResource("BoxMesh_o7u17")
-buffer = PackedFloat32Array(16, 0, 0, -210, 0, 18, 0, 9, 0, 0, 16, -216, 20, 0, 0, -226, 0, 25, 0, 12.5, 0, 0, 16, -180, 24, 0, 0, -242, 0, 11, 0, 5.5, 0, 0, 16, -144, 16, 0, 0, -210, 0, 18, 0, 9, 0, 0, 16, -108, 20, 0, 0, -226, 0, 25, 0, 12.5, 0, 0, 16, -72, 24, 0, 0, -242, 0, 11, 0, 5.5, 0, 0, 16, -35.999996, 16, 0, 0, -210, 0, 18, 0, 9, 0, 0, 16, 2.504225e-06, 20, 0, 0, -226, 0, 25, 0, 12.5, 0, 0, 16, 36.000004, 24, 0, 0, -242, 0, 11, 0, 5.5, 0, 0, 16, 72, 16, 0, 0, -210, 0, 18, 0, 9, 0, 0, 16, 108, 20, 0, 0, -226, 0, 25, 0, 12.5, 0, 0, 16, 144, 24, 0, 0, -242, 0, 11, 0, 5.5, 0, 0, 16, 180, 16, 0, 0, -210, 0, 18, 0, 9, 0, 0, 16, 216)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_vixb4"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_d6e8j"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 14.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_ivm54"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 18.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_va7fe"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_mq602"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_nw58i"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 14.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_ud71r"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 18.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_kak68"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_jh0dd"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_h1rfw"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 14.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_rp5ym"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 18.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_d65e6"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_hwvsa"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_eiw41"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 14.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_8orji"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 18.0
-radial_segments = 8
-rings = 1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_x4jty"]
-material = ExtResource("2_sg773")
-top_radius = 12.0
-bottom_radius = 45.0
-height = 10.0
-radial_segments = 8
-rings = 1
+size = Vector3(2200, 2, 2200)
 
 [node name="Battlefield" type="Node3D" unique_id=896703022]
 script = ExtResource("1_field")
@@ -235,10 +70,10 @@ environment = SubResource("Environment_sg773")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=805440154]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 40, 0)
-light_color = Color(1, 0.97, 0.92, 1)
-light_energy = 1.15
+light_color = Color(1, 0.96, 0.9, 1)
+light_energy = 0.85
 shadow_enabled = true
-directional_shadow_max_distance = 260.0
+directional_shadow_max_distance = 280.0
 
 [node name="Terrain" type="Node3D" parent="." unique_id=1255328092]
 
@@ -311,103 +146,7 @@ script = ExtResource("18_kjtcb")
 
 [node name="Environment" type="Node3D" parent="." unique_id=1452257440]
 
-[node name="RoadNetwork" parent="Environment" unique_id=456560153 instance=ExtResource("22_j65gt")]
-
-[node name="Districts" type="Node3D" parent="Environment" unique_id=1692463830]
-
-[node name="CentralUrban" parent="Environment/Districts" unique_id=1610325910 instance=ExtResource("23_f22i4")]
-
-[node name="Industrial" parent="Environment/Districts" unique_id=2014291378 instance=ExtResource("24_45bbw")]
-
-[node name="Military" parent="Environment/Districts" unique_id=1219101787 instance=ExtResource("25_pl44h")]
-
-[node name="Outskirts" parent="Environment/Districts" unique_id=131739001 instance=ExtResource("26_l0wik")]
-
-[node name="PeripheralScenery" type="Node3D" parent="Environment" unique_id=1485438750]
-
-[node name="DistantSkylineSide0" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=24180550]
-transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
-cast_shadow = 0
-multimesh = SubResource("MultiMesh_p5wp6")
-
-[node name="DistantSkylineSide1" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1802562327]
-transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
-cast_shadow = 0
-multimesh = SubResource("MultiMesh_6dbsf")
-
-[node name="DistantSkylineSide2" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1253755814]
-transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
-cast_shadow = 0
-multimesh = SubResource("MultiMesh_0dhpt")
-
-[node name="DistantSkylineSide3" type="MultiMeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1131548324]
-transform = Transform3D(1.4, 0, 0, 0, 1.4, 0, 0, 0, 1.4, 0, 0, 0)
-cast_shadow = 0
-multimesh = SubResource("MultiMesh_wrgpj")
-
-[node name="HorizonHill_0_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=164675978]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -165, 4.7, 385)
-mesh = SubResource("CylinderMesh_vixb4")
-
-[node name="HorizonHill_0_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=485445086]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 6.7, 385)
-mesh = SubResource("CylinderMesh_d6e8j")
-
-[node name="HorizonHill_0_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=300355576]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 8.7, 385)
-mesh = SubResource("CylinderMesh_ivm54")
-
-[node name="HorizonHill_0_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=607721799]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 4.7, 385)
-mesh = SubResource("CylinderMesh_va7fe")
-
-[node name="HorizonHill_1_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1105760782]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 4.7, 164.99998)
-mesh = SubResource("CylinderMesh_mq602")
-
-[node name="HorizonHill_1_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1965065410]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 6.7, 59.99999)
-mesh = SubResource("CylinderMesh_nw58i")
-
-[node name="HorizonHill_1_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=288742038]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 8.7, -45.00001)
-mesh = SubResource("CylinderMesh_ud71r")
-
-[node name="HorizonHill_1_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1454670084]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 385, 4.7, -150.00002)
-mesh = SubResource("CylinderMesh_kak68")
-
-[node name="HorizonHill_2_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1867230719]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 164.99997, 4.7, -385)
-mesh = SubResource("CylinderMesh_jh0dd")
-
-[node name="HorizonHill_2_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=2055849879]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59.999973, 6.7, -385)
-mesh = SubResource("CylinderMesh_h1rfw")
-
-[node name="HorizonHill_2_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=650944460]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45.000027, 8.7, -385)
-mesh = SubResource("CylinderMesh_rp5ym")
-
-[node name="HorizonHill_2_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=150170611]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -150.00003, 4.7, -385)
-mesh = SubResource("CylinderMesh_d65e6")
-
-[node name="HorizonHill_3_0" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1871419109]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 4.7, -165)
-mesh = SubResource("CylinderMesh_hwvsa")
-
-[node name="HorizonHill_3_1" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1787107770]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 6.7, -59.999996)
-mesh = SubResource("CylinderMesh_eiw41")
-
-[node name="HorizonHill_3_2" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=1150891734]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 8.7, 45.000004)
-mesh = SubResource("CylinderMesh_8orji")
-
-[node name="HorizonHill_3_3" type="MeshInstance3D" parent="Environment/PeripheralScenery" unique_id=2013039842]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -385, 4.7, 150)
-mesh = SubResource("CylinderMesh_x4jty")
+[node name="CityWorldStreamer" parent="Environment" unique_id=951631279 instance=ExtResource("22_sv6pa")]
 
 [node name="GroundSpawnSources" type="Node3D" parent="." unique_id=1473496848]
 

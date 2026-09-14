@@ -22,12 +22,14 @@ enum State {
 @export var damage_per_shot: float = 2.4
 @export var fire_rate: float = 8.0 # RPS during attack window
 @export var xp_reward: int = 15
+@export var arming_delay: float = 1.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
 var current_health: float = 50.0
 var current_state: State = State.APPROACH
 var is_alive: bool = true
+var _arming_timer: float = 1.5
 
 var _state_timer: float = 0.0
 var _attack_timer: float = 0.0
@@ -91,20 +93,23 @@ func _physics_process(delta: float) -> void:
 	if main_rotor:
 		main_rotor.rotate_y(44.0 * delta)
 
+	if _arming_timer > 0.0:
+		_arming_timer -= delta
+
 	# Distance-based AI LOD throttling
 	var dist := global_position.distance_to(_player.global_position)
 	_lod_frame_counter += 1
 	var step_delta := delta
-	if dist > 140.0:
-		return # LOD 3: Culled
-	elif dist > 80.0:
-		if _lod_frame_counter % 4 != 0:
-			return # LOD 2: 15 Hz
-		step_delta = delta * 4.0
-	elif dist > 40.0:
-		if _lod_frame_counter % 2 != 0:
-			return # LOD 1: 30 Hz
-		step_delta = delta * 2.0
+	if dist > 280.0:
+		return # LOD 4: Dormant beyond 280m
+	elif dist > 120.0:
+		if _lod_frame_counter % 8 != 0:
+			return # LOD 3: 7.5 Hz corridor advance
+		step_delta = delta * 8.0
+	elif dist > 60.0:
+		if _lod_frame_counter % 3 != 0:
+			return # LOD 2: 20 Hz approach
+		step_delta = delta * 3.0
 
 	# Keep altitude matched with player with rooftop clearance
 	_match_player_altitude(step_delta)
@@ -252,6 +257,7 @@ func _query_ground_or_roof_height() -> float:
 	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 	if hit.is_empty():
 		return 0.0
@@ -268,6 +274,7 @@ func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
 	var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 
 	if hit.is_empty():
@@ -422,11 +429,18 @@ func _fire_pass_shot() -> void:
 			p.add_child.call_deferred(flash)
 
 func _request_air_slot() -> bool:
+	if _arming_timer > 0.0:
+		return false
+
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
-		var granted: bool = dir.request_attack_slot(self, true)
+		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_AIR_SCOUT, true, false, false, 2, "hunter_air_run")
 		_has_air_slot = granted
 		return granted
 	_has_air_slot = true
@@ -438,7 +452,7 @@ func _release_air_slot() -> void:
 		if not dir and CombatDirector.instance:
 			dir = CombatDirector.instance
 		if dir:
-			dir.release_attack_slot(self, true)
+			dir.release_attack_permission(self)
 	_has_air_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

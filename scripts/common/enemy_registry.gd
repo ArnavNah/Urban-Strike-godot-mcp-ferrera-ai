@@ -201,3 +201,161 @@ func _physics_process(_delta: float) -> void:
 	for enemy in all_enemies:
 		if is_instance_valid(enemy) and enemy.is_inside_tree():
 			update_enemy_position(enemy)
+
+## Static helper to extract Phase 10A archetype metadata from any enemy node
+static func get_enemy_metadata(enemy: Node) -> Dictionary:
+	var result := {
+		"visual_crowd_weight": 1.0,
+		"role": "fodder",
+		"threat_cost": 2,
+		"attack_token_cost": 1,
+		"tier": "ordinary", # "ordinary", "heavy", "elite", "boss", "objective"
+		"earliest_permitted_wave": 1,
+		"is_air": false,
+		"is_special": false
+	}
+	if not is_instance_valid(enemy):
+		return result
+
+	# Check archetype property if present
+	if "archetype" in enemy and enemy.archetype != null:
+		var arch: Variant = enemy.archetype
+		if "visual_crowd_weight" in arch:
+			result["visual_crowd_weight"] = float(arch.visual_crowd_weight)
+		if "role_identifier" in arch:
+			result["role"] = str(arch.role_identifier)
+		if "threat_cost" in arch:
+			result["threat_cost"] = int(arch.threat_cost)
+		if "attack_token_cost" in arch:
+			result["attack_token_cost"] = int(arch.attack_token_cost)
+		if "enemy_tier" in arch:
+			result["tier"] = str(arch.enemy_tier)
+		if "earliest_permitted_wave" in arch:
+			result["earliest_permitted_wave"] = int(arch.earliest_permitted_wave)
+		if arch is AirEnemyArchetype:
+			result["is_air"] = true
+
+	# Unit-specific overrides / fallbacks for native/legacy classes
+	var s_name := enemy.name.to_lower()
+	if enemy is InfantryCluster or s_name.contains("infantry"):
+		result["visual_crowd_weight"] = 4.0
+		result["role"] = "fodder"
+		result["tier"] = "ordinary"
+		result["threat_cost"] = 2
+		result["earliest_permitted_wave"] = 1
+	elif enemy is GroundTurret or s_name.contains("turret"):
+		result["visual_crowd_weight"] = 1.0
+		result["role"] = "light_shooter"
+		result["tier"] = "ordinary"
+		result["threat_cost"] = 3
+		result["earliest_permitted_wave"] = 1
+	elif enemy is SAMSite or s_name.contains("sam"):
+		result["visual_crowd_weight"] = 1.0
+		result["role"] = "anti_air"
+		result["tier"] = "ordinary"
+		result["is_special"] = true
+		result["threat_cost"] = 8
+		result["earliest_permitted_wave"] = 4
+	elif enemy is BossArchon or s_name.contains("archon"):
+		result["visual_crowd_weight"] = 6.0
+		result["role"] = "boss"
+		result["tier"] = "boss"
+		result["threat_cost"] = 30
+		result["earliest_permitted_wave"] = 10
+	elif s_name.contains("mortar"):
+		result["role"] = "mortar"
+		result["is_special"] = true
+		result["earliest_permitted_wave"] = 5
+	elif s_name.contains("buggy"):
+		result["role"] = "light_shooter"
+		result["tier"] = "ordinary"
+		result["visual_crowd_weight"] = 1.0
+		result["earliest_permitted_wave"] = 2
+	elif s_name.contains("technical"):
+		result["role"] = "light_shooter"
+		result["tier"] = "ordinary"
+		result["visual_crowd_weight"] = 1.0
+		result["earliest_permitted_wave"] = 3
+	elif s_name.contains("tank") or s_name.contains("ifv"):
+		result["role"] = "armored"
+		result["tier"] = "heavy"
+		result["visual_crowd_weight"] = 2.0
+		result["threat_cost"] = 6
+		result["earliest_permitted_wave"] = 3
+	elif s_name.contains("apc"):
+		result["role"] = "armored"
+		result["tier"] = "ordinary"
+		result["visual_crowd_weight"] = 2.0
+		result["earliest_permitted_wave"] = 3
+
+	if enemy.is_in_group("air_enemies"):
+		result["is_air"] = true
+		if result["earliest_permitted_wave"] < 6:
+			result["earliest_permitted_wave"] = 6
+	if enemy.is_in_group("objectives"):
+		result["tier"] = "objective"
+		result["visual_crowd_weight"] = 0.0
+
+	return result
+
+func get_living_visual_crowd() -> float:
+	var total: float = 0.0
+	for e in all_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			var meta := get_enemy_metadata(e)
+			total += meta["visual_crowd_weight"]
+	return total
+
+func get_living_node_count() -> int:
+	var count: int = 0
+	for e in all_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			count += 1
+	return count
+
+func get_special_counts() -> Dictionary:
+	var counts := {"sam": 0, "mortar": 0, "heavy": 0, "medium_armored": 0, "air": 0, "boss": 0}
+	for e in all_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			var meta := get_enemy_metadata(e)
+			if meta["is_air"]:
+				counts["air"] += 1
+			if meta["role"] == "anti_air" or e is SAMSite or e.is_in_group("sams"):
+				counts["sam"] += 1
+			if meta["role"] == "mortar" or e.name.to_lower().contains("mortar"):
+				counts["mortar"] += 1
+			if meta["tier"] == "heavy":
+				counts["heavy"] += 1
+			if meta["role"] == "armored":
+				counts["medium_armored"] += 1
+			if meta["tier"] == "boss":
+				counts["boss"] += 1
+	return counts
+
+func get_role_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for e in all_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			var meta := get_enemy_metadata(e)
+			var r: String = meta.get("role", "fodder")
+			counts[r] = counts.get(r, 0) + 1
+	return counts
+
+func get_tier_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for e in all_enemies:
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			if "is_alive" in e and not e.is_alive:
+				continue
+			var meta := get_enemy_metadata(e)
+			var t: String = meta.get("tier", "ordinary")
+			counts[t] = counts.get(t, 0) + 1
+	return counts

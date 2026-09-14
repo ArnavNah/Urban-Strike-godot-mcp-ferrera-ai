@@ -22,12 +22,14 @@ enum State {
 @export var wait_time: float = 0.25
 @export var bullet_damage: float = 6.5
 @export var xp_reward: int = 12
+@export var arming_delay: float = 1.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
 var current_health: float = 45.0
 var current_state: State = State.IDLE
 var is_alive: bool = true
+var _arming_timer: float = 1.5
 
 var _state_timer: float = 0.0
 var _shots_fired_in_burst: int = 0
@@ -70,9 +72,12 @@ func _physics_process(delta: float) -> void:
 	var dist_to_player := global_position.distance_to(_player_node.global_position)
 	var has_los := _check_line_of_sight()
 
+	if _arming_timer > 0.0:
+		_arming_timer -= delta
+
 	match current_state:
 		State.IDLE:
-			if dist_to_player <= threat_range and has_los:
+			if _arming_timer <= 0.0 and dist_to_player <= threat_range and has_los:
 				_transition_to(State.AIMING)
 
 		State.AIMING:
@@ -99,7 +104,7 @@ func _physics_process(delta: float) -> void:
 				_transition_to(State.IDLE)
 				return
 
-			_track_player(delta)
+			# Snapshot aim locked from AIMING state - do not track player mid-burst
 			_burst_timer -= delta
 			if _burst_timer <= 0.0:
 				_burst_timer = burst_interval
@@ -123,9 +128,18 @@ func _physics_process(delta: float) -> void:
 					_transition_to(State.IDLE)
 
 func _request_slot() -> bool:
-	var dir_node: Node = get_tree().get_first_node_in_group("combat_director")
-	if dir_node and dir_node.has_method("request_attack_slot"):
-		var granted: bool = dir_node.request_attack_slot(self, false)
+	if _arming_timer > 0.0:
+		return false
+
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
+	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+	if not dir and CombatDirector.instance:
+		dir = CombatDirector.instance
+	if dir:
+		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_TURRET, false, false, false, CombatDirector.DANGER_COST_BULLET, "turret")
 		_has_attack_slot = granted
 		return granted
 	_has_attack_slot = true
@@ -133,9 +147,11 @@ func _request_slot() -> bool:
 
 func _release_slot() -> void:
 	if _has_attack_slot:
-		var dir_node: Node = get_tree().get_first_node_in_group("combat_director")
-		if dir_node and dir_node.has_method("release_attack_slot"):
-			dir_node.release_attack_slot(self, false)
+		var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+		if not dir and CombatDirector.instance:
+			dir = CombatDirector.instance
+		if dir:
+			dir.release_attack_permission(self)
 	_has_attack_slot = false
 
 func _transition_to(new_state: State) -> void:

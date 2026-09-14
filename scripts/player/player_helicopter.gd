@@ -20,8 +20,8 @@ signal died()
 @export var climb_speed: float = 14.0
 @export var vertical_input_response: float = 14.0
 @export var vertical_release_response: float = 11.0
-@export var minimum_altitude: float = 2.6
-@export var maximum_altitude: float = 26.0
+@export var minimum_altitude: float = 3.6
+@export var maximum_altitude: float = 90.0
 
 @export_category("Flight Tilt")
 @export var forward_pitch_degrees: float = 16.0
@@ -63,6 +63,19 @@ var repair_rate: float = 4.0
 var _time_since_damage: float = 0.0
 var has_aegis_shield: bool = false
 var _aegis_cooldown: float = 0.0
+
+# Legendary Upgrades
+var has_ghost_rotor: bool = false
+var ghost_rotor_cooldown: float = 12.0
+var _ghost_rotor_timer: float = 0.0
+var has_one_more_pass: bool = false
+var one_more_pass_used: bool = false
+
+# Phase 10B Player-Damage Fairness & Post-Hit Invulnerability (i-frames)
+@export var invulnerability_duration: float = 0.35
+var _invulnerability_timer: float = 0.0
+var _recent_damaging_sources: Dictionary = {} # Maps Variant -> float (expiry)
+
 var is_alive: bool = true
 var _control_enabled: bool = true
 var _is_dying: bool = false
@@ -74,7 +87,7 @@ var current_visual_bank: float = 0.0
 var hover_time: float = 0.0
 var _base_tilt_rotation: Vector3 = Vector3.ZERO
 var _recoil_offset: float = 0.0
-var _base_gun_mount_pos: Vector3 = Vector3(0.0, -0.55, -1.15)
+var _base_gun_mount_pos: Vector3 = Vector3(0.0, -1.25, -2.60)
 var _current_main_speed: float = 48.0
 var _current_tail_speed: float = 72.0
 var _smoothed_throttle: float = 0.0
@@ -204,6 +217,19 @@ func _physics_process(delta: float) -> void:
 
 	if has_aegis_shield and _aegis_cooldown > 0.0:
 		_aegis_cooldown -= delta
+	if has_ghost_rotor and _ghost_rotor_timer > 0.0:
+		_ghost_rotor_timer -= delta
+	if _invulnerability_timer > 0.0:
+		_invulnerability_timer = maxf(0.0, _invulnerability_timer - delta)
+
+	if _recent_damaging_sources.size() > 0:
+		var expired_sources: Array = []
+		for src in _recent_damaging_sources.keys():
+			_recent_damaging_sources[src] -= delta
+			if _recent_damaging_sources[src] <= 0.0:
+				expired_sources.append(src)
+		for exp_src in expired_sources:
+			_recent_damaging_sources.erase(exp_src)
 
 	_handle_flight_movement(delta)
 	_handle_visual_tilt(delta)
@@ -219,6 +245,21 @@ func enable_repair_drone(rate: float = 4.0) -> void:
 
 func enable_aegis_shield() -> void:
 	has_aegis_shield = true
+
+func enable_ghost_rotor(cooldown: float = 12.0) -> void:
+	has_ghost_rotor = true
+	ghost_rotor_cooldown = cooldown
+	_ghost_rotor_timer = 0.0
+
+func enable_one_more_pass() -> void:
+	has_one_more_pass = true
+	one_more_pass_used = false
+
+func reset_legendaries() -> void:
+	has_ghost_rotor = false
+	_ghost_rotor_timer = 0.0
+	has_one_more_pass = false
+	one_more_pass_used = false
 
 func _handle_repair_drone(delta: float) -> void:
 	_time_since_damage += delta
@@ -543,8 +584,35 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	if not is_alive or _is_dying or not _control_enabled:
 		return
 
-	if amount > 0.0:
-		_time_since_damage = 0.0
+	# Deployment safety: invulnerable during opening countdown
+	var wm := get_tree().get_first_node_in_group("wave_manager")
+	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
+		return
+
+	# Zero damage and invalid/friendly hits do not consume protection or trigger i-frames
+	if amount <= 0.0:
+		return
+
+	# Phase 10B: Post-hit invulnerability (0.35s i-frames)
+	if _invulnerability_timer > 0.0:
+		return
+
+	# Same-projectile / same-source repeat hit protection
+	if _source != null and _recent_damaging_sources.has(_source):
+		return
+
+	_time_since_damage = 0.0
+
+	# Legendary Ghost Rotor ECM Barrier: Absorbs 1 hit every 12 seconds
+	if has_ghost_rotor and _ghost_rotor_timer <= 0.0:
+		_ghost_rotor_timer = ghost_rotor_cooldown
+		_invulnerability_timer = invulnerability_duration
+		if _source != null:
+			_recent_damaging_sources[_source] = 0.5
+		_flash_hit()
+		if EventBus and EventBus.has_signal("camera_shake_requested"):
+			EventBus.camera_shake_requested.emit(0.15)
+		return
 
 	# Emergency Aegis Countermeasure: Trigger when falling below 35% hull
 	if has_aegis_shield and _aegis_cooldown <= 0.0 and (current_health - amount) <= (max_health * 0.35):
@@ -555,6 +623,15 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 			EventBus.camera_shake_requested.emit(0.6)
 		amount *= 0.5 # Shield absorbs 50% of the breach damage
 
+	# Activate i-frames and record source
+	_invulnerability_timer = invulnerability_duration
+	if _source != null:
+		_recent_damaging_sources[_source] = 0.5
+
+	# Telemetry: Record player damage in CombatDirector
+	if CombatDirector.instance:
+		CombatDirector.instance.record_player_damage(amount)
+
 	current_health = maxf(0.0, current_health - amount)
 	_flash_hit()
 	emit_signal("health_changed", current_health, max_health)
@@ -564,6 +641,18 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 			EventBus.camera_shake_requested.emit(0.25)
 
 	if current_health <= 0.0:
+		# Legendary One More Pass: Revive once per run at 30% Hull
+		if has_one_more_pass and not one_more_pass_used:
+			one_more_pass_used = true
+			current_health = max_health * 0.3
+			emit_signal("health_changed", current_health, max_health)
+			if EventBus:
+				EventBus.player_health_changed.emit(current_health, max_health)
+				if EventBus.has_signal("camera_shake_requested"):
+					EventBus.camera_shake_requested.emit(0.5)
+			if flare_dispenser and flare_dispenser.has_method("deploy_flares"):
+				flare_dispenser.deploy_flares()
+			return
 		_die()
 
 func _flash_hit() -> void:
@@ -574,15 +663,22 @@ func _flash_hit() -> void:
 		tween.tween_property(target_vis, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
 	var body_mesh := get_node_or_null("FlightTiltPivot/Visuals/Body/Mesh0") as MeshInstance3D
 	if body_mesh and is_inside_tree():
-		var flash_mat := StandardMaterial3D.new()
-		flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		flash_mat.albedo_color = Color(1.8, 0.3, 0.3, 1.0)
-		var orig_mat := body_mesh.material_override
-		body_mesh.material_override = flash_mat
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			if is_instance_valid(body_mesh) and body_mesh.material_override == flash_mat:
-				body_mesh.material_override = orig_mat
-		)
+		var flash_enabled := bool(SaveSystem.get_setting("damage_flash_enabled", true))
+		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))
+		if flash_enabled:
+			var flash_mat := StandardMaterial3D.new()
+			if reduced_flash:
+				flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+				flash_mat.albedo_color = Color(0.9, 0.45, 0.45, 1.0)
+			else:
+				flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				flash_mat.albedo_color = Color(1.8, 0.3, 0.3, 1.0)
+			var orig_mat := body_mesh.material_override
+			body_mesh.material_override = flash_mat
+			get_tree().create_timer(0.06, false).timeout.connect(func():
+				if is_instance_valid(body_mesh) and body_mesh.material_override == flash_mat:
+					body_mesh.material_override = orig_mat
+			)
 
 func _die() -> void:
 	if _is_dying:

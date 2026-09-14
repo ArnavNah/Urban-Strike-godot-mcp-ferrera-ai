@@ -13,7 +13,14 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	if flash_light:
-		flash_light.light_energy = 4.0
+		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))
+		var flash_enabled := bool(SaveSystem.get_setting("damage_flash_enabled", true))
+		if not flash_enabled:
+			flash_light.light_energy = 0.0
+		elif reduced_flash:
+			flash_light.light_energy = 1.2
+		else:
+			flash_light.light_energy = 4.0
 		var light_tween := create_tween()
 		light_tween.tween_property(flash_light, "light_energy", 0.0, 0.45)
 

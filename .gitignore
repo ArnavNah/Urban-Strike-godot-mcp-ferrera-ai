@@ -5,3 +5,6 @@
 *.log
 run_output.txt
 test_results.txt
+*.tmp
+*.TMP
+~*

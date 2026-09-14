@@ -109,4 +109,7 @@ func explode(impact_pos: Vector3) -> void:
 				var parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				parent.add_child.call_deferred(expl)
 
+	if not is_player_missile and CombatDirector.instance:
+		CombatDirector.instance.release_danger_capacity(self, CombatDirector.DANGER_COST_HOMING_MISSILE)
+
 	queue_free()

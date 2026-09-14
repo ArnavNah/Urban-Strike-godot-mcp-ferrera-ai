@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Grass"
-albedo_color = Color(0.28, 0.62, 0.32, 1)
+albedo_color = Color(0.32, 0.38, 0.26, 1)
 roughness = 0.88

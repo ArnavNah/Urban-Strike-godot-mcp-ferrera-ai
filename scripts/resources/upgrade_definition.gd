@@ -3,19 +3,27 @@ extends Resource
 
 ## Resource definition for Heli-Strike survivor-style upgrades and build evolutions.
 
+const RARITY_COMMON := &"Common"
+const RARITY_RARE := &"Rare"
+const RARITY_LEGENDARY := &"Legendary"
+const RARITY_EVOLUTION := &"Evolution"
+
 @export var id: String = ""
 @export var display_name: String = ""
 @export var description: String = ""
-@export var category: String = "UPGRADE" # "Primary", "Secondary", "Airframe", "Avionics", "Support", "EVOLUTION"
+@export var category: String = "UPGRADE" # "Primary", "Secondary", "Airframe", "Avionics", "Support", "EVOLUTION", "Legendary"
 @export var benefit: String = ""
 @export var tradeoff: String = ""
 @export var icon: Texture2D = null
 @export var icon_path: String = ""
-@export var rarity: String = "Common" # "Common", "Rare", "Epic", "Evolution"
+@export var rarity: String = "Common" # "Common", "Rare", "Legendary", "Evolution"
 @export var max_level: int = 1
 @export var is_evolution: bool = false
 @export var prerequisites: Array[String] = []
 @export var effect_values: Dictionary = {}
+@export var current_value: String = ""
+@export var next_value: String = ""
+@export var priority: int = 0
 
 func to_dictionary() -> Dictionary:
 	var desc := description if not description.is_empty() else benefit
@@ -35,4 +43,7 @@ func to_dictionary() -> Dictionary:
 		"is_evolution": is_evolution,
 		"prerequisites": prerequisites,
 		"effect_values": effect_values,
+		"current_value": current_value,
+		"next_value": next_value,
+		"priority": priority,
 	}

@@ -28,6 +28,7 @@ enum State {
 		_apply_archetype_config()
 @export var custom_threat_cost: int = -1
 @export var xp_reward: int = 12
+@export var arming_delay: float = 1.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
@@ -35,6 +36,7 @@ var current_state: State = State.APPROACH
 var current_health: float = 30.0
 var is_alive: bool = true
 var threat_score: float = 0.5
+var _arming_timer: float = 1.5
 
 # Drop zone for Transport Helicopter
 var drop_target_position: Vector3 = Vector3.ZERO
@@ -102,7 +104,7 @@ func _ready() -> void:
 		add_to_group("jammers")
 		_notify_jammer_state_change()
 
-	if visuals and not visuals.has_node("HostileBeacon"):
+	if visuals and not visuals.has_node("HostileBeacon") and visuals.global_transform.is_finite():
 		var beacon := MeshInstance3D.new()
 		beacon.name = "HostileBeacon"
 		var sph := SphereMesh.new()
@@ -160,13 +162,19 @@ func _physics_process(delta: float) -> void:
 		_evasion_cooldown -= delta
 	if _missile_cooldown_timer > 0.0:
 		_missile_cooldown_timer -= delta
+	if _arming_timer > 0.0:
+		_arming_timer -= delta
 
 	# Distance-based AI LOD
 	var dist_to_player := global_position.distance_to(_player.global_position)
 	_lod_frame_counter += 1
 	var step_delta := delta
-	if dist_to_player > 140.0:
-		return # LOD 3: Culled
+	if dist_to_player > 280.0:
+		return # LOD 4: Dormant beyond 280m
+	elif dist_to_player > 140.0:
+		if _lod_frame_counter % 8 != 0:
+			return # LOD 3: 7.5 Hz corridor advance
+		step_delta = delta * 8.0
 	elif dist_to_player > 80.0:
 		if _lod_frame_counter % 4 != 0:
 			return # LOD 2: 15 Hz
@@ -261,6 +269,7 @@ func _query_ground_or_roof_height() -> float:
 	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1) # Layer 1 = World
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 	if hit.is_empty():
 		return 0.0
@@ -296,6 +305,7 @@ func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
 	var query := PhysicsRayQueryParameters3D.create(origin, target, 1) # Layer 1 = World
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 
 	if hit.is_empty():
@@ -802,11 +812,23 @@ func _notify_jammer_state_change() -> void:
 		eb.emit_signal("jammer_status_changed", is_jammed, count)
 
 func _request_air_slot() -> bool:
+	if _arming_timer > 0.0:
+		return false
+
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
-		var granted: bool = dir.request_attack_slot(self, true)
+		var token_cost: int = CombatDirector.TOKEN_COST_AIR_SCOUT
+		var danger_cost: int = 2
+		if archetype and ("is_gunship" in archetype or archetype.role_identifier in ["air_gunship", "air_ace"]):
+			token_cost = 3
+			danger_cost = 3
+		var granted: bool = dir.request_attack_permission(self, token_cost, true, false, false, danger_cost, "air_run")
 		_has_air_slot = granted
 		return granted
 	_has_air_slot = true
@@ -818,7 +840,7 @@ func _release_air_slot() -> void:
 		if not dir and CombatDirector.instance:
 			dir = CombatDirector.instance
 		if dir:
-			dir.release_attack_slot(self, true)
+			dir.release_attack_permission(self)
 	_has_air_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

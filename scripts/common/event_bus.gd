@@ -84,6 +84,8 @@ signal salvage_updated(run_salvage: int)
 signal damage_number_spawned(pos: Vector3, amount: float, is_critical: bool)
 @warning_ignore("unused_signal")
 signal border_warning_changed(is_warning: bool, return_direction: Vector3, distance_to_edge: float)
+@warning_ignore("unused_signal")
+signal setting_changed(setting_name: String, new_value: Variant)
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS

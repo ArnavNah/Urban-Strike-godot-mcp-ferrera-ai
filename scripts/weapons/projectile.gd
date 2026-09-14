@@ -184,6 +184,8 @@ func _spawn_spark(pos: Vector3, norm: Vector3) -> void:
 			target_parent.add_child.call_deferred(spark)
 
 func deactivate() -> void:
+	if not _is_player_projectile and CombatDirector.instance:
+		CombatDirector.instance.release_danger_capacity(self, 1)
 	_is_active = false
 	visible = false
 	set_process(false)

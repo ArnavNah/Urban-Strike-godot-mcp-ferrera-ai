@@ -14,13 +14,34 @@ const DEVICE_KBM: StringName = &"keyboard_mouse"
 @export_group("Response Curves")
 @export_range(1.0, 3.0, 0.05) var move_exponent: float = 1.25
 @export_range(1.0, 3.0, 0.05) var aim_exponent: float = 1.45
+@export_range(0.2, 3.0, 0.05) var aim_sensitivity: float = 1.0
 
 var last_device: StringName = DEVICE_KBM
+var controller_glyph_mode: String = "auto"
 
 func _ready() -> void:
-	# Load configured deadzones from SaveSystem
+	# Load configured deadzones & sensitivity from SaveSystem
 	move_deadzone = float(SaveSystem.get_setting("move_deadzone", 0.15))
 	aim_deadzone = float(SaveSystem.get_setting("aim_deadzone", 0.12))
+	aim_sensitivity = float(SaveSystem.get_setting("aim_sensitivity", 1.0))
+	aim_exponent = float(SaveSystem.get_setting("aim_exponent", 1.45))
+	controller_glyph_mode = str(SaveSystem.get_setting("controller_glyph_mode", "auto"))
+
+	if EventBus and EventBus.has_signal("setting_changed"):
+		EventBus.setting_changed.connect(_on_setting_changed)
+
+func _on_setting_changed(key: String, val: Variant) -> void:
+	match key:
+		"move_deadzone":
+			move_deadzone = clampf(float(val), 0.0, 0.45)
+		"aim_deadzone":
+			aim_deadzone = clampf(float(val), 0.0, 0.45)
+		"aim_sensitivity":
+			aim_sensitivity = clampf(float(val), 0.2, 3.0)
+		"aim_exponent":
+			aim_exponent = clampf(float(val), 1.0, 3.0)
+		"controller_glyph_mode":
+			controller_glyph_mode = str(val)
 
 func set_deadzones(move_dz: float, aim_dz: float, save: bool = false) -> void:
 	move_deadzone = clampf(move_dz, 0.0, 0.45)
@@ -28,6 +49,7 @@ func set_deadzones(move_dz: float, aim_dz: float, save: bool = false) -> void:
 	if save:
 		SaveSystem.set_setting("move_deadzone", move_deadzone)
 		SaveSystem.set_setting("aim_deadzone", aim_deadzone)
+
 
 
 func _input(event: InputEvent) -> void:
@@ -72,7 +94,8 @@ func get_aim_input() -> Vector2:
 		"aim_down",
 		0.0
 	)
-	return _radial_curve(raw, aim_deadzone, outer_deadzone, aim_exponent)
+	var curved := _radial_curve(raw, aim_deadzone, outer_deadzone, aim_exponent)
+	return curved * aim_sensitivity
 
 
 func is_precision_aiming() -> bool:

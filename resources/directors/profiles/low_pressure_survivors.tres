@@ -1,0 +1,172 @@
+[gd_resource type="Resource" script_class="DifficultyProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/difficulty_profile.gd" id="1_nehxx"]
+[ext_resource type="Script" path="res://scripts/resources/wave_population_target.gd" id="2_a2nrq"]
+
+[sub_resource type="Resource" id="Resource_jbjs7"]
+script = ExtResource("2_a2nrq")
+announcement = "WAVE 1 // HOSTILE INFANTRY CONTACT"
+
+[sub_resource type="Resource" id="Resource_wmsyp"]
+script = ExtResource("2_a2nrq")
+wave_number = 2
+announcement = "WAVE 2 // ARMORED PATROL INBOUND"
+visual_crowd_min = 12
+visual_crowd_max = 16
+node_cap = 10
+composition_weights = {
+"fodder": 0.85,
+"light_shooter": 0.15
+}
+
+[sub_resource type="Resource" id="Resource_funh5"]
+script = ExtResource("2_a2nrq")
+wave_number = 3
+announcement = "WAVE 3 // SUSTAINED GROUND ASSAULT"
+visual_crowd_min = 16
+visual_crowd_max = 22
+node_cap = 12
+composition_weights = {
+"armored": 0.05,
+"fodder": 0.75,
+"light_shooter": 0.2
+}
+allowed_roles = ["fodder", "light_shooter", "armored"]
+max_medium_armored = 1
+
+[sub_resource type="Resource" id="Resource_h25km"]
+script = ExtResource("2_a2nrq")
+wave_number = 4
+announcement = "WAVE 4 // HEAVY ARMOR CONVOY INBOUND"
+visual_crowd_min = 20
+visual_crowd_max = 26
+node_cap = 14
+composition_weights = {
+"armored": 0.1,
+"fodder": 0.7,
+"light_shooter": 0.2
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy"]
+max_heavy = 1
+spawn_interval_min = 1.1
+spawn_interval_max = 2.0
+
+[sub_resource type="Resource" id="Resource_e5c6y"]
+script = ExtResource("2_a2nrq")
+wave_number = 5
+announcement = "WAVE 5 // SAM & MORTAR FIRE SUPPORT DETECTED"
+visual_crowd_min = 24
+visual_crowd_max = 30
+node_cap = 16
+composition_weights = {
+"anti_air": 0.025,
+"armored": 0.1,
+"fodder": 0.65,
+"light_shooter": 0.2,
+"mortar": 0.025
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar"]
+max_sam = 1
+max_mortar = 1
+spawn_interval_min = 1.1
+spawn_interval_max = 2.0
+
+[sub_resource type="Resource" id="Resource_4y872"]
+script = ExtResource("2_a2nrq")
+wave_number = 6
+announcement = "WAVE 6 // AIR THREAT: RECON SQUADRONS CONTACT"
+visual_crowd_min = 24
+visual_crowd_max = 32
+node_cap = 17
+composition_weights = {
+"air_scout": 0.12,
+"armored": 0.1,
+"fodder": 0.6,
+"light_shooter": 0.18
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider"]
+max_air = 2
+spawn_interval_min = 1.1
+spawn_interval_max = 2.0
+
+[sub_resource type="Resource" id="Resource_tgwge"]
+script = ExtResource("2_a2nrq")
+wave_number = 7
+announcement = "WAVE 7 // COMBINED AIR & ARMORED PRESSURE"
+visual_crowd_min = 26
+visual_crowd_max = 34
+node_cap = 18
+composition_weights = {
+"air_raider": 0.05,
+"air_scout": 0.1,
+"armored": 0.12,
+"fodder": 0.55,
+"light_shooter": 0.18
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_transport"]
+max_air = 3
+spawn_interval_min = 0.9
+spawn_interval_max = 1.7
+
+[sub_resource type="Resource" id="Resource_vcvbm"]
+script = ExtResource("2_a2nrq")
+wave_number = 8
+announcement = "WAVE 8 // AIR STRIKE & ADVANCED FORMATIONS"
+visual_crowd_min = 28
+visual_crowd_max = 36
+node_cap = 19
+composition_weights = {
+"air_gunship": 0.02,
+"air_raider": 0.05,
+"air_scout": 0.08,
+"armored": 0.12,
+"fodder": 0.5,
+"heavy": 0.05,
+"light_shooter": 0.18
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer"]
+max_heavy = 2
+max_air = 4
+spawn_interval_min = 0.9
+spawn_interval_max = 1.7
+
+[sub_resource type="Resource" id="Resource_lwwqe"]
+script = ExtResource("2_a2nrq")
+wave_number = 9
+announcement = "WAVE 9 // MAXIMUM THREAT SATURATION"
+visual_crowd_min = 30
+visual_crowd_max = 40
+node_cap = 20
+composition_weights = {
+"air_gunship": 0.04,
+"air_raider": 0.05,
+"air_scout": 0.08,
+"armored": 0.14,
+"fodder": 0.45,
+"heavy": 0.06,
+"light_shooter": 0.18
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer", "air_ace"]
+max_heavy = 2
+max_air = 5
+spawn_interval_min = 0.9
+spawn_interval_max = 1.7
+
+[sub_resource type="Resource" id="Resource_b0fam"]
+script = ExtResource("2_a2nrq")
+wave_number = 10
+duration = 60.0
+announcement = "WAVE 10 // WARNING: ARCHON HEAVY GUNSHIP ENGAGEMENT"
+node_cap = 11
+composition_weights = {
+"armored": 0.15,
+"fodder": 0.6,
+"light_shooter": 0.25
+}
+allowed_roles = ["fodder", "light_shooter", "armored", "boss"]
+is_boss_wave = true
+
+[resource]
+script = ExtResource("1_nehxx")
+display_name = "Low-Pressure Survivors (Default)"
+wave_targets = Array[Resource]([SubResource("Resource_jbjs7"), SubResource("Resource_wmsyp"), SubResource("Resource_funh5"), SubResource("Resource_h25km"), SubResource("Resource_e5c6y"), SubResource("Resource_4y872"), SubResource("Resource_tgwge"), SubResource("Resource_vcvbm"), SubResource("Resource_lwwqe"), SubResource("Resource_b0fam")])

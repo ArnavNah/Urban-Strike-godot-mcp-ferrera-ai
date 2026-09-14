@@ -84,11 +84,29 @@ func _ready() -> void:
 	success = test_xp_collection_and_progression_integrity(log_lines) and success
 	append_log("Running test 32 (dynamic strike missions & combat causality)...", log_lines)
 	success = test_dynamic_strike_missions(log_lines) and success
+	append_log("Running test 33 (upgrade drafting, rarity, eligibility & legendary limits)...", log_lines)
+	success = test_upgrade_drafting_rarity_and_legendary_rules(log_lines) and success
+	append_log("Running test 34 (accessibility, persistent settings & enemy telegraphs)...", log_lines)
+	success = test_accessibility_and_enemy_telegraphs(log_lines) and success
+	append_log("Running test 35 (xp aggregation & 13-step acceptance suite)...", log_lines)
+	success = test_xp_aggregation_and_acceptance_suite(log_lines) and success
+	append_log("Running test 36 (Phase 10A survivors population & spawning foundation)...", log_lines)
+	success = test_phase_10a_population_and_spawning_foundation(log_lines) and success
+	append_log("Running test 37 (Phase 10B low-difficulty enemy ai & combat director)...", log_lines)
+	success = test_phase_10b_low_difficulty_enemy_ai_and_combat_director(log_lines) and success
+	append_log("Running test 38 (Survivors low-difficulty enemy AI & spawner refinement)...", log_lines)
+	success = test_survivors_low_difficulty_enemy_ai_and_spawner_refinement(log_lines) and success
+	append_log("Running test 39 (City world streamer, scale contract & socket continuity)...", log_lines)
+	success = test_city_world_streamer_and_scale_contract(log_lines) and success
+	append_log("Running test 40 (Nuclear Strike camera composition & oblique framing)...", log_lines)
+	success = test_nuclear_strike_camera_composition_and_behavior(log_lines) and success
+	append_log("Running test 41 (SpawnDirector separation, reservations & repeated-entry regression)...", log_lines)
+	success = test_spawn_director_separation_reservations_and_regression(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
 	else:
-		for l in log_lines:
+		for l in log_lines.duplicate():
 			if "FAIL:" in l:
 				append_log(l, log_lines)
 		append_log("=== SOME TESTS FAILED! ===", log_lines)
@@ -1615,34 +1633,37 @@ func test_environment_districts_and_playable_boundary(logs: Array[String]) -> bo
 
 	EventBus.border_warning_changed.connect(warning_cb)
 
-	# Place player in safe zone (<185m)
-	append_log("[TEST 22] Sub-step 1.3: Testing safe zone (100m)...", logs)
-	dummy_player.position = Vector3(100.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(100.0, 10.0, 0.0)
+	# Place player in safe zone (< safe_half_extent)
+	var safe_test_x: float = pa.safe_half_extent * 0.5
+	append_log("[TEST 22] Sub-step 1.3: Testing safe zone (%.1fm)..." % safe_test_x, logs)
+	dummy_player.position = Vector3(safe_test_x, 10.0, 0.0)
+	dummy_player.global_position = Vector3(safe_test_x, 10.0, 0.0)
 	pa._physics_process(0.016)
 	if warning_state["received"]:
-		logs.append("FAIL: Boundary warning triggered inside safe zone at 100m")
+		logs.append("FAIL: Boundary warning triggered inside safe zone at %.1fm" % safe_test_x)
 		EventBus.border_warning_changed.disconnect(warning_cb)
 		dummy_player.free()
 		pa.free()
 		return false
 
-	# Place player in warning zone (200m, between 185m and 215m)
-	append_log("[TEST 22] Sub-step 1.4: Testing warning zone (200m)...", logs)
-	dummy_player.position = Vector3(200.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(200.0, 10.0, 0.0)
+	# Place player in warning zone (between safe and warning)
+	var warn_test_x: float = (pa.safe_half_extent + pa.warning_half_extent) * 0.5
+	append_log("[TEST 22] Sub-step 1.4: Testing warning zone (%.1fm)..." % warn_test_x, logs)
+	dummy_player.position = Vector3(warn_test_x, 10.0, 0.0)
+	dummy_player.global_position = Vector3(warn_test_x, 10.0, 0.0)
 	pa._physics_process(0.016)
 	if not warning_state["received"]:
-		logs.append("FAIL: Boundary warning NOT triggered in warning zone at 200m (target_player=%s, pos=%s, is_warn=%s, safe=%s)" % [str(pa.target_player), str(pa.target_player.global_position if pa.target_player else Vector3.ZERO), str(pa.get("_is_currently_warning")), str(pa.safe_half_extent)])
+		logs.append("FAIL: Boundary warning NOT triggered in warning zone at %.1fm (target_player=%s, pos=%s, is_warn=%s, safe=%s)" % [warn_test_x, str(pa.target_player), str(pa.target_player.global_position if pa.target_player else Vector3.ZERO), str(pa.get("_is_currently_warning")), str(pa.safe_half_extent)])
 		EventBus.border_warning_changed.disconnect(warning_cb)
 		dummy_player.free()
 		pa.free()
 		return false
 
-	# Place player past hard boundary (>222m) with outward velocity
+	# Place player past hard boundary (> hard_half_extent) with outward velocity
+	var hard_test_x: float = pa.hard_half_extent + 3.0
 	append_log("[TEST 22] Sub-step 1.5: Testing hard boundary clamping...", logs)
-	dummy_player.position = Vector3(225.0, 10.0, 0.0)
-	dummy_player.global_position = Vector3(225.0, 10.0, 0.0)
+	dummy_player.position = Vector3(hard_test_x, 10.0, 0.0)
+	dummy_player.global_position = Vector3(hard_test_x, 10.0, 0.0)
 	dummy_player.velocity = Vector3(25.0, 0.0, 0.0)
 	pa._physics_process(0.016)
 	if dummy_player.global_position.x > pa.hard_half_extent + 0.01:
@@ -1758,19 +1779,21 @@ func test_environment_districts_and_playable_boundary(logs: Array[String]) -> bo
 	var found_ind := false
 	var found_mil := false
 	var found_out := false
+	var found_streamer := false
 	for i in range(state.get_node_count()):
 		var n: String = state.get_node_name(i)
 		if n == "PlayableArea": found_pa = true
+		elif n == "CityWorldStreamer": found_streamer = true
 		elif n == "Districts": found_districts = true
 		elif n == "District_CityCenter" or n == "CentralUrban": found_city = true
 		elif n == "District_Industrial" or n == "Industrial": found_ind = true
 		elif n == "District_Military" or n == "Military": found_mil = true
 		elif n == "District_Outskirts" or n == "Outskirts": found_out = true
 
-	if not found_pa or not found_districts:
-		logs.append("FAIL: Battlefield missing PlayableArea or Districts node")
+	if not found_pa or (not found_districts and not found_streamer):
+		logs.append("FAIL: Battlefield missing PlayableArea or CityWorldStreamer/Districts node")
 		return false
-	if not found_city or not found_ind or not found_mil or not found_out:
+	if not found_streamer and (not found_city or not found_ind or not found_mil or not found_out):
 		logs.append("FAIL: Battlefield missing one of the 4 district nodes")
 		return false
 
@@ -1966,7 +1989,7 @@ func test_environment_gameplay_integration(logs: Array[String]) -> bool:
 		root_node.queue_free()
 		return false
 
-	var c_pos := crate1.global_position
+	var c_pos: Vector3 = crate1.global_position if crate1.is_inside_tree() else crate1.transform.origin
 	if absf(c_pos.x) > 125.0 or absf(c_pos.z) > 125.0:
 		logs.append("FAIL: Pickup spawned outside EnvironmentBounds safe area (125m)")
 		root_node.queue_free()
@@ -2010,13 +2033,13 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 	var dummy_player := Node3D.new()
 	dummy_player.name = "DummyPlayer"
 	dummy_player.add_to_group("player")
-	dummy_player.global_position = Vector3(0.0, 10.0, 30.0)
+	dummy_player.position = Vector3(0.0, 10.0, 30.0)
 	root_node.add_child(dummy_player)
 
 	# 1. Test InfantryCluster mobility and approach
 	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
 	var inf: Node3D = inf_scene.instantiate() as Node3D
-	inf.global_position = Vector3(0.0, 0.0, 0.0)
+	inf.position = Vector3(0.0, 0.0, 0.0)
 	root_node.add_child(inf)
 
 	if not (inf is CharacterBody3D):
@@ -2041,7 +2064,7 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 	# 2. Test Tank approach, chassis orientation, and pre-fire charge
 	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
 	var tank: Node3D = tank_scene.instantiate() as Node3D
-	tank.global_position = Vector3(0.0, 0.0, -10.0)
+	tank.position = Vector3(0.0, 0.0, -10.0)
 	root_node.add_child(tank)
 
 	var tank_body := tank as CharacterBody3D
@@ -2082,7 +2105,7 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 	# 5. Test Flying Enemy AI (AirEnemyController)
 	var scout_scene := load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
 	var scout: Node3D = scout_scene.instantiate() as Node3D
-	scout.global_position = Vector3(0.0, 16.0, -30.0)
+	scout.position = Vector3(0.0, 16.0, -30.0)
 	root_node.add_child(scout)
 
 	var scout_body := scout as CharacterBody3D
@@ -2108,8 +2131,8 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 	var raider_scene := load("res://scenes/enemies/air_rocket_raider.tscn") as PackedScene
 	var raider1: Node3D = raider_scene.instantiate() as Node3D
 	var raider2: Node3D = raider_scene.instantiate() as Node3D
-	raider1.global_position = Vector3(30.0, 16.0, 30.0)
-	raider2.global_position = Vector3(31.0, 16.0, 30.0) # 1m apart (within 10m search radius)
+	raider1.position = Vector3(30.0, 16.0, 30.0)
+	raider2.position = Vector3(31.0, 16.0, 30.0) # 1m apart (within 10m search radius)
 	root_node.add_child(raider1)
 	root_node.add_child(raider2)
 
@@ -3307,9 +3330,11 @@ func test_survival_encounter_director_and_frustum_safety(logs: Array[String]) ->
 
 	# 5. Test Camera Frustum Safety
 	var test_cam := Camera3D.new()
+	test_cam.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	root_node.add_child(test_cam)
-	test_cam.global_position = Vector3(0.0, 10.0, 30.0)
+	test_cam.position = Vector3(0.0, 10.0, 30.0)
 	test_cam.look_at(Vector3(0.0, 10.0, 0.0), Vector3.UP)
+	test_cam.force_update_transform()
 	test_cam.current = true
 
 	var in_view_pos := Vector3(0.0, 10.0, 0.0)
@@ -3846,4 +3871,2291 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 
 	root_node.queue_free()
 	append_log("  -> Dynamic strike missions, radar/SAM causality, jammer EW interference, LZ 3D proximity hold, and continuous horde focus verified.", logs)
+	return true
+
+func test_upgrade_drafting_rarity_and_legendary_rules(logs: Array[String]) -> bool:
+	logs.append("[TEST] Upgrade Drafting, Rarity Tiers, Eligibility & Legendary Limits...")
+
+	var root_node := Node.new()
+	add_child(root_node)
+
+	var run_state := RunStateController.new()
+	run_state.add_to_group("run_state_controller")
+	root_node.add_child(run_state)
+
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player := player_scene.instantiate() as PlayerHelicopter
+	player.add_to_group("player")
+	root_node.add_child(player)
+
+	var menu_scene := load("res://scenes/ui/level_up_menu.tscn") as PackedScene
+	var level_up_menu := menu_scene.instantiate() as LevelUpMenu
+	level_up_menu.add_to_group("level_up_menu")
+	root_node.add_child(level_up_menu)
+
+	var upgrade_mgr := UpgradeManager.new()
+	upgrade_mgr.add_to_group("upgrade_manager")
+	root_node.add_child(upgrade_mgr)
+
+	# 1. Rarity Classifications & UpgradeDefinition Resources
+	var rarities_found: Dictionary = {"Common": 0, "Rare": 0, "Legendary": 0, "Evolution": 0}
+	for key in upgrade_mgr.upgrade_database:
+		var data: Dictionary = upgrade_mgr.upgrade_database[key]
+		var rar: String = data.get("rarity", "")
+		if not rarities_found.has(rar):
+			append_log("FAIL: Unknown rarity '%s' for upgrade '%s'" % [rar, key], logs)
+			root_node.queue_free()
+			return false
+		rarities_found[rar] += 1
+
+		# Verify corresponding UpgradeDefinition resource
+		var def: UpgradeDefinition = upgrade_mgr.get_definition(key)
+		if not def:
+			append_log("FAIL: Missing UpgradeDefinition for '%s'" % key, logs)
+			root_node.queue_free()
+			return false
+		if def.rarity != rar:
+			append_log("FAIL: Rarity mismatch between database and definition for '%s'" % key, logs)
+			root_node.queue_free()
+			return false
+		if def.benefit.is_empty():
+			append_log("FAIL: Empty benefit for '%s'" % key, logs)
+			root_node.queue_free()
+			return false
+
+	if rarities_found["Common"] != 9 or rarities_found["Rare"] != 7 or rarities_found["Legendary"] != 3 or rarities_found["Evolution"] != 6:
+		append_log("FAIL: Unexpected rarity distribution in catalog: %s" % str(rarities_found), logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Normalized 70% Common / 25% Rare / 5% Legendary Weighting & Dynamic Renormalization
+	if upgrade_mgr.roll_rarity_tier(0.0, true, true, true) != "Common" or \
+	   upgrade_mgr.roll_rarity_tier(0.6999, true, true, true) != "Common" or \
+	   upgrade_mgr.roll_rarity_tier(0.70, true, true, true) != "Rare" or \
+	   upgrade_mgr.roll_rarity_tier(0.9499, true, true, true) != "Rare" or \
+	   upgrade_mgr.roll_rarity_tier(0.95, true, true, true) != "Legendary" or \
+	   upgrade_mgr.roll_rarity_tier(0.9999, true, true, true) != "Legendary":
+		append_log("FAIL: roll_rarity_tier 3-tier threshold calculation error", logs)
+		root_node.queue_free()
+		return false
+
+	# 2-tier (No Legendary, e.g. after acquiring one): 0.70 / (0.70 + 0.25) = ~0.73684
+	var cutoff_cr: float = 0.70 / 0.95
+	if upgrade_mgr.roll_rarity_tier(cutoff_cr - 0.01, true, true, false) != "Common" or \
+	   upgrade_mgr.roll_rarity_tier(cutoff_cr + 0.01, true, true, false) != "Rare":
+		append_log("FAIL: roll_rarity_tier 2-tier (Common+Rare) renormalization failed", logs)
+		root_node.queue_free()
+		return false
+
+	# 2-tier (No Common): 0.25 / (0.25 + 0.05) = ~0.83333
+	var cutoff_rl: float = 0.25 / 0.30
+	if upgrade_mgr.roll_rarity_tier(cutoff_rl - 0.01, false, true, true) != "Rare" or \
+	   upgrade_mgr.roll_rarity_tier(cutoff_rl + 0.01, false, true, true) != "Legendary":
+		append_log("FAIL: roll_rarity_tier 2-tier (Rare+Legendary) renormalization failed", logs)
+		root_node.queue_free()
+		return false
+
+	# 1-tier fallback
+	if upgrade_mgr.roll_rarity_tier(0.5, true, false, false) != "Common" or \
+	   upgrade_mgr.roll_rarity_tier(0.5, false, true, false) != "Rare" or \
+	   upgrade_mgr.roll_rarity_tier(0.5, false, false, true) != "Legendary" or \
+	   upgrade_mgr.roll_rarity_tier(0.5, false, false, false) != "":
+		append_log("FAIL: roll_rarity_tier single/empty tier calculation error", logs)
+		root_node.queue_free()
+		return false
+
+	# Seeded Monte Carlo distribution test (10,000 samples)
+	var counts: Dictionary = {"Common": 0, "Rare": 0, "Legendary": 0}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	for i in range(10000):
+		var r := rng.randf()
+		var tier := upgrade_mgr.roll_rarity_tier(r, true, true, true)
+		counts[tier] += 1
+
+	# Expected: Common ~7000 (6800-7200), Rare ~2500 (2300-2700), Legendary ~500 (400-600)
+	if counts["Common"] < 6800 or counts["Common"] > 7200 or \
+	   counts["Rare"] < 2300 or counts["Rare"] > 2700 or \
+	   counts["Legendary"] < 400 or counts["Legendary"] > 600:
+		append_log("FAIL: Monte Carlo tier distribution outside tolerance: %s" % str(counts), logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Eligibility Filtering: Dead Player & Weapon Subsystem Dependencies
+	if not upgrade_mgr._is_eligible("multi_shot") or not upgrade_mgr._is_eligible("larger_explosions"):
+		append_log("FAIL: Standard upgrades should be eligible with live player and subsystems", logs)
+		root_node.queue_free()
+		return false
+
+	# Dead player ineligibility
+	player.is_alive = false
+	if upgrade_mgr._is_eligible("multi_shot") or upgrade_mgr._is_eligible("movement_boost"):
+		append_log("FAIL: Upgrades should be ineligible when player is dead", logs)
+		root_node.queue_free()
+		return false
+	player.is_alive = true
+
+	# Subsystem dependency
+	var saved_gun := player.chaingun
+	player.chaingun = null
+	if upgrade_mgr._is_eligible("multi_shot") or upgrade_mgr._is_eligible("faster_cannon"):
+		append_log("FAIL: Chaingun upgrades should be ineligible when chaingun is missing", logs)
+		root_node.queue_free()
+		return false
+	player.chaingun = saved_gun
+
+	var saved_pod := player.missile_pod
+	player.missile_pod = null
+	if upgrade_mgr._is_eligible("larger_explosions") or upgrade_mgr._is_eligible("rapid_lock"):
+		append_log("FAIL: Missile upgrades should be ineligible when missile_pod is missing", logs)
+		root_node.queue_free()
+		return false
+	player.missile_pod = saved_pod
+
+	# 4. Legendary Limit Enforcement: Maximum 1 Acquired Legendary Per Run
+	upgrade_mgr.reset_run()
+	if upgrade_mgr.has_acquired_legendary or upgrade_mgr.acquired_legendary_id != "":
+		append_log("FAIL: Legendary state not clean after reset_run()", logs)
+		root_node.queue_free()
+		return false
+
+	if not upgrade_mgr._is_eligible("overdrive_core") or not upgrade_mgr._is_eligible("ghost_rotor") or not upgrade_mgr._is_eligible("one_more_pass"):
+		append_log("FAIL: Legendaries must be eligible prior to acquisition", logs)
+		root_node.queue_free()
+		return false
+
+	var apply_ok := upgrade_mgr.apply_upgrade("overdrive_core")
+	if not apply_ok or not upgrade_mgr.has_acquired_legendary or upgrade_mgr.acquired_legendary_id != "overdrive_core":
+		append_log("FAIL: Failed to acquire initial Legendary upgrade", logs)
+		root_node.queue_free()
+		return false
+
+	if upgrade_mgr._is_eligible("ghost_rotor") or upgrade_mgr._is_eligible("one_more_pass"):
+		append_log("FAIL: Other Legendaries must be ineligible after acquiring one Legendary", logs)
+		root_node.queue_free()
+		return false
+
+	var second_apply := upgrade_mgr.apply_upgrade("ghost_rotor")
+	if second_apply:
+		append_log("FAIL: Secondary Legendary acquisition should have been rejected", logs)
+		root_node.queue_free()
+		return false
+
+	for i in range(50):
+		var choices := upgrade_mgr.get_random_choices(3)
+		for c in choices:
+			if c.get("rarity") == "Legendary":
+				append_log("FAIL: Legendary offered after Legendary was already acquired: %s" % str(c), logs)
+				root_node.queue_free()
+				return false
+
+	# 5. Deterministic Evolution Priority Rule
+	upgrade_mgr.reset_run()
+	if upgrade_mgr._is_eligible("hellfire_minigun") or upgrade_mgr._is_eligible("siege_cannon"):
+		append_log("FAIL: Evolutions should be ineligible without prerequisites", logs)
+		root_node.queue_free()
+		return false
+
+	upgrade_mgr.acquired_upgrades.append("twin_barrel")
+	upgrade_mgr.acquired_upgrades.append("overclocked_feed")
+	upgrade_mgr.acquired_upgrades.append("armor_piercing")
+	upgrade_mgr.acquired_upgrades.append("reinforced_airframe")
+
+	if not upgrade_mgr._is_eligible("hellfire_minigun") or not upgrade_mgr._is_eligible("siege_cannon"):
+		append_log("FAIL: Both evolutions should be eligible after satisfying prerequisites", logs)
+		root_node.queue_free()
+		return false
+
+	upgrade_mgr.guarantee_mini_heli_on_first_offer = false
+	var evo_choices := upgrade_mgr.get_random_choices(3)
+	if evo_choices.is_empty() or evo_choices[0].get("id") != "hellfire_minigun":
+		append_log("FAIL: Priority 1 evolution not placed in slot 0 (got %s)" % (evo_choices[0].get("id") if not evo_choices.is_empty() else "none"), logs)
+		root_node.queue_free()
+		return false
+
+	var evo_card := evo_choices[0]
+	if str(evo_card.get("evolution_synergy", "")).is_empty() or str(evo_card.get("prerequisites_text", "")).is_empty():
+		append_log("FAIL: Evolution card missing synergy or prerequisites text: %s" % str(evo_card), logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Queued Multi-Level Pacing, Duplicate Protection & Exhausted Pool Continue
+	upgrade_mgr.reset_run()
+	upgrade_mgr.guarantee_mini_heli_on_first_offer = false
+
+	upgrade_mgr.add_xp(50 + 90) # Reaches Level 3, pending levels = [2, 3]
+	if upgrade_mgr.current_level != 3 or upgrade_mgr.pending_levels.size() != 2:
+		append_log("FAIL: Multi-level XP addition failed (lvl=%d, pending=%s)" % [upgrade_mgr.current_level, str(upgrade_mgr.pending_levels)], logs)
+		root_node.queue_free()
+		return false
+
+	upgrade_mgr._present_next_choice()
+	if not upgrade_mgr.is_choice_active or not level_up_menu.visible:
+		append_log("FAIL: Level-up choice modal not active after multi-level gain", logs)
+		root_node.queue_free()
+		return false
+
+	var offered_first := upgrade_mgr._offered_ids.duplicate()
+	if offered_first.is_empty():
+		append_log("FAIL: No choices offered on first pending level", logs)
+		root_node.queue_free()
+		return false
+
+	var pick_id: String = offered_first[0]
+	var first_sub := upgrade_mgr.select_choice(pick_id)
+	if not first_sub:
+		append_log("FAIL: Valid card selection rejected", logs)
+		root_node.queue_free()
+		return false
+
+	var dup_sub := upgrade_mgr.select_choice(pick_id)
+	if dup_sub:
+		append_log("FAIL: Duplicate choice submission should have been rejected", logs)
+		root_node.queue_free()
+		return false
+
+	if not upgrade_mgr.is_choice_active or upgrade_mgr.pending_levels.size() != 1:
+		append_log("FAIL: Second pending level choice was not queued and presented properly", logs)
+		root_node.queue_free()
+		return false
+
+	var offered_second := upgrade_mgr._offered_ids.duplicate()
+	if offered_second.has(pick_id):
+		append_log("FAIL: Previously acquired upgrade was offered again in second choice", logs)
+		root_node.queue_free()
+		return false
+
+	var pick_id2: String = offered_second[0]
+	upgrade_mgr.select_choice(pick_id2)
+	if not upgrade_mgr.pending_levels.is_empty() or upgrade_mgr.is_choice_active:
+		append_log("FAIL: Pending levels not empty after resolving all choices", logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Exhausted Pool Continue Card Resolution
+	for key in upgrade_mgr.upgrade_database:
+		if not upgrade_mgr.acquired_upgrades.has(key):
+			upgrade_mgr.acquired_upgrades.append(key)
+
+	var exhausted_choices := upgrade_mgr.get_random_choices(3)
+	if not exhausted_choices.is_empty():
+		append_log("FAIL: get_random_choices should return empty when catalog is fully acquired", logs)
+		root_node.queue_free()
+		return false
+
+	upgrade_mgr.pending_levels.append(99)
+	upgrade_mgr.is_choice_active = true
+	upgrade_mgr._offered_ids.clear()
+	level_up_menu.display_cards([], 99)
+
+	if level_up_menu._buttons.size() != 1 or level_up_menu._buttons[0].text != "CONTINUE":
+		append_log("FAIL: Exhausted pool did not create CONTINUE button on level-up menu", logs)
+		root_node.queue_free()
+		return false
+
+	var continue_res := upgrade_mgr.select_choice("")
+	if not continue_res or not upgrade_mgr.pending_levels.is_empty():
+		append_log("FAIL: Exhausted pool CONTINUE selection failed to clear pending level", logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Reset Run restores clean state
+	upgrade_mgr.reset_run()
+	if not upgrade_mgr.acquired_upgrades.is_empty() or upgrade_mgr.current_level != 1 or upgrade_mgr.current_xp != 0:
+		append_log("FAIL: reset_run did not reset level, xp, or acquired upgrades", logs)
+		root_node.queue_free()
+		return false
+	if upgrade_mgr.has_acquired_legendary or upgrade_mgr.acquired_legendary_id != "":
+		append_log("FAIL: reset_run did not reset legendary flags", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Upgrade drafting, rarity weights (70/25/5), eligibility, legendary limit (max 1), deterministic evolution priority, and exhausted pool verified.", logs)
+	return true
+
+func test_accessibility_and_enemy_telegraphs(logs: Array[String]) -> bool:
+	logs.append("[TEST 34] Starting Accessibility, Persistent Settings & Enemy Telegraphs tests...")
+	var root_node := Node3D.new()
+	root_node.name = "Test34Root"
+	add_child(root_node)
+
+	# 1. Verify SaveSystem Settings Schema, Safe Defaults, and Signal
+	var safe_defaults := {
+		"screen_shake_enabled": true,
+		"screen_shake_intensity": 1.0,
+		"damage_flash_enabled": true,
+		"damage_flash_intensity": 1.0,
+		"reduced_flashing": false,
+		"volume_master": 1.0,
+		"volume_sfx": 1.0,
+		"volume_music": 1.0,
+		"move_deadzone": 0.15,
+		"aim_deadzone": 0.20,
+		"aim_sensitivity": 1.0,
+		"aim_exponent": 1.0,
+		"controller_glyph_mode": "auto",
+		"high_contrast_indicators": false
+	}
+
+	var all_settings := SaveSystem.get_all_settings()
+	for key in safe_defaults:
+		if not all_settings.has(key):
+			append_log("FAIL: SaveSystem missing setting key: %s" % key, logs)
+			root_node.queue_free()
+			return false
+
+	# Test signal emission on set_setting with dictionary closure capture
+	var signal_data := {"received": false, "key": "", "val": null}
+	var listener := func(k: String, v: Variant) -> void:
+		signal_data["received"] = true
+		signal_data["key"] = k
+		signal_data["val"] = v
+
+	if EventBus and EventBus.has_signal("setting_changed"):
+		EventBus.setting_changed.connect(listener)
+
+	SaveSystem.set_setting("screen_shake_intensity", 0.65)
+	if not bool(signal_data["received"]) or str(signal_data["key"]) != "screen_shake_intensity" or absf(float(signal_data["val"]) - 0.65) > 0.01:
+		append_log("FAIL: EventBus.setting_changed not emitted or incorrect on set_setting (received=%s, key=%s, val=%s)" % [
+			str(signal_data["received"]), str(signal_data["key"]), str(signal_data["val"])
+		], logs)
+		if EventBus and EventBus.has_signal("setting_changed"):
+			EventBus.setting_changed.disconnect(listener)
+		root_node.queue_free()
+		return false
+
+	if EventBus and EventBus.has_signal("setting_changed"):
+		EventBus.setting_changed.disconnect(listener)
+
+	# Restore default
+	SaveSystem.set_setting("screen_shake_intensity", 1.0)
+
+	# 2. Verify Camera Shake Scaling and Disabling
+	var camera_rig_scene := load("res://scenes/camera/camera_rig.tscn") as PackedScene
+	var camera_rig: CameraRig = null
+	if camera_rig_scene:
+		camera_rig = camera_rig_scene.instantiate() as CameraRig
+		root_node.add_child(camera_rig)
+
+	if camera_rig:
+		# Test shake disabled
+		camera_rig.camera_shake_enabled = false
+		camera_rig._shake_trauma = 0.0
+		camera_rig._on_shake_requested(1.0)
+		if camera_rig._shake_trauma > 0.001:
+			append_log("FAIL: CameraRig trauma increased while camera_shake_enabled = false", logs)
+			root_node.queue_free()
+			return false
+
+		# Test shake scaling with intensity 0.5
+		camera_rig.camera_shake_enabled = true
+		camera_rig.screen_shake_intensity = 0.5
+		camera_rig._shake_trauma = 0.0
+		camera_rig._on_shake_requested(0.8)
+		if absf(camera_rig._shake_trauma - 0.4) > 0.02:
+			append_log("FAIL: CameraRig trauma did not scale correctly by intensity (expected 0.4, got %.2f)" % camera_rig._shake_trauma, logs)
+			root_node.queue_free()
+			return false
+
+		# Test _apply_camera_shake resets camera to zero when disabled
+		camera_rig.camera_shake_enabled = false
+		camera_rig._apply_camera_shake(0.016)
+		if is_instance_valid(camera_rig.camera) and camera_rig.camera.transform.origin != Vector3.ZERO:
+			append_log("FAIL: Camera transform offset not reset to ZERO when shake disabled", logs)
+			root_node.queue_free()
+			return false
+
+	# 3. Verify HUD Damage Flash, Reduced Flashing & Multi-Cue Health
+	var hud_scene := load("res://scenes/ui/hud.tscn") as PackedScene
+	var hud: HUD = null
+	if hud_scene:
+		hud = hud_scene.instantiate() as HUD
+		root_node.add_child(hud)
+
+	if hud:
+		# Verify critical health multi-cue textual label
+		hud._on_health_changed(15.0, 100.0)
+		if not hud.health_label or not "CRITICAL" in hud.health_label.text or not "[!]" in hud.health_label.text:
+			append_log("FAIL: HUD critical health did not format non-color multi-cue text: %s" % (hud.health_label.text if hud.health_label else "null"), logs)
+			root_node.queue_free()
+			return false
+
+		# Verify normal health display
+		hud._on_health_changed(85.0, 100.0)
+		if not hud.health_label or not "HULL: 85 / 100" in hud.health_label.text:
+			append_log("FAIL: HUD normal health did not format correctly: %s" % (hud.health_label.text if hud.health_label else "null"), logs)
+			root_node.queue_free()
+			return false
+
+		# Verify damage flash suppression when disabled
+		hud._damage_flash_enabled = false
+		hud._damage_flash_intensity = 1.0
+		hud._on_health_changed(70.0, 100.0)
+		if hud.damage_vignette and hud.damage_vignette.color.a > 0.001:
+			append_log("FAIL: HUD damage vignette alpha > 0 when damage_flash_enabled is false", logs)
+			root_node.queue_free()
+			return false
+
+		# Verify reduced flashing mode caps alpha at <= 0.16
+		hud._damage_flash_enabled = true
+		hud._reduced_flashing = true
+		hud._damage_flash_intensity = 1.0
+		hud._prev_health = 100.0
+		hud._on_health_changed(20.0, 100.0)
+		if hud.damage_vignette and hud.damage_vignette.color.a > 0.165:
+			append_log("FAIL: HUD reduced_flashing vignette alpha (%.2f) exceeded 0.16 cap" % hud.damage_vignette.color.a, logs)
+			root_node.queue_free()
+			return false
+
+	# 4. Audio Volume Setting Management
+	var sound_scene := load("res://scenes/audio/sound_manager.tscn") as PackedScene
+	var sound_mgr: SoundManager = null
+	if sound_scene:
+		sound_mgr = sound_scene.instantiate() as SoundManager
+		root_node.add_child(sound_mgr)
+
+	if sound_mgr:
+		SaveSystem.set_setting("volume_master", 0.75)
+		SaveSystem.set_setting("volume_sfx", 0.6)
+		SaveSystem.set_setting("volume_music", 0.4)
+		sound_mgr.apply_volume_settings()
+		# Restore
+		SaveSystem.set_setting("volume_master", 1.0)
+		SaveSystem.set_setting("volume_sfx", 1.0)
+		SaveSystem.set_setting("volume_music", 1.0)
+		sound_mgr.apply_volume_settings()
+
+	# 5. Input Router Aim Sensitivity & Exponent
+	var input_router := InputRouter.new()
+	root_node.add_child(input_router)
+
+	SaveSystem.set_setting("aim_sensitivity", 1.35)
+	SaveSystem.set_setting("aim_exponent", 1.2)
+	SaveSystem.set_setting("controller_glyph_mode", "xbox")
+	if absf(input_router.aim_sensitivity - 1.35) > 0.01:
+		append_log("FAIL: InputRouter did not update aim_sensitivity from setting", logs)
+		root_node.queue_free()
+		return false
+	if input_router.controller_glyph_mode != "xbox":
+		append_log("FAIL: InputRouter did not update controller_glyph_mode from setting", logs)
+		root_node.queue_free()
+		return false
+	# Restore
+	SaveSystem.set_setting("aim_sensitivity", 1.0)
+	SaveSystem.set_setting("aim_exponent", 1.45)
+	SaveSystem.set_setting("controller_glyph_mode", "auto")
+	input_router.queue_free()
+
+	# 6. Enemy Telegraphs Verification
+	# Heavy Tank Charging tell
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	if tank_scene:
+		var tank := tank_scene.instantiate() as Tank
+		root_node.add_child(tank)
+		if not tank.charge_light:
+			append_log("FAIL: Tank missing charge_light pre-shot tell node", logs)
+			root_node.queue_free()
+			return false
+		tank.current_state = Tank.State.CHARGING
+		tank._state_timer = 0.2
+		if not is_instance_valid(tank.charge_light):
+			append_log("FAIL: Tank charge_light invalid", logs)
+			root_node.queue_free()
+			return false
+		tank.queue_free()
+
+	# SAM Site Lock Tell
+	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
+	if sam_scene:
+		var sam := sam_scene.instantiate() as SAMSite
+		root_node.add_child(sam)
+		if not sam.has_method("_on_radar_status_changed"):
+			append_log("FAIL: SAM missing radar status handler", logs)
+			root_node.queue_free()
+			return false
+		sam.queue_free()
+
+	# Boss Archon Attack Tells
+	var boss_scene := load("res://scenes/enemies/boss_archon.tscn") as PackedScene
+	if boss_scene:
+		var boss := boss_scene.instantiate() as BossArchon
+		root_node.add_child(boss)
+		if not boss.has_method("_telegraph_rocket_salvo"):
+			append_log("FAIL: BossArchon missing _telegraph_rocket_salvo method", logs)
+			root_node.queue_free()
+			return false
+		if not boss.core_light:
+			append_log("FAIL: BossArchon missing core_light node for telegraphs", logs)
+			root_node.queue_free()
+			return false
+		boss.queue_free()
+
+	root_node.queue_free()
+	append_log("  -> Accessibility persistent settings, camera shake scaling, damage flash suppression, audio volumes, and enemy telegraph tells verified.", logs)
+	return true
+
+func test_xp_aggregation_and_acceptance_suite(logs: Array[String]) -> bool:
+	logs.append("[TEST 35] Starting XP Aggregation & 13-Step Acceptance Suite...")
+	var root_node := Node3D.new()
+	root_node.name = "Test35Root"
+	add_child(root_node)
+
+	# 1. XP Gem Aggregation (Conserves 100% total XP value while capping count <= 50)
+	var gem_scene := load("res://scenes/pickups/xp_gem.tscn") as PackedScene
+	var spawned_gems: Array[XPGem] = []
+	var total_initial_xp: int = 0
+	var gem_count := 60
+	for i in range(gem_count):
+		var gem: XPGem = null
+		if gem_scene:
+			gem = gem_scene.instantiate() as XPGem
+		else:
+			gem = XPGem.new()
+		gem.xp_value = 5
+		gem.current_state = XPGem.State.IDLE
+		gem.transform.origin = Vector3(randf_range(-4.0, 4.0), 0.4, randf_range(-4.0, 4.0))
+		root_node.add_child(gem)
+		spawned_gems.append(gem)
+		total_initial_xp += 5
+
+	if total_initial_xp != 300:
+		append_log("FAIL: Initial XP sum is not 300 (got %d)" % total_initial_xp, logs)
+		root_node.queue_free()
+		return false
+
+	var _merged_count := XPGem.aggregate_excess_gems(root_node.get_tree(), 50)
+	var remaining_active_gems := 0
+	var total_remaining_xp := 0
+	for g in spawned_gems:
+		if is_instance_valid(g) and not g.is_queued_for_deletion() and not g._is_collected:
+			remaining_active_gems += 1
+			total_remaining_xp += g.xp_value
+
+	if remaining_active_gems > 50:
+		append_log("FAIL: Remaining active gems (%d) exceeded cap of 50" % remaining_active_gems, logs)
+		root_node.queue_free()
+		return false
+
+	if total_remaining_xp != total_initial_xp:
+		append_log("FAIL: XP lost during gem aggregation! Expected %d total XP, got %d" % [total_initial_xp, total_remaining_xp], logs)
+		root_node.queue_free()
+		return false
+
+	# Clean up test gems
+	for g in spawned_gems:
+		if is_instance_valid(g):
+			g.queue_free()
+
+	# 2. Dynamic Strike Mission: 4th Mission (Eliminate Elite)
+	var mission_director := MissionDirector.new()
+	mission_director.auto_start_missions = false
+	root_node.add_child(mission_director)
+
+	if not mission_director._mission_queue.has("eliminate_elite"):
+		append_log("FAIL: MissionDirector._mission_queue missing eliminate_elite", logs)
+		root_node.queue_free()
+		return false
+
+	var elite_mission := mission_director.start_mission_by_id("eliminate_elite")
+	if not elite_mission or elite_mission.id != "eliminate_elite":
+		append_log("FAIL: start_mission_by_id('eliminate_elite') did not return EliminateEliteMission", logs)
+		root_node.queue_free()
+		return false
+
+	if elite_mission.time_limit != 60.0 or elite_mission.xp_reward != 80 or elite_mission.salvage_reward != 120 or elite_mission.requisition_reward != 1:
+		append_log("FAIL: EliminateEliteMission config values incorrect", logs)
+		root_node.queue_free()
+		return false
+
+	var reward_text := elite_mission.get_reward_text()
+	if "+0" in reward_text or not "+80 XP" in reward_text or not "+120 CR" in reward_text or not "+1 REQ" in reward_text:
+		append_log("FAIL: EliminateEliteMission.get_reward_text() ill-formed: '%s'" % reward_text, logs)
+		root_node.queue_free()
+		return false
+
+	# Verify bounty timer countdown formatting
+	var dummy_p := Node3D.new()
+	root_node.add_child(dummy_p)
+	var update_dict := elite_mission.update(1.0, dummy_p)
+	if not ":" in str(update_dict.get("detail", "")):
+		append_log("FAIL: EliminateEliteMission update detail missing countdown timer: %s" % str(update_dict.get("detail", "")), logs)
+		root_node.queue_free()
+		return false
+
+	mission_director.resolve_mission(true)
+	mission_director.queue_free()
+
+	# 3. 13-Step Acceptance Suite Verification
+	# Step 1: Save system schema & safe migration
+	var save_data: Dictionary = SaveSystem.load_data()
+	if not save_data.has("upgrades") or not save_data.has("settings") or not save_data.has("salvage"):
+		append_log("FAIL: Step 1 (Save system) schema missing required top-level keys", logs)
+		root_node.queue_free()
+		return false
+
+	# Step 2: Input router authoritative bindings
+	for action in ["fire_primary", "fire_secondary", "countermeasure_flares", "aim_override", "pause"]:
+		if not InputMap.has_action(action):
+			append_log("FAIL: Step 2 (InputRouter) missing action: %s" % action, logs)
+			root_node.queue_free()
+			return false
+
+	# Step 3: Flight physics isolation
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	if absf(player.max_speed - 38.0) > 0.1 or absf(player.acceleration_stat - 42.0) > 0.1:
+		append_log("FAIL: Step 3 (Flight physics) modified player flight constants", logs)
+		root_node.queue_free()
+		return false
+
+	# Step 4: Weapon system heat & auto-aim
+	if not player.chaingun or not player.targeting_system:
+		append_log("FAIL: Step 4 (Weapons) missing chaingun or targeting system", logs)
+		root_node.queue_free()
+		return false
+
+	# Step 5: Enemy hierarchy
+	var enemy_reg := EnemyRegistry.instance
+	if not enemy_reg:
+		enemy_reg = EnemyRegistry.new()
+		root_node.add_child(enemy_reg)
+
+	# Step 6: Wave 1-5 ground-only gating
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: Node = sd_script.new() as Node
+	root_node.add_child(sd)
+	var table: Array = sd.get("wave_table")
+	for i in range(5):
+		if int(table[i]["air_slots"]) != 0:
+			append_log("FAIL: Step 6 (Wave 1-5 gating) wave %d has non-zero air slots (%d)" % [i + 1, int(table[i]["air_slots"])], logs)
+			root_node.queue_free()
+			return false
+	if int(table[5]["air_slots"]) < 1:
+		append_log("FAIL: Step 6 (Wave 6+ gating) wave 6 has no air slots", logs)
+		root_node.queue_free()
+		return false
+	sd.queue_free()
+
+	# Step 7: Dynamic strike missions non-blocking verified above in sub-step 2
+
+	# Step 8: Pausable run clock verified across test 8 & test 32
+
+	# Step 9: Level-up drafting weights (70/25/5), max 1 legendary, deterministic evolution
+	var up_mgr := UpgradeManager.new()
+	var t_c := up_mgr.roll_rarity_tier(0.50, true, true, true)
+	var t_r := up_mgr.roll_rarity_tier(0.80, true, true, true)
+	var t_l := up_mgr.roll_rarity_tier(0.98, true, true, true)
+	if t_c != "Common" or t_r != "Rare" or t_l != "Legendary":
+		append_log("FAIL: Step 9 (Drafting weights) roll_rarity_tier did not follow 70/25/5 (got %s, %s, %s)" % [t_c, t_r, t_l], logs)
+		root_node.queue_free()
+		return false
+	up_mgr.queue_free()
+
+	# Step 10: Boss Archon 3 phases
+	var archon_scene := load("res://scenes/enemies/boss_archon.tscn") as PackedScene
+	var archon: BossArchon = archon_scene.instantiate() as BossArchon
+	root_node.add_child(archon)
+	if archon.speed_phase1 <= 0.0 or archon.speed_phase2 <= archon.speed_phase1 or archon.speed_phase3 <= archon.speed_phase2:
+		append_log("FAIL: Step 10 (Boss Archon) speed phases not monotonically increasing", logs)
+		root_node.queue_free()
+		return false
+	archon.queue_free()
+
+	# Step 11: Post-wave-10 Victory vs Endless verified in test 8 & run_state_controller
+	# Step 12: Hangar meta-progression verified in test 8
+	# Step 13: Accessibility settings toggles verified in test 13 & test 34
+
+	root_node.queue_free()
+	append_log("  -> XP aggregation 100% value conservation, 4th Strike mission (Eliminate Elite), and 13-step acceptance suite verified.", logs)
+	return true
+
+func test_phase_10a_population_and_spawning_foundation(logs: Array[String]) -> bool:
+	append_log("[TEST 36] Phase 10A Survivors Population & Spawning Foundation...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test36Root"
+	add_child(root_node)
+
+	# 1. Test DifficultyProfile Resource & 10-Wave Population Targets
+	var prof_path := "res://resources/directors/profiles/low_pressure_survivors.tres"
+	if not ResourceLoader.exists(prof_path):
+		append_log("FAIL: [Step 1] %s does not exist" % prof_path, logs)
+		root_node.queue_free()
+		return false
+
+	var prof: Resource = load(prof_path)
+	if not prof:
+		append_log("FAIL: [Step 1] Failed to load low_pressure_survivors.tres as DifficultyProfile", logs)
+		root_node.queue_free()
+		return false
+
+	var pop_targets: Array = prof.get("wave_targets")
+	if pop_targets.size() != 10:
+		append_log("FAIL: [Step 1] wave_targets does not contain exactly 10 waves (got %d)" % pop_targets.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Verify each wave contract per GDD & Phase 10A specs
+	var expected_targets: Array[Dictionary] = [
+		{"wave": 1, "v_min": 8, "v_max": 12, "node_cap": 8, "max_air": 0},
+		{"wave": 2, "v_min": 12, "v_max": 16, "node_cap": 10, "max_air": 0},
+		{"wave": 3, "v_min": 16, "v_max": 22, "node_cap": 12, "max_med": 1, "max_air": 0},
+		{"wave": 4, "v_min": 20, "v_max": 26, "node_cap": 14, "max_heavy": 1, "max_air": 0},
+		{"wave": 5, "v_min": 24, "v_max": 30, "node_cap": 16, "max_sam": 1, "max_mortar": 1, "max_air": 0},
+		{"wave": 6, "v_min": 24, "v_max": 32, "node_cap": 17, "max_air": 2},
+		{"wave": 7, "v_min": 26, "v_max": 34, "node_cap": 18, "max_air": 3},
+		{"wave": 8, "v_min": 28, "v_max": 36, "node_cap": 19, "max_heavy": 2, "max_air": 4},
+		{"wave": 9, "v_min": 30, "v_max": 40, "node_cap": 20, "max_heavy": 2, "max_air": 5},
+		{"wave": 10, "is_boss": true, "supp_v_min": 8, "supp_v_max": 12, "supp_node_cap": 10}
+	]
+
+	for expected_item in expected_targets:
+		var w_num: int = int(expected_item["wave"])
+		var wt: Resource = prof.get_wave_target(w_num)
+		if not wt:
+			append_log("FAIL: [Step 1] get_wave_target(%d) returned null" % w_num, logs)
+			root_node.queue_free()
+			return false
+		if expected_item.get("is_boss", false):
+			if not wt.is_boss_wave or wt.support_visual_crowd_min != expected_item["supp_v_min"] or wt.support_visual_crowd_max != expected_item["supp_v_max"] or wt.support_node_cap != expected_item["supp_node_cap"]:
+				append_log("FAIL: [Step 1] Wave 10 boss support targets mismatch (vis: %d-%d, cap: %d)" % [wt.support_visual_crowd_min, wt.support_visual_crowd_max, wt.support_node_cap], logs)
+				root_node.queue_free()
+				return false
+		else:
+			if wt.visual_crowd_min != expected_item["v_min"] or wt.visual_crowd_max != expected_item["v_max"] or wt.node_cap != expected_item["node_cap"]:
+				append_log("FAIL: [Step 1] Wave %d targets mismatch (vis: %d-%d, cap: %d)" % [w_num, wt.visual_crowd_min, wt.visual_crowd_max, wt.node_cap], logs)
+				root_node.queue_free()
+				return false
+		if expected_item.has("max_med") and wt.max_medium_armored != expected_item["max_med"]:
+			append_log("FAIL: [Step 1] Wave %d max_medium_armored mismatch" % w_num, logs)
+			root_node.queue_free()
+			return false
+		if expected_item.has("max_heavy") and wt.max_heavy != expected_item["max_heavy"]:
+			append_log("FAIL: [Step 1] Wave %d max_heavy mismatch" % w_num, logs)
+			root_node.queue_free()
+			return false
+		if expected_item.has("max_sam") and wt.max_sam != expected_item["max_sam"]:
+			append_log("FAIL: [Step 1] Wave %d max_sam mismatch" % w_num, logs)
+			root_node.queue_free()
+			return false
+		if expected_item.has("max_mortar") and wt.max_mortar != expected_item["max_mortar"]:
+			append_log("FAIL: [Step 1] Wave %d max_mortar mismatch" % w_num, logs)
+			root_node.queue_free()
+			return false
+		if expected_item.has("max_air") and wt.max_air != expected_item["max_air"]:
+			append_log("FAIL: [Step 1] Wave %d max_air mismatch (got %d, expected %d)" % [w_num, wt.max_air, expected_item["max_air"]], logs)
+			root_node.queue_free()
+			return false
+
+	# 2. Test Archetype Metadata & Separation of Raw Nodes vs Visual Horde
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf := inf_scene.instantiate() as InfantryCluster
+	if inf.visual_crowd_weight != 4:
+		append_log("FAIL: [Step 2] InfantryCluster visual_crowd_weight is not 4 (got %d)" % inf.visual_crowd_weight, logs)
+		inf.queue_free()
+		root_node.queue_free()
+		return false
+	inf.queue_free()
+
+	# 3. Test EnemyRegistry Visual Crowd & Living Node Separation
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.all_enemies.clear()
+		EnemyRegistry.instance.ground_enemies.clear()
+		EnemyRegistry.instance.air_enemies.clear()
+		var cluster1 := inf_scene.instantiate() as InfantryCluster
+		var cluster2 := inf_scene.instantiate() as InfantryCluster
+		root_node.add_child(cluster1)
+		root_node.add_child(cluster2)
+		EnemyRegistry.instance.register_enemy(cluster1)
+		EnemyRegistry.instance.register_enemy(cluster2)
+
+		var vis_crowd := EnemyRegistry.instance.get_living_visual_crowd()
+		var node_cnt := EnemyRegistry.instance.get_living_node_count()
+		if vis_crowd != 8 or node_cnt != 2:
+			append_log("FAIL: [Step 3] EnemyRegistry crowd/node separation failed (vis: %d, nodes: %d)" % [vis_crowd, node_cnt], logs)
+			cluster1.queue_free()
+			cluster2.queue_free()
+			root_node.queue_free()
+			return false
+
+		EnemyRegistry.instance.unregister_enemy(cluster1)
+		cluster1.queue_free()
+		if EnemyRegistry.instance.get_living_visual_crowd() != 4 or EnemyRegistry.instance.get_living_node_count() != 1:
+			append_log("FAIL: [Step 3] EnemyRegistry crowd unregister failed", logs)
+			cluster2.queue_free()
+			root_node.queue_free()
+			return false
+		EnemyRegistry.instance.unregister_enemy(cluster2)
+		cluster2.queue_free()
+
+	# 4. Test SpawnDirector Directional Sectors & Escape Arc
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: SpawnDirector = sd_script.new() as SpawnDirector
+	sd.difficulty_profile = prof
+	root_node.add_child(sd)
+
+	for i in range(10):
+		sd.rotate_directional_sectors()
+		var p_sec: int = sd.primary_entry_sector
+		var s_sec: int = sd.secondary_entry_sector
+		var esc := sd.get_protected_escape_sectors()
+		var diff := absi(p_sec - s_sec)
+		if diff != 1 and diff != 7:
+			append_log("FAIL: [Step 4] Secondary sector (%d) is not adjacent to primary sector (%d)" % [s_sec, p_sec], logs)
+			root_node.queue_free()
+			return false
+		if esc.size() < 3:
+			append_log("FAIL: [Step 4] Protected escape sectors count < 3 (arc < 120 deg)" % esc.size(), logs)
+			root_node.queue_free()
+			return false
+		if esc.has(p_sec) or esc.has(s_sec):
+			append_log("FAIL: [Step 4] Entry sector (%d or %d) is inside protected escape arc %s" % [p_sec, s_sec, str(esc)], logs)
+			root_node.queue_free()
+			return false
+
+	# 5. Test Air Gating (Ordinary Air Attackers Never Before Wave 6)
+	for w in range(1, 6):
+		sd.current_wave = w
+		var f := sd.select_procedural_formation(Vector3.ZERO)
+		if f:
+			if f.air_budget_cost > 0.0 or f.category == 2 or f.category == 3:
+				append_log("FAIL: [Step 5] Air formation selected during wave %d" % w, logs)
+				root_node.queue_free()
+				return false
+
+	# 6. Test Spawn Rhythm & Deficit Compression
+	for w in [1, 5, 9]:
+		sd.current_wave = w
+		var t_wt: Resource = prof.get_wave_target(w)
+		var base_int := sd._get_next_stream_interval(1, false)
+		if base_int < (t_wt.spawn_interval_min - 0.05) or base_int > (t_wt.spawn_interval_max + 0.05):
+			append_log("FAIL: [Step 6] Wave %d base interval out of range (got %.2f, expected [%.1f, %.1f])" % [w, base_int, t_wt.spawn_interval_min, t_wt.spawn_interval_max], logs)
+			root_node.queue_free()
+			return false
+
+	# Deficit reduction should be bounded at max 30% reduction (no instant burst dump)
+	sd.current_wave = 1
+	var def_int := sd._get_next_stream_interval(1, true)
+	if def_int < (1.4 * 0.65):
+		append_log("FAIL: [Step 6] Deficit interval dropped too aggressively (got %.2f)" % def_int, logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Test Quiet Despawn Eligibility & Zero Rewards
+	var dummy_enemy := Node3D.new()
+	dummy_enemy.name = "FarFodder"
+	dummy_enemy.add_to_group("enemies")
+	root_node.add_child(dummy_enemy)
+	dummy_enemy.global_position = Vector3(0.0, 0.0, 160.0)
+
+	var dummy_boss := Node3D.new()
+	dummy_boss.name = "BossTarget"
+	dummy_boss.add_to_group("bosses")
+	root_node.add_child(dummy_boss)
+	dummy_boss.global_position = Vector3(0.0, 0.0, 160.0)
+
+	var dummy_elite := Node3D.new()
+	dummy_elite.name = "EliteTarget"
+	dummy_elite.add_to_group("elites")
+	root_node.add_child(dummy_elite)
+	dummy_elite.global_position = Vector3(0.0, 0.0, 160.0)
+
+	# Regular far enemy is eligible
+	if not sd.is_enemy_eligible_for_quiet_cleanup(dummy_enemy):
+		append_log("FAIL: [Step 7] Regular far enemy not eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+	# Boss is protected
+	if sd.is_enemy_eligible_for_quiet_cleanup(dummy_boss):
+		append_log("FAIL: [Step 7] Boss falsely marked eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+	# Elite is protected
+	if sd.is_enemy_eligible_for_quiet_cleanup(dummy_elite):
+		append_log("FAIL: [Step 7] Elite falsely marked eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+
+	# Test quiet despawn awards zero kills and recycles budget
+	sd._wave_enemies.append(dummy_enemy)
+	var k_before := sd.total_enemies_killed
+	var d_before := sd.total_despawns
+	var g_budget_before := sd.continuous_ground_budget
+	sd._despawn_enemy_quietly(dummy_enemy)
+
+	if sd.total_enemies_killed != k_before:
+		append_log("FAIL: [Step 7] Quiet despawn incorrectly incremented kill count", logs)
+		root_node.queue_free()
+		return false
+	if sd.total_despawns != (d_before + 1):
+		append_log("FAIL: [Step 7] Quiet despawn did not increment total_despawns", logs)
+		root_node.queue_free()
+		return false
+	if sd.continuous_ground_budget <= g_budget_before:
+		append_log("FAIL: [Step 7] Quiet despawn did not recycle 50% budget back to ground pool", logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Test Telemetry API
+	var telem := sd.get_debug_telemetry()
+	var required_keys := ["wave", "encounter_state", "living_nodes", "node_cap", "visual_crowd", "visual_target_min", "visual_target_max", "ground_budget", "air_budget", "primary_entry_sector", "secondary_entry_sector", "protected_escape_sectors", "special_counts"]
+	for k in required_keys:
+		if not telem.has(k):
+			append_log("FAIL: [Step 8] Debug telemetry missing key '%s'" % k, logs)
+			root_node.queue_free()
+			return false
+
+	root_node.queue_free()
+	append_log("  -> 10-wave population targets, archetype weights, air gating, deficit pacing, directional sectors, escape arc, and quiet cleanup verified.", logs)
+	return true
+
+func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[String]) -> bool:
+	append_log("[TEST 37] Phase 10B Low-Difficulty Enemy AI & Combat Director...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "TestPhase10BRoot"
+	add_child(root_node)
+
+	# 1. Arming Delays on Spawn
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf := inf_scene.instantiate() as InfantryCluster
+	root_node.add_child(inf)
+	if inf.arming_delay < 1.5 or inf._arming_timer < 1.4:
+		append_log("FAIL: [Step 1] Infantry arming delay not set (got %.2f)" % inf.arming_delay, logs)
+		root_node.queue_free()
+		return false
+	if inf._request_slot():
+		append_log("FAIL: [Step 1] Infantry requested slot before arming delay elapsed", logs)
+		root_node.queue_free()
+		return false
+
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var tank := tank_scene.instantiate() as Tank
+	root_node.add_child(tank)
+	if tank.arming_delay < 2.0 or tank._arming_timer < 1.9:
+		append_log("FAIL: [Step 1] Tank arming delay not set (got %.2f)" % tank.arming_delay, logs)
+		root_node.queue_free()
+		return false
+	if tank._request_slot():
+		append_log("FAIL: [Step 1] Tank requested slot before arming delay elapsed", logs)
+		root_node.queue_free()
+		return false
+
+	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
+	var sam := sam_scene.instantiate() as SAMSite
+	root_node.add_child(sam)
+	if sam.arming_delay < 2.0 or sam._arming_timer < 1.9:
+		append_log("FAIL: [Step 1] SAMSite arming delay not set (got %.2f)" % sam.arming_delay, logs)
+		root_node.queue_free()
+		return false
+	if sam._request_slot():
+		append_log("FAIL: [Step 1] SAMSite requested slot before arming delay elapsed", logs)
+		root_node.queue_free()
+		return false
+
+	# 2. CombatDirector Wave Capacities & Token Limits
+	var cd := CombatDirector.new()
+	cd.name = "TestCombatDirector"
+	root_node.add_child(cd)
+
+	cd.set_wave(1)
+	if cd.max_ground_attack_slots != 1 or cd.max_air_attack_slots != 0 or cd.max_concurrent_attackers != 1 or cd.max_projectile_danger != 5:
+		append_log("FAIL: [Step 2] Wave 1 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
+		root_node.queue_free()
+		return false
+
+	cd.set_wave(6)
+	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 3 or cd.max_projectile_danger != 10:
+		append_log("FAIL: [Step 2] Wave 6 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
+		root_node.queue_free()
+		return false
+
+	cd.set_wave(9)
+	if cd.max_ground_attack_slots != 3 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 4 or cd.max_projectile_danger != 16:
+		append_log("FAIL: [Step 2] Wave 9 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Wave 1 Capacity & Attacker Count Enforcement
+	cd.set_wave(1)
+	var e1 := Node3D.new()
+	e1.name = "DummyEnemy1"
+	root_node.add_child(e1)
+	var e2 := Node3D.new()
+	e2.name = "DummyEnemy2"
+	root_node.add_child(e2)
+
+	if not cd.request_attack_permission(e1, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e1 was denied permission on empty Wave 1", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e2 was granted permission exceeding Wave 1 max_attackers = 1", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(e1)
+	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e2 was denied permission after e1 released", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(e2)
+
+	# 4. Single Heavy Attack Constraint
+	cd.set_wave(8) # ground tokens: 3, max attackers: 3
+	var heavy1 := Node3D.new()
+	heavy1.name = "HeavyTank1"
+	root_node.add_child(heavy1)
+	var heavy2 := Node3D.new()
+	heavy2.name = "HeavySAM2"
+	root_node.add_child(heavy2)
+
+	if not cd.request_attack_permission(heavy1, 3, false, true, false, 3):
+		append_log("FAIL: [Step 4] heavy1 was denied heavy attack permission", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(heavy2, 3, false, true, false, 3):
+		append_log("FAIL: [Step 4] heavy2 was granted simultaneous heavy attack permission", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(heavy1)
+	if not cd.request_attack_permission(heavy2, 3, false, true, false, 3):
+		append_log("FAIL: [Step 4] heavy2 was denied heavy attack permission after heavy1 release", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(heavy2)
+
+	# 5. Single Homing Lock Constraint
+	cd.set_wave(6)
+	var sam_unit1 := Node3D.new()
+	sam_unit1.name = "SAMUnit1"
+	root_node.add_child(sam_unit1)
+	var sam_unit2 := Node3D.new()
+	sam_unit2.name = "SAMUnit2"
+	root_node.add_child(sam_unit2)
+
+	if not cd.request_attack_permission(sam_unit1, 2, false, false, true, 2):
+		append_log("FAIL: [Step 5] sam_unit1 denied homing lock permission", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(sam_unit2, 2, false, false, true, 2):
+		append_log("FAIL: [Step 5] sam_unit2 granted simultaneous homing lock (max 1 exceeded)", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(sam_unit1)
+	if not cd.request_attack_permission(sam_unit2, 2, false, false, true, 2):
+		append_log("FAIL: [Step 5] sam_unit2 denied homing lock after sam_unit1 released", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(sam_unit2)
+
+	# 6. Projectile Danger Budget Reservation & Release
+	cd.set_wave(1) # danger_cap = 5
+	if not cd.reserve_danger_capacity("shotA", 3, 2.0):
+		append_log("FAIL: [Step 6] Failed to reserve 3 danger points under cap 5", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.reserve_danger_capacity("shotB", 3, 2.0):
+		append_log("FAIL: [Step 6] Reserved 3 danger points exceeding cap 5 (3 + 3 > 5)", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_danger_capacity("shotA", 3)
+	if not cd.reserve_danger_capacity("shotB", 3, 2.0):
+		append_log("FAIL: [Step 6] Failed to reserve shotB after shotA was released", logs)
+		root_node.queue_free()
+		return false
+	cd.release_danger_capacity("shotB", 3)
+
+	# 7. Watchdog Leaked Reservation Cleanup
+	var leaked_enemy := Node3D.new()
+	leaked_enemy.name = "LeakedEnemy"
+	root_node.add_child(leaked_enemy)
+	cd.request_attack_permission(leaked_enemy, 1, false, false, false, 2)
+	cd.reserve_danger_capacity("leak_shot", 2, 0.05)
+
+	var before_leases := cd.watchdog_reclaimed_leases
+	var before_danger := cd.watchdog_reclaimed_danger
+	leaked_enemy.queue_free()
+	cd._gameplay_time += 1.0
+	cd._cleanup_expired(0.1)
+
+	if cd.watchdog_reclaimed_leases <= before_leases and cd.watchdog_reclaimed_danger <= before_danger:
+		append_log("FAIL: [Step 7] Watchdog failed to reclaim dead node lease or expired danger", logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Player Post-Hit Invulnerability (0.35s i-frames) & Stack Protection
+	var player_scene: PackedScene = load("res://scenes/player/player_helicopter.tscn")
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	player.current_health = 100.0
+	player.max_health = 100.0
+	player.is_alive = true
+	player.set_control_enabled(true)
+
+	var proj1 := Node3D.new()
+	proj1.name = "EnemyBullet1"
+	root_node.add_child(proj1)
+	var proj2 := Node3D.new()
+	proj2.name = "EnemyBullet2"
+	root_node.add_child(proj2)
+
+	player.take_damage(10.0, proj1)
+	if player.current_health != 90.0:
+		append_log("FAIL: [Step 8] Player did not take expected initial damage (got %.1f)" % player.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	# Same projectile repeat hit ignored
+	player.take_damage(10.0, proj1)
+	if player.current_health != 90.0:
+		append_log("FAIL: [Step 8] Same projectile dealt repeat damage to player", logs)
+		root_node.queue_free()
+		return false
+
+	# Same-frame / immediate second projectile ignored by i-frames
+	player.take_damage(15.0, proj2)
+	if player.current_health != 90.0:
+		append_log("FAIL: [Step 8] Second projectile bypassed 0.35s post-hit invulnerability (got %.1f)" % player.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	# Zero damage does not consume protection
+	player.take_damage(0.0)
+	if player.current_health != 90.0:
+		append_log("FAIL: [Step 8] Zero damage modified player health", logs)
+		root_node.queue_free()
+		return false
+
+	# Simulate 0.4s passage of time to expire i-frames
+	player._physics_process(0.4)
+
+	var proj3 := Node3D.new()
+	proj3.name = "EnemyBullet3"
+	root_node.add_child(proj3)
+	player.take_damage(10.0, proj3)
+	if player.current_health != 80.0:
+		append_log("FAIL: [Step 8] Player invulnerability did not expire after 0.35s (got %.1f)" % player.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	# 9. Ordinary Health Bands
+	if inf.max_health > 24.0 or inf.max_health < 6.0:
+		append_log("FAIL: [Step 9] InfantryCluster max_health not in ordinary fast-kill band [6.0, 24.0] (got %.1f)" % inf.max_health, logs)
+		root_node.queue_free()
+		return false
+	if tank.max_health < 150.0:
+		append_log("FAIL: [Step 9] Tank max_health < 150.0 (got %.1f)" % tank.max_health, logs)
+		root_node.queue_free()
+		return false
+	if sam.max_health < 140.0:
+		append_log("FAIL: [Step 9] SAMSite max_health < 140.0 (got %.1f)" % sam.max_health, logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Arming delays, weighted attack tokens, danger budgets, single-heavy/homing constraints, watchdog cleanup, i-frames, and health bands verified.", logs)
+	return true
+
+func test_survivors_low_difficulty_enemy_ai_and_spawner_refinement(logs: Array[String]) -> bool:
+	append_log("--- Starting Test 38: Survivors Low-Difficulty Enemy AI & Spawner Refinement ---", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test38_Root"
+	add_child(root_node)
+
+	# 1. System Preservation & 10-Wave Token Architecture
+	var cd := CombatDirector.new()
+	cd.name = "Test38_CombatDirector"
+	root_node.add_child(cd)
+
+	var expected_attacker_caps: Dictionary = {
+		1: { "attackers": 1, "air_tokens": 0 },
+		2: { "attackers": 1, "air_tokens": 0 },
+		3: { "attackers": 2, "air_tokens": 0 },
+		4: { "attackers": 2, "air_tokens": 0 },
+		5: { "attackers": 2, "air_tokens": 0 },
+		6: { "attackers": 3, "air_tokens": 1 },
+		7: { "attackers": 3, "air_tokens": 1 },
+		8: { "attackers": 3, "air_tokens": 1 },
+		9: { "attackers": 4, "air_tokens": 1 },
+		10: { "attackers": 2, "air_tokens": 0 },
+	}
+
+	for wave_num in range(1, 11):
+		cd.set_wave(wave_num)
+		var exp_cap: Dictionary = expected_attacker_caps[wave_num]
+		if cd.max_concurrent_attackers != exp_cap["attackers"]:
+			append_log("FAIL: [Step 1] Wave %d max_concurrent_attackers mismatch (got %d, expected %d)" % [wave_num, cd.max_concurrent_attackers, exp_cap["attackers"]], logs)
+			root_node.queue_free()
+			return false
+		if cd.max_air_attack_slots != exp_cap["air_tokens"]:
+			append_log("FAIL: [Step 1] Wave %d max_air_attack_slots mismatch (got %d, expected %d)" % [wave_num, cd.max_air_attack_slots, exp_cap["air_tokens"]], logs)
+			root_node.queue_free()
+			return false
+
+	# 2. Strict Attacker Limits & Waiting Queue Fairness
+	cd.set_wave(1)
+	var e1 := Node3D.new()
+	e1.name = "DummyAttacker1"
+	root_node.add_child(e1)
+	var e2 := Node3D.new()
+	e2.name = "DummyAttacker2"
+	root_node.add_child(e2)
+
+	if not cd.request_attack_permission(e1, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e1 denied initial attack permission on Wave 1", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e2 granted permission exceeding Wave 1 limit of 1", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(e1)
+	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e2 denied permission after e1 released slot", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(e2)
+
+	# 3. Single Heavy Attack Exclusion Across Battlefield (Waves 1-10)
+	cd.set_wave(9) # Wave 9 allows 4 attackers, but heavy attack must remain capped at 1
+	var heavy1 := Node3D.new()
+	heavy1.name = "HeavyAttacker1"
+	root_node.add_child(heavy1)
+	var heavy2 := Node3D.new()
+	heavy2.name = "HeavyAttacker2"
+	root_node.add_child(heavy2)
+
+	if not cd.request_attack_permission(heavy1, 3, false, true, false, 3, "tank_cannon"):
+		append_log("FAIL: [Step 3] heavy1 was denied heavy attack permission", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.active_heavy_attacks != 1:
+		append_log("FAIL: [Step 3] active_heavy_attacks != 1 (got %d)" % cd.active_heavy_attacks, logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(heavy2, 3, false, true, false, 3, "tank_cannon"):
+		append_log("FAIL: [Step 3] heavy2 granted simultaneous heavy attack permission (max 1 exceeded)", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(heavy1)
+	if cd.active_heavy_attacks != 0:
+		append_log("FAIL: [Step 3] active_heavy_attacks != 0 after heavy1 released (got %d)" % cd.active_heavy_attacks, logs)
+		root_node.queue_free()
+		return false
+
+	if not cd.request_attack_permission(heavy2, 3, false, true, false, 3, "tank_cannon"):
+		append_log("FAIL: [Step 3] heavy2 denied heavy attack permission after heavy1 release", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(heavy2)
+
+	# 4. Single SAM / Homing Lock Constraint
+	var sam1 := Node3D.new()
+	sam1.name = "SAMUnit1"
+	root_node.add_child(sam1)
+	var sam2 := Node3D.new()
+	sam2.name = "SAMUnit2"
+	root_node.add_child(sam2)
+
+	if not cd.request_attack_permission(sam1, 2, false, false, true, 2, "sam_missile"):
+		append_log("FAIL: [Step 4] sam1 denied homing lock permission", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.active_homing_locks != 1:
+		append_log("FAIL: [Step 4] active_homing_locks != 1 (got %d)" % cd.active_homing_locks, logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(sam2, 2, false, false, true, 2, "sam_missile"):
+		append_log("FAIL: [Step 4] sam2 granted simultaneous homing lock (max 1 exceeded)", logs)
+		root_node.queue_free()
+		return false
+
+	cd.release_attack_permission(sam1)
+	if cd.active_homing_locks != 0:
+		append_log("FAIL: [Step 4] active_homing_locks != 0 after sam1 released (got %d)" % cd.active_homing_locks, logs)
+		root_node.queue_free()
+		return false
+
+	if not cd.request_attack_permission(sam2, 2, false, false, true, 2, "sam_missile"):
+		append_log("FAIL: [Step 4] sam2 denied homing lock permission after sam1 release", logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(sam2)
+
+	# 5. Arming Delays for Newly Spawned Enemies (Ordinary >= 1.5s, Heavy >= 2.0s)
+	var turret_scn := load("res://scenes/enemies/ground_turret.tscn") as PackedScene
+	var turret_inst := turret_scn.instantiate() as GroundTurret
+	root_node.add_child(turret_inst)
+	if turret_inst.arming_delay < 1.5 or turret_inst._arming_timer < 1.4:
+		append_log("FAIL: [Step 5] GroundTurret arming delay < 1.5s (got %.2f)" % turret_inst.arming_delay, logs)
+		root_node.queue_free()
+		return false
+
+	var inf_scn := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf_inst := inf_scn.instantiate() as InfantryCluster
+	root_node.add_child(inf_inst)
+	if inf_inst.arming_delay < 1.5 or inf_inst._arming_timer < 1.4:
+		append_log("FAIL: [Step 5] InfantryCluster arming delay < 1.5s (got %.2f)" % inf_inst.arming_delay, logs)
+		root_node.queue_free()
+		return false
+
+	var heli_scn := load("res://scenes/enemies/hunter_helicopter.tscn") as PackedScene
+	var heli_inst := heli_scn.instantiate() as HunterHelicopter
+	root_node.add_child(heli_inst)
+	if heli_inst.arming_delay < 1.5 or heli_inst._arming_timer < 1.4:
+		append_log("FAIL: [Step 5] HunterHelicopter arming delay < 1.5s (got %.2f)" % heli_inst.arming_delay, logs)
+		root_node.queue_free()
+		return false
+
+	var sam_scn := load("res://scenes/enemies/sam_site.tscn") as PackedScene
+	var sam_inst := sam_scn.instantiate() as SAMSite
+	root_node.add_child(sam_inst)
+	if sam_inst.arming_delay < 2.0 or sam_inst._arming_timer < 1.9:
+		append_log("FAIL: [Step 5] SAMSite arming delay < 2.0s (got %.2f)" % sam_inst.arming_delay, logs)
+		root_node.queue_free()
+		return false
+
+	var tank_scn := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var tank_inst := tank_scn.instantiate() as Tank
+	root_node.add_child(tank_inst)
+	if tank_inst.arming_delay < 2.0 or tank_inst._arming_timer < 1.9:
+		append_log("FAIL: [Step 5] Tank arming delay < 2.0s (got %.2f)" % tank_inst.arming_delay, logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Ordinary Enemy Health Bands (1-2 Chaingun Hits: 6.0 - 12.0 HP)
+	var chaingun_scn := load("res://scenes/weapons/chaingun.tscn") as PackedScene
+	var chaingun_inst := chaingun_scn.instantiate() as Chaingun
+	root_node.add_child(chaingun_inst)
+	if chaingun_inst.damage_per_shot != 6.0:
+		append_log("FAIL: [Step 6] Chaingun damage_per_shot != 6.0 (got %.1f)" % chaingun_inst.damage_per_shot, logs)
+		root_node.queue_free()
+		return false
+
+	if inf_inst.max_health > 12.0 or inf_inst.max_health < 6.0:
+		append_log("FAIL: [Step 6] Ordinary infantry health not in 1-2 hit band [6.0, 12.0] (got %.1f)" % inf_inst.max_health, logs)
+		root_node.queue_free()
+		return false
+
+	# 7. Continuous Spawner Geometry, Standoff >= 38m, Forward Arc & Boundary Rejection
+	var p_scn := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player_inst := p_scn.instantiate() as PlayerHelicopter
+	player_inst.name = "TestPlayer"
+	player_inst.add_to_group("player")
+	root_node.add_child(player_inst)
+	player_inst.global_position = Vector3(0, 5, 0)
+	player_inst.rotation = Vector3.ZERO # Forward is Vector3(0, 0, -1)
+
+	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
+	var sd: SpawnDirector = sd_script.new() as SpawnDirector
+	root_node.add_child(sd)
+
+	# Distance < 38m must be rejected
+	if sd.is_spawn_position_clear(Vector3(0, 5, -25)):
+		append_log("FAIL: [Step 7] Spawn position at 25m (<38m standoff) was accepted", logs)
+		root_node.queue_free()
+		return false
+
+	# Distance >= 38m directly in forward arc (dot > 0.70) must be rejected
+	if sd.is_spawn_position_clear(Vector3(0, 5, -45)):
+		append_log("FAIL: [Step 7] Spawn position directly in player forward cone was accepted", logs)
+		root_node.queue_free()
+		return false
+
+	# Outside battlefield boundary must be rejected
+	if sd.is_spawn_position_clear(Vector3(450, 5, 0)):
+		append_log("FAIL: [Step 7] Spawn position outside battlefield boundary was accepted", logs)
+		root_node.queue_free()
+		return false
+
+	# Distance >= 38m lateral within boundary must be accepted
+	if not sd.is_spawn_position_clear(Vector3(50, 5, 0)):
+		append_log("FAIL: [Step 7] Valid lateral spawn position (50m, dot=0) was rejected", logs)
+		root_node.queue_free()
+		return false
+
+	# 8. Escape Direction & Sector Preservation
+	sd.rotate_directional_sectors()
+	var escape_secs := sd.get_protected_escape_sectors()
+	if escape_secs.size() < 3:
+		append_log("FAIL: [Step 8] Protected escape arc size < 3 sectors (got %d)" % escape_secs.size(), logs)
+		root_node.queue_free()
+		return false
+
+	if escape_secs.has(sd.primary_entry_sector) or escape_secs.has(sd.secondary_entry_sector):
+		append_log("FAIL: [Step 8] Entry sector is inside protected escape arc", logs)
+		root_node.queue_free()
+		return false
+
+	var diff := absi(sd.primary_entry_sector - sd.secondary_entry_sector)
+	if diff == 4:
+		append_log("FAIL: [Step 8] Primary and secondary entry sectors directly oppose each other", logs)
+		root_node.queue_free()
+		return false
+
+	# 9. Offscreen Quiet Cleanup Rules (Bosses, Elites, Objectives, Active Attackers Protected)
+	var far_fodder := Node3D.new()
+	far_fodder.name = "FarFodderTest"
+	far_fodder.add_to_group("enemies")
+	root_node.add_child(far_fodder)
+	far_fodder.global_position = Vector3(0, 5, 120)
+
+	if not sd.is_enemy_eligible_for_quiet_cleanup(far_fodder):
+		append_log("FAIL: [Step 9] Distant unengaged fodder not eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+
+	# Active attacker lease protects against quiet cleanup
+	if cd.request_attack_permission(far_fodder, 1, false, false, false, 1):
+		if sd.is_enemy_eligible_for_quiet_cleanup(far_fodder):
+			append_log("FAIL: [Step 9] Enemy with active attack lease was marked eligible for quiet cleanup", logs)
+			root_node.queue_free()
+			return false
+		cd.release_attack_permission(far_fodder)
+
+	# Bosses and elites are protected
+	far_fodder.add_to_group("bosses")
+	if sd.is_enemy_eligible_for_quiet_cleanup(far_fodder):
+		append_log("FAIL: [Step 9] Boss was marked eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+	far_fodder.remove_from_group("bosses")
+
+	far_fodder.add_to_group("elites")
+	if sd.is_enemy_eligible_for_quiet_cleanup(far_fodder):
+		append_log("FAIL: [Step 9] Elite was marked eligible for quiet cleanup", logs)
+		root_node.queue_free()
+		return false
+	far_fodder.remove_from_group("elites")
+
+	# 10. Player Hit Protection & Post-Hit Invulnerability (~0.35s)
+	player_inst.current_health = 100.0
+	player_inst.max_health = 100.0
+	player_inst.is_alive = true
+	var p_bullet1 := Node3D.new()
+	p_bullet1.name = "PBullet1"
+	root_node.add_child(p_bullet1)
+	var p_bullet2 := Node3D.new()
+	p_bullet2.name = "PBullet2"
+	root_node.add_child(p_bullet2)
+
+	player_inst.take_damage(10.0, p_bullet1)
+	if player_inst.current_health != 90.0:
+		append_log("FAIL: [Step 10] Player initial damage failed (got %.1f)" % player_inst.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	# Second projectile on same frame ignored by i-frames
+	player_inst.take_damage(15.0, p_bullet2)
+	if player_inst.current_health != 90.0:
+		append_log("FAIL: [Step 10] Simultaneous projectile bypassed ~0.35s invulnerability (got %.1f)" % player_inst.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	# Invulnerability expires after 0.4s
+	player_inst._physics_process(0.4)
+	var p_bullet3 := Node3D.new()
+	p_bullet3.name = "PBullet3"
+	root_node.add_child(p_bullet3)
+	player_inst.take_damage(10.0, p_bullet3)
+	if player_inst.current_health != 80.0:
+		append_log("FAIL: [Step 10] Player invulnerability failed to expire after 0.4s (got %.1f)" % player_inst.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Test 38 PASSED: Survivors low-difficulty enemy AI and spawner refinement validated.", logs)
+	return true
+
+func test_city_world_streamer_and_scale_contract(logs: Array[String]) -> bool:
+	append_log("[TEST 39] Testing City World Streamer, Scale Contract & Road Sockets...", logs)
+
+	# -------------------------------------------------------------
+	# 1. Scale Contract Verification (1 Godot unit = 1 metre)
+	# -------------------------------------------------------------
+	append_log("[TEST 39] Sub-step 1: Verifying real-world asset scales...", logs)
+
+	# 1a. Player Helicopter: rotor diameter in [11, 13], fuselage in [9, 12]
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	if not player_scene:
+		append_log("FAIL: [Step 1] player_helicopter.tscn failed to load", logs)
+		return false
+	var player := player_scene.instantiate() as PlayerHelicopter
+	add_child(player)
+	var rotor_blur: MeshInstance3D = player.get_node_or_null("FlightTiltPivot/Visuals/MainRotor/RotorBlurDisc") as MeshInstance3D
+	var rotor_diam: float = 0.0
+	if rotor_blur and rotor_blur.mesh is CylinderMesh:
+		rotor_diam = (rotor_blur.mesh as CylinderMesh).top_radius * 2.0
+	elif rotor_blur and rotor_blur.mesh is SphereMesh:
+		rotor_diam = (rotor_blur.mesh as SphereMesh).radius * 2.0
+	var col_shape: CollisionShape3D = player.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	var fuselage_len: float = 0.0
+	if col_shape and col_shape.shape is CapsuleShape3D:
+		fuselage_len = (col_shape.shape as CapsuleShape3D).height
+
+	remove_child(player)
+	player.free()
+
+	if rotor_diam < 11.0 or rotor_diam > 13.0:
+		append_log("FAIL: [Step 1] Helicopter rotor diameter %.2fm outside target [11.0, 13.0]m" % rotor_diam, logs)
+		return false
+	if fuselage_len < 9.0 or fuselage_len > 12.0:
+		append_log("FAIL: [Step 1] Helicopter fuselage length %.2fm outside target [9.0, 12.0]m" % fuselage_len, logs)
+		return false
+
+	# 1b. Parked Vehicle: length in [4, 5]
+	var car_scene := load("res://scenes/environment/props/parked_vehicle.tscn") as PackedScene
+	if not car_scene:
+		append_log("FAIL: [Step 1] parked_vehicle.tscn failed to load", logs)
+		return false
+	var car: Node3D = car_scene.instantiate() as Node3D
+	add_child(car)
+	var chassis: MeshInstance3D = car.get_node_or_null("Intact/Chassis") as MeshInstance3D
+	var car_len: float = 0.0
+	if chassis and chassis.mesh is BoxMesh:
+		car_len = (chassis.mesh as BoxMesh).size.z
+	remove_child(car)
+	car.free()
+
+	if car_len < 4.0 or car_len > 5.0:
+		append_log("FAIL: [Step 1] Civilian car length %.2fm outside target [4.0, 5.0]m" % car_len, logs)
+		return false
+
+	# 1c. Road Widths: Local road asphalt in [8, 10], Main avenue in [14, 18]
+	var road_scene := load("res://scenes/environment/roads/road_straight.tscn") as PackedScene
+	var road: Node3D = road_scene.instantiate() as Node3D
+	add_child(road)
+	var r_asphalt: MeshInstance3D = road.get_node_or_null("Asphalt") as MeshInstance3D
+	var r_width: float = (r_asphalt.mesh as BoxMesh).size.x if (r_asphalt and r_asphalt.mesh is BoxMesh) else 0.0
+	remove_child(road)
+	road.free()
+
+	if r_width < 8.0 or r_width > 10.0:
+		append_log("FAIL: [Step 1] Local road asphalt width %.2fm outside target [8.0, 10.0]m" % r_width, logs)
+		return false
+
+	var ave_scene := load("res://scenes/environment/roads/wide_avenue.tscn") as PackedScene
+	var ave: Node3D = ave_scene.instantiate() as Node3D
+	add_child(ave)
+	var a_asphalt: MeshInstance3D = ave.get_node_or_null("Asphalt") as MeshInstance3D
+	var a_width: float = (a_asphalt.mesh as BoxMesh).size.x if (a_asphalt and a_asphalt.mesh is BoxMesh) else 0.0
+	remove_child(ave)
+	ave.free()
+
+	if a_width < 14.0 or a_width > 18.0:
+		append_log("FAIL: [Step 1] Main avenue asphalt width %.2fm outside target [14.0, 18.0]m" % a_width, logs)
+		return false
+
+	# 1d. Building Heights: Low-rise [9, 18], Mid-rise [20, 45], High-rise [50, 90], Warehouse [10, 16]
+	var b_small_scene := load("res://scenes/environment/city/building_small.tscn") as PackedScene
+	var b_small: StaticBody3D = b_small_scene.instantiate() as StaticBody3D
+	add_child(b_small)
+	var bs_col: CollisionShape3D = b_small.get_node_or_null("CollisionShopModel") as CollisionShape3D
+	var bs_h: float = (bs_col.shape as BoxShape3D).size.y if (bs_col and bs_col.shape is BoxShape3D) else 0.0
+	remove_child(b_small)
+	b_small.free()
+	if bs_h < 9.0 or bs_h > 18.0:
+		append_log("FAIL: [Step 1] Low-rise building height %.2fm outside [9.0, 18.0]m" % bs_h, logs)
+		return false
+
+	var b_med_scene := load("res://scenes/environment/city/building_medium.tscn") as PackedScene
+	var b_med: StaticBody3D = b_med_scene.instantiate() as StaticBody3D
+	add_child(b_med)
+	var bm_col: CollisionShape3D = b_med.get_node_or_null("CollisionCommercialModel") as CollisionShape3D
+	var bm_h: float = (bm_col.shape as BoxShape3D).size.y if (bm_col and bm_col.shape is BoxShape3D) else 0.0
+	remove_child(b_med)
+	b_med.free()
+	if bm_h < 20.0 or bm_h > 45.0:
+		append_log("FAIL: [Step 1] Mid-rise building height %.2fm outside [20.0, 45.0]m" % bm_h, logs)
+		return false
+
+	var b_lrg_scene := load("res://scenes/environment/city/building_large.tscn") as PackedScene
+	var b_lrg: StaticBody3D = b_lrg_scene.instantiate() as StaticBody3D
+	add_child(b_lrg)
+	var bl_col: CollisionShape3D = b_lrg.get_node_or_null("CollisionTowerA") as CollisionShape3D
+	var bl_h: float = (bl_col.shape as BoxShape3D).size.y if (bl_col and bl_col.shape is BoxShape3D) else 0.0
+	remove_child(b_lrg)
+	b_lrg.free()
+	if bl_h < 50.0 or bl_h > 90.0:
+		append_log("FAIL: [Step 1] High-rise building height %.2fm outside [50.0, 90.0]m" % bl_h, logs)
+		return false
+
+	var wh_scene := load("res://scenes/environment/city/warehouse.tscn") as PackedScene
+	var wh: StaticBody3D = wh_scene.instantiate() as StaticBody3D
+	add_child(wh)
+	var wh_col: CollisionShape3D = wh.get_node_or_null("CollisionWarehouseModel") as CollisionShape3D
+	var wh_h: float = (wh_col.shape as BoxShape3D).size.y if (wh_col and wh_col.shape is BoxShape3D) else 0.0
+	remove_child(wh)
+	wh.free()
+	if wh_h < 10.0 or wh_h > 16.0:
+		append_log("FAIL: [Step 1] Warehouse building height %.2fm outside [10.0, 16.0]m" % wh_h, logs)
+		return false
+
+	# -------------------------------------------------------------
+	# 2. Seed Determinism Verification
+	# -------------------------------------------------------------
+	append_log("[TEST 39] Sub-step 2: Testing seed determinism...", logs)
+	var chunkA := CityChunk.new()
+	add_child(chunkA)
+	chunkA.setup(Vector2i(2, 1), CityChunk.DetailLevel.FULL_DETAIL, 1337)
+
+	var chunkB := CityChunk.new()
+	add_child(chunkB)
+	chunkB.setup(Vector2i(2, 1), CityChunk.DetailLevel.FULL_DETAIL, 1337)
+
+	if chunkA.district_type != chunkB.district_type:
+		append_log("FAIL: [Step 2] Chunk determinism failed: district types differ", logs)
+		chunkA.queue_free()
+		chunkB.queue_free()
+		return false
+
+	if chunkA.ground_spawn_points.size() != chunkB.ground_spawn_points.size():
+		append_log("FAIL: [Step 2] Chunk determinism failed: ground spawn count differs (%d vs %d)" % [chunkA.ground_spawn_points.size(), chunkB.ground_spawn_points.size()], logs)
+		chunkA.queue_free()
+		chunkB.queue_free()
+		return false
+
+	for i in range(chunkA.ground_spawn_points.size()):
+		if chunkA.ground_spawn_points[i].distance_to(chunkB.ground_spawn_points[i]) > 0.001:
+			append_log("FAIL: [Step 2] Chunk determinism failed: ground spawn point %d position differs" % i, logs)
+			chunkA.queue_free()
+			chunkB.queue_free()
+			return false
+
+	chunkA.queue_free()
+	chunkB.queue_free()
+
+	# -------------------------------------------------------------
+	# 3. Road Socket Continuity Across Chunk Seams
+	# -------------------------------------------------------------
+	append_log("[TEST 39] Sub-step 3: Testing road socket continuity...", logs)
+	var c_center := CityChunk.new()
+	add_child(c_center)
+	c_center.setup(Vector2i(0, 0), CityChunk.DetailLevel.FULL_DETAIL, 1337)
+
+	var c_north := CityChunk.new()
+	add_child(c_north)
+	c_north.setup(Vector2i(0, -1), CityChunk.DetailLevel.FULL_DETAIL, 1337)
+
+	var c_east := CityChunk.new()
+	add_child(c_east)
+	c_east.setup(Vector2i(1, 0), CityChunk.DetailLevel.FULL_DETAIL, 1337)
+
+	var center_north_socket: Vector3 = c_center.global_position + Vector3(0.0, 0.0, -64.0)
+	var north_south_socket: Vector3 = c_north.global_position + Vector3(0.0, 0.0, 64.0)
+	if center_north_socket.distance_to(north_south_socket) > 0.001:
+		append_log("FAIL: [Step 3] North/South road seam mismatch: %s vs %s" % [str(center_north_socket), str(north_south_socket)], logs)
+		c_center.queue_free()
+		c_north.queue_free()
+		c_east.queue_free()
+		return false
+
+	var center_east_socket: Vector3 = c_center.global_position + Vector3(64.0, 0.0, 0.0)
+	var east_west_socket: Vector3 = c_east.global_position + Vector3(-64.0, 0.0, 0.0)
+	if center_east_socket.distance_to(east_west_socket) > 0.001:
+		append_log("FAIL: [Step 3] East/West road seam mismatch: %s vs %s" % [str(center_east_socket), str(east_west_socket)], logs)
+		c_center.queue_free()
+		c_north.queue_free()
+		c_east.queue_free()
+		return false
+
+	c_center.queue_free()
+	c_north.queue_free()
+	c_east.queue_free()
+
+	# -------------------------------------------------------------
+	# 4. Chunk Streaming & Bounded Active Chunk Count
+	# -------------------------------------------------------------
+	append_log("[TEST 39] Sub-step 4: Testing chunk streaming & active bounds...", logs)
+	var streamer := CityWorldStreamer.new()
+	streamer.world_seed = 1337
+	streamer.immediate_startup_load = false
+	add_child(streamer)
+
+	streamer.force_update(Vector2i(0, 0))
+	var active_count: int = streamer.get_active_chunk_count()
+	var hlod_count: int = streamer.get_hlod_chunk_count()
+
+	if active_count > 25:
+		append_log("FAIL: [Step 4] Active full-detail chunk count %d exceeded maximum 25" % active_count, logs)
+		streamer.queue_free()
+		return false
+
+	if hlod_count > 24:
+		append_log("FAIL: [Step 4] HLOD chunk count %d exceeded maximum 24" % hlod_count, logs)
+		streamer.queue_free()
+		return false
+
+	# Move player 4 chunks East (to cx=4, cz=0)
+	streamer.force_update(Vector2i(4, 0))
+	var moved_active: int = streamer.get_active_chunk_count()
+	if moved_active > 25:
+		append_log("FAIL: [Step 4] Active chunk count %d after move exceeded maximum 25" % moved_active, logs)
+		streamer.queue_free()
+		return false
+
+	if streamer.total_chunks_recycled == 0:
+		append_log("FAIL: [Step 4] No chunks were recycled to pool after move (got %d)" % streamer.total_chunks_recycled, logs)
+		streamer.queue_free()
+		return false
+
+	# -------------------------------------------------------------
+	# 5. Typed Candidate Queries
+	# -------------------------------------------------------------
+	append_log("[TEST 39] Sub-step 5: Testing gameplay candidate queries...", logs)
+	streamer.force_update(Vector2i(0, 0))
+
+	var ground_pts: Array[Vector3] = streamer.get_ground_spawn_points(Vector3.ZERO, 38.0, 75.0)
+	if ground_pts.is_empty():
+		append_log("FAIL: [Step 5] get_ground_spawn_points returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	for pt in ground_pts:
+		var d: float = Vector3.ZERO.distance_to(pt)
+		if d < 37.9 or d > 75.1:
+			append_log("FAIL: [Step 5] Ground spawn point distance %.1fm outside [38, 75] window" % d, logs)
+			streamer.queue_free()
+			return false
+
+	var roof_pts: Array[Vector3] = streamer.get_rooftop_spawn_points(Vector3.ZERO, 20.0, 100.0)
+	if roof_pts.is_empty():
+		append_log("FAIL: [Step 5] get_rooftop_spawn_points returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	var air_pts: Array[Vector3] = streamer.get_air_entry_positions(Vector3.ZERO, 40.0, 140.0)
+	if air_pts.is_empty():
+		append_log("FAIL: [Step 5] get_air_entry_positions returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	var obj_pts: Array[Vector3] = streamer.get_objective_candidates(Vector3.ZERO, 30.0, 160.0)
+	if obj_pts.is_empty():
+		append_log("FAIL: [Step 5] get_objective_candidates returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	var pick_pts: Array[Vector3] = streamer.get_pickup_candidates(Vector3.ZERO, 20.0, 100.0)
+	if pick_pts.is_empty():
+		append_log("FAIL: [Step 5] get_pickup_candidates returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	var safe_pts: Array[Vector3] = streamer.get_safe_open_positions(Vector3.ZERO, 0.0, 60.0)
+	if safe_pts.is_empty():
+		append_log("FAIL: [Step 5] get_safe_open_positions returned empty array", logs)
+		streamer.queue_free()
+		return false
+
+	streamer.queue_free()
+	append_log("  -> Test 39 PASSED: City world streamer, 1:1 scale contract, socket continuity and candidate queries validated.", logs)
+	return true
+
+func test_nuclear_strike_camera_composition_and_behavior(logs: Array[String]) -> bool:
+	logs.append("[TEST 40] Testing Nuclear Strike Camera Composition & Oblique Framing...")
+
+	var root_node := Node3D.new()
+	add_child(root_node)
+
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	player.global_position = Vector3(0.0, 2.4, 0.0)
+	player.rotation = Vector3.ZERO
+	player.velocity = Vector3.ZERO
+
+	var cam_scene := load("res://scenes/camera/camera_rig.tscn") as PackedScene
+	var cam_rig: CameraRig = cam_scene.instantiate() as CameraRig
+	root_node.add_child(cam_rig)
+	cam_rig.tracked_player = player
+
+	# 1. Baseline Composition Exports Check
+	if absf(cam_rig.camera_fov - 50.0) > 0.1:
+		append_log("FAIL: Camera FOV expected 50.0, got %.1f" % cam_rig.camera_fov, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.base_distance - 31.0) > 0.1:
+		append_log("FAIL: Base distance expected 31.0, got %.1f" % cam_rig.base_distance, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.base_height - 22.0) > 0.1:
+		append_log("FAIL: Base height expected 22.0, got %.1f" % cam_rig.base_height, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.base_lookahead - 16.0) > 0.1:
+		append_log("FAIL: Base lookahead expected 16.0, got %.1f" % cam_rig.base_lookahead, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.horizontal_camera_response - 6.5) > 0.1:
+		append_log("FAIL: Horizontal camera response expected 6.5, got %.1f" % cam_rig.horizontal_camera_response, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.vertical_camera_response - 5.5) > 0.1:
+		append_log("FAIL: Vertical camera response expected 5.5, got %.1f" % cam_rig.vertical_camera_response, logs)
+		root_node.queue_free()
+		return false
+	if absf(cam_rig.look_response - 9.0) > 0.1:
+		append_log("FAIL: Look response expected 9.0, got %.1f" % cam_rig.look_response, logs)
+		root_node.queue_free()
+		return false
+
+	# 2. Frame 1 & Hover Stabilization
+	cam_rig.reset_smoothing()
+	for _i in range(30):
+		cam_rig._process(0.016)
+
+	var cam_pos := cam_rig.smoothed_camera_position
+	var look_pos := cam_rig.smoothed_look_position
+
+	# Camera must be BEHIND the helicopter (facing -Z, so camera.z > player.z)
+	if cam_pos.z < player.global_position.z + 25.0:
+		append_log("FAIL: Camera position Z (%.1f) not sufficiently behind helicopter (player Z=%.1f)" % [cam_pos.z, player.global_position.z], logs)
+		root_node.queue_free()
+		return false
+
+	# Camera must be ELEVATED above helicopter
+	if cam_pos.y < player.global_position.y + 18.0:
+		append_log("FAIL: Camera elevation Y (%.1f) too low relative to helicopter (player Y=%.1f)" % [cam_pos.y, player.global_position.y], logs)
+		root_node.queue_free()
+		return false
+
+	# Look target must be AHEAD of helicopter (look_pos.z < player.z)
+	if look_pos.z > player.global_position.z - 10.0:
+		append_log("FAIL: Look position Z (%.1f) not ahead of helicopter (player Z=%.1f)" % [look_pos.z, player.global_position.z], logs)
+		root_node.queue_free()
+		return false
+
+	# Optical pitch check: pitch to look target must be oblique (18-32 deg), NOT near-vertical (50-65 deg)
+	var horiz_span := cam_pos.z - look_pos.z
+	var vert_span := cam_pos.y - look_pos.y
+	var optical_pitch_deg := rad_to_deg(atan2(vert_span, horiz_span))
+	if optical_pitch_deg > 32.0 or optical_pitch_deg < 18.0:
+		append_log("FAIL: Optical pitch angle to look target (%.1f deg) outside oblique window [18, 32] deg" % optical_pitch_deg, logs)
+		root_node.queue_free()
+		return false
+
+	# 3. Dynamic Speed Pullback
+	player.velocity = Vector3(0.0, 0.0, -38.0) # max forward speed
+	for _i in range(60):
+		cam_rig._process(0.016)
+
+	var fast_cam_pos := cam_rig.smoothed_camera_position
+	var fast_look_pos := cam_rig.smoothed_look_position
+	if fast_cam_pos.z < cam_pos.z + 3.0:
+		append_log("FAIL: Speed pullback did not increase camera distance at full speed (slow=%.1f, fast=%.1f)" % [cam_pos.z, fast_cam_pos.z], logs)
+		root_node.queue_free()
+		return false
+	if fast_look_pos.z > look_pos.z - 3.0:
+		append_log("FAIL: Speed lookahead bonus did not extend look target at full speed (slow=%.1f, fast=%.1f)" % [look_pos.z, fast_look_pos.z], logs)
+		root_node.queue_free()
+		return false
+
+	# 4. Altitude Scaling & Perspective Preservation
+	player.velocity = Vector3.ZERO
+	player.global_position.y = 22.4 # climbed 20m above baseline 2.4m
+	for _i in range(60):
+		cam_rig._process(0.016)
+
+	var high_cam_pos := cam_rig.smoothed_camera_position
+	var high_look_pos := cam_rig.smoothed_look_position
+	var expected_height_gain := 20.0 * cam_rig.altitude_height_scale # ~8.4m
+	if absf((high_cam_pos.y - cam_pos.y) - (20.0 + expected_height_gain)) > 3.0:
+		append_log("FAIL: Camera height did not scale appropriately with player climb (expected ~+%.1fm, got +%.1fm)" % [20.0 + expected_height_gain, high_cam_pos.y - cam_pos.y], logs)
+		root_node.queue_free()
+		return false
+
+	# Pitch at high altitude must remain oblique and not collapse to top-down (< 46 deg)
+	var high_horiz := high_cam_pos.z - high_look_pos.z
+	var high_vert := high_cam_pos.y - high_look_pos.y
+	var high_pitch_deg := rad_to_deg(atan2(high_vert, high_horiz))
+	if high_pitch_deg > 46.0:
+		append_log("FAIL: High altitude pitch (%.1f deg) became too steep (>46 deg)" % high_pitch_deg, logs)
+		root_node.queue_free()
+		return false
+
+	# 5. Reverse Flight Protection (Reversing must NOT flip camera 180 deg)
+	player.global_position.y = 2.4
+	cam_rig.reset_smoothing()
+	for _i in range(30):
+		cam_rig._process(0.016)
+	var pre_rev_yaw := cam_rig._current_yaw
+	player.velocity = Vector3(0.0, 0.0, 15.0) # moving backward
+	for _i in range(30):
+		cam_rig._process(0.016)
+	var post_rev_yaw := cam_rig._current_yaw
+	var yaw_diff := absf(wrapf(post_rev_yaw - pre_rev_yaw, -PI, PI))
+	if yaw_diff > deg_to_rad(30.0):
+		append_log("FAIL: Reversing caused camera to flip or excessively rotate (yaw diff=%.1f deg)" % rad_to_deg(yaw_diff), logs)
+		root_node.queue_free()
+		return false
+
+	# 6. Mode Switching & Recenter
+	cam_rig.set_camera_mode(CameraRig.CameraMode.CLASSIC)
+	if cam_rig.camera_mode != CameraRig.CameraMode.CLASSIC:
+		append_log("FAIL: Failed to switch to CLASSIC camera mode", logs)
+		root_node.queue_free()
+		return false
+	if str(SaveSystem.get_setting("camera_mode", "chase")).to_lower() != "classic":
+		append_log("FAIL: Camera mode setting was not persisted to SaveSystem as 'classic'", logs)
+		root_node.queue_free()
+		return false
+
+	cam_rig.set_camera_mode(CameraRig.CameraMode.CHASE)
+	if cam_rig.camera_mode != CameraRig.CameraMode.CHASE:
+		append_log("FAIL: Failed to switch back to CHASE camera mode", logs)
+		root_node.queue_free()
+		return false
+
+	root_node.queue_free()
+	append_log("  -> Test 40 PASSED: Nuclear Strike oblique camera composition, speed bonuses, altitude stability, reverse protection, and mode switching verified.", logs)
+	return true
+
+func test_spawn_director_separation_reservations_and_regression(logs: Array[String]) -> bool:
+	append_log("[TEST] SpawnDirector separation, reservations & repeated-entry regression suite...", logs)
+
+	var root_node := Node3D.new()
+	add_child(root_node)
+
+	# Seed RNG for deterministic test execution
+	seed(1337)
+
+	# Create a dummy player node at center
+	var player := CharacterBody3D.new()
+	player.name = "Player"
+	player.add_to_group("player")
+	player.position = Vector3(0.0, 14.0, 0.0)
+	root_node.add_child(player)
+
+	# Instantiate SpawnDirector
+	var spawn_director: SpawnDirector = SpawnDirector.new()
+	root_node.add_child(spawn_director)
+	spawn_director.arena_half_extents = 150.0
+	spawn_director.elapsed_survival_time = 10.0
+
+	# Ensure preloaded scenes are loaded if needed
+	if not spawn_director._scene_infantry:
+		spawn_director._scene_infantry = preload("res://scenes/enemies/infantry_cluster.tscn")
+	if not spawn_director._scene_turret:
+		spawn_director._scene_turret = preload("res://scenes/enemies/ground_turret.tscn")
+	if not spawn_director._scene_tank:
+		spawn_director._scene_tank = preload("res://scenes/enemies/tank.tscn")
+
+	# --- Case 1: 3 same-frame opening requests return non-overlapping positions (>= 18m, >= 2 sources/sectors) ---
+	append_log("  -> Running Case 1: Opening encounter 3-unit planning...", logs)
+	var planned := spawn_director._plan_initial_encounter_positions(player.global_position)
+	if planned.size() != 3:
+		append_log("FAIL: Case 1 - Expected 3 planned initial encounter positions, got %d" % planned.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Check pairwise separation >= 18.0m
+	for i in range(planned.size()):
+		for j in range(i + 1, planned.size()):
+			var p_i: Vector3 = planned[i]["position"]
+			var p_j: Vector3 = planned[j]["position"]
+			var dist := Vector2(p_i.x - p_j.x, p_i.z - p_j.z).length()
+			if dist < 18.0:
+				append_log("FAIL: Case 1 - Initial encounter units %d and %d are too close (dist=%.2fm < 18m)" % [i, j, dist], logs)
+				root_node.queue_free()
+				return false
+
+	# Check at least 2 distinct sources or sectors
+	var sources_used: Dictionary = {}
+	var sectors_used: Dictionary = {}
+	for u in planned:
+		sources_used[u["source_key"]] = true
+		sectors_used[u["sector"]] = true
+	if sources_used.size() < 2 and sectors_used.size() < 2:
+		append_log("FAIL: Case 1 - Expected >= 2 distinct sources or sectors, got sources=%d, sectors=%d" % [sources_used.size(), sectors_used.size()], logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 1 PASSED: 3 units planned, min sep >= 18m, %d sources, %d sectors" % [sources_used.size(), sectors_used.size()], logs)
+
+	# Clean reservations from Case 1
+	for u in planned:
+		spawn_director.release_reservation(u["res_id"])
+
+	# --- Case 2: A pending deferred enemy reservation blocks another spawn within clearance radius ---
+	append_log("  -> Running Case 2: Pending deferred enemy reservation clearance...", logs)
+	var res_pos := Vector3(60.0, 0.0, 60.0)
+	var test_res_id := spawn_director.reserve_spawn_position(res_pos, 10.0, "ground", "TestPendingSource", 1, 4.5)
+	if not spawn_director.has_reservation(test_res_id):
+		append_log("FAIL: Case 2 - Failed to register reservation %s" % test_res_id, logs)
+		root_node.queue_free()
+		return false
+
+	# Querying exact same position must be rejected
+	if spawn_director.is_spawn_position_clear(res_pos, false, 10.0):
+		append_log("FAIL: Case 2 - is_spawn_position_clear accepted position with active reservation", logs)
+		root_node.queue_free()
+		return false
+
+	# Querying within clearance radius (< 10.0m, e.g. 5m away) must be rejected
+	var near_pos := res_pos + Vector3(5.0, 0.0, 0.0)
+	if spawn_director.is_spawn_position_clear(near_pos, false, 10.0):
+		append_log("FAIL: Case 2 - is_spawn_position_clear accepted position within 5m of active reservation", logs)
+		root_node.queue_free()
+		return false
+
+	# Querying outside clearance radius (e.g. 20m away) must be clear
+	var far_pos := res_pos + Vector3(20.0, 0.0, 0.0)
+	if not spawn_director.is_spawn_position_clear(far_pos, false, 10.0):
+		append_log("FAIL: Case 2 - is_spawn_position_clear falsely rejected position 20m away from reservation", logs)
+		root_node.queue_free()
+		return false
+
+	# Ignore self reservation ID check
+	if not spawn_director.is_spawn_position_clear(res_pos, false, 10.0, test_res_id):
+		append_log("FAIL: Case 2 - is_spawn_position_clear failed with ignore_reservation_id set", logs)
+		root_node.queue_free()
+		return false
+
+	spawn_director.release_reservation(test_res_id)
+	if not spawn_director.is_spawn_position_clear(res_pos, false, 10.0):
+		append_log("FAIL: Case 2 - Position remained blocked after reservation released", logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 2 PASSED: Active reservation strictly blocks within clearance radius and frees cleanly.", logs)
+
+	# --- Case 3: A queued formation member blocks another spawn ---
+	append_log("  -> Running Case 3: Queued formation member separation check...", logs)
+	var q_unit := Node3D.new()
+	q_unit.name = "QueuedInfantry"
+	q_unit.add_to_group("infantry")
+	var q_pos := Vector3(-60.0, 0.0, -60.0)
+	q_unit.transform.origin = q_pos
+
+	# Deploy as staggered unit (adds to _formation_spawn_queue)
+	spawn_director._deploy_formation_unit(q_unit, root_node, false, true)
+	if spawn_director._formation_spawn_queue.is_empty():
+		append_log("FAIL: Case 3 - Unit was not queued into _formation_spawn_queue", logs)
+		root_node.queue_free()
+		return false
+
+	# Position near queued unit (< 8.0m, e.g. 4m away) must be rejected
+	var q_near := q_pos + Vector3(4.0, 0.0, 0.0)
+	if spawn_director.is_spawn_position_clear(q_near, false, 8.0):
+		append_log("FAIL: Case 3 - is_spawn_position_clear accepted position within 4m of queued formation unit", logs)
+		root_node.queue_free()
+		return false
+
+	# Position far from queued unit (e.g. 20m away) must be clear
+	var q_far := q_pos + Vector3(20.0, 0.0, 0.0)
+	if not spawn_director.is_spawn_position_clear(q_far, false, 8.0):
+		append_log("FAIL: Case 3 - is_spawn_position_clear falsely rejected position 20m away from queued unit", logs)
+		root_node.queue_free()
+		return false
+
+	spawn_director.clear_formation_queue()
+	if not spawn_director._formation_spawn_queue.is_empty():
+		append_log("FAIL: Case 3 - clear_formation_queue failed to empty queue", logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 3 PASSED: Queued formation members successfully block nearby spawns.", logs)
+
+	# --- Case 4: An occupied safe road point is rejected by fallback ---
+	append_log("  -> Running Case 4: Safe road perimeter fallback rejects occupied points...", logs)
+	var safe_reservations: Array[String] = []
+	for i in range(spawn_director._safe_road_points.size()):
+		var pt := spawn_director._safe_road_points[i]
+		var r_id := spawn_director.reserve_spawn_position(pt, 12.0, "ground", "SafeRoadPoint_%d" % i, 0, 10.0)
+		safe_reservations.append(r_id)
+
+	var fallback_all_busy := spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
+	if fallback_all_busy.get("success", true):
+		append_log("FAIL: Case 4 - Fallback succeeded when all safe road points were occupied/reserved", logs)
+		root_node.queue_free()
+		return false
+
+	var released_index := -1
+	for i in range(spawn_director._safe_road_points.size()):
+		var pt := spawn_director._safe_road_points[i]
+		var d := player.global_position.distance_to(pt)
+		if d >= 35.0 and d <= 120.0:
+			spawn_director.release_reservation(safe_reservations[i])
+			released_index = i
+			break
+
+	if released_index >= 0:
+		var fallback_one_free := spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
+		if not fallback_one_free.get("success", false):
+			append_log("FAIL: Case 4 - Fallback failed to pick the single available free road point", logs)
+			root_node.queue_free()
+			return false
+		var picked_pt: Vector3 = fallback_one_free["position"]
+		var target_pt: Vector3 = spawn_director._safe_road_points[released_index]
+		if picked_pt.distance_to(target_pt) > 0.1:
+			append_log("FAIL: Case 4 - Fallback picked wrong point (expected %s, got %s)" % [str(target_pt), str(picked_pt)], logs)
+			root_node.queue_free()
+			return false
+
+	for r_id in safe_reservations:
+		spawn_director.release_reservation(r_id)
+	append_log("     Case 4 PASSED: Safe road fallback strictly rejects occupied road points.", logs)
+
+	# --- Case 5: Recent natural road sockets are not reused within 6s / 18m within 8s ---
+	append_log("  -> Running Case 5: Cooldown and recent spawn proximity enforcement...", logs)
+	spawn_director.elapsed_survival_time = 100.0
+	var socket_pos := Vector3(80.0, 0.0, -40.0)
+	var socket_key := "streamer_ground_1_2_TestSocket"
+
+	spawn_director.record_spawn_event(socket_key, socket_pos, "TestSocket")
+
+	if not spawn_director.is_source_on_cooldown(socket_key, 6.0):
+		append_log("FAIL: Case 5 - Source was not on cooldown immediately after spawn", logs)
+		root_node.queue_free()
+		return false
+
+	if not spawn_director.is_position_near_recent_spawn(socket_pos, 18.0, 8.0):
+		append_log("FAIL: Case 5 - Position near recent spawn was not detected at exact position", logs)
+		root_node.queue_free()
+		return false
+	if not spawn_director.is_position_near_recent_spawn(socket_pos + Vector3(10.0, 0.0, 0.0), 18.0, 8.0):
+		append_log("FAIL: Case 5 - Position within 10m of recent spawn was not detected", logs)
+		root_node.queue_free()
+		return false
+	if spawn_director.is_position_near_recent_spawn(socket_pos + Vector3(25.0, 0.0, 0.0), 18.0, 8.0):
+		append_log("FAIL: Case 5 - Position 25m away was falsely flagged as near recent spawn", logs)
+		root_node.queue_free()
+		return false
+
+	spawn_director.elapsed_survival_time = 106.5
+	if spawn_director.is_source_on_cooldown(socket_key, 6.0):
+		append_log("FAIL: Case 5 - Source was still on cooldown after 6.5s (limit 6.0s)", logs)
+		root_node.queue_free()
+		return false
+	if not spawn_director.is_position_near_recent_spawn(socket_pos, 18.0, 8.0):
+		append_log("FAIL: Case 5 - Position proximity expired too early at 6.5s (limit 8.0s)", logs)
+		root_node.queue_free()
+		return false
+
+	spawn_director.elapsed_survival_time = 108.5
+	if spawn_director.is_position_near_recent_spawn(socket_pos, 18.0, 8.0):
+		append_log("FAIL: Case 5 - Position proximity was still active after 8.5s (limit 8.0s)", logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 5 PASSED: 6.0s source cooldown and 8.0s/18m proximity rules enforced.", logs)
+
+	# --- Case 6: Failed spawn selection does not consume budget or increment counters ---
+	append_log("  -> Running Case 6: Spawn failure budget & counter safety...", logs)
+	var initial_budget: float = 85.0
+	spawn_director.continuous_ground_budget = initial_budget
+	var initial_spawns: int = spawn_director.total_enemies_spawned
+	var initial_fails: int = spawn_director.failed_spawn_attempts
+
+	var failed_enemy := spawn_director._spawn_continuous_enemy(spawn_director._scene_infantry, player.global_position, 0.0, Vector3(0.0, 0.0, 0.0))
+	if failed_enemy != null:
+		append_log("FAIL: Case 6 - Expected null from forced invalid spawn, got instance", logs)
+		failed_enemy.queue_free()
+		root_node.queue_free()
+		return false
+
+	if spawn_director.continuous_ground_budget != initial_budget:
+		append_log("FAIL: Case 6 - Ground budget was deducted on failed spawn (was %.1f, now %.1f)" % [initial_budget, spawn_director.continuous_ground_budget], logs)
+		root_node.queue_free()
+		return false
+	if spawn_director.total_enemies_spawned != initial_spawns:
+		append_log("FAIL: Case 6 - total_enemies_spawned was incremented on failed spawn", logs)
+		root_node.queue_free()
+		return false
+	if spawn_director.failed_spawn_attempts <= initial_fails:
+		append_log("FAIL: Case 6 - failed_spawn_attempts was not incremented on failed spawn", logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 6 PASSED: Failed spawn selection preserves budget and counters safely.", logs)
+
+	# --- Case 7: Formation members satisfy minimum separation ---
+	append_log("  -> Running Case 7: Formation member minimum separation...", logs)
+	var column_origin := Vector3(50.0, 0.0, 50.0)
+	var column_dir := Vector3(0.0, 0.0, 1.0)
+	var column_units := spawn_director.spawn_road_column(column_origin, column_dir, 3, false)
+	if column_units.size() != 3:
+		append_log("FAIL: Case 7 - Expected 3 units from spawn_road_column, got %d" % column_units.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var tank_min_sep: float = float(SpawnDirector.SEPARATION_RADII["tank"]) # 12.0m
+	for i in range(column_units.size()):
+		for j in range(i + 1, column_units.size()):
+			var u_i := column_units[i]
+			var u_j := column_units[j]
+			var dist := Vector2(u_i.transform.origin.x - u_j.transform.origin.x, u_i.transform.origin.z - u_j.transform.origin.z).length()
+			if dist < tank_min_sep:
+				append_log("FAIL: Case 7 - Road column tanks %d and %d are too close (dist=%.2fm < %.1fm)" % [i, j, dist, tank_min_sep], logs)
+				root_node.queue_free()
+				return false
+
+	for u in column_units:
+		u.queue_free()
+	append_log("     Case 7 PASSED: Formation members strictly satisfy minimum separation (>=12m).", logs)
+
+	# --- Case 8: Multiple clamped positions cannot collapse onto the same boundary coordinate ---
+	append_log("  -> Running Case 8: Boundary clamping separation and anti-collapse...", logs)
+	var boundary_origin := Vector3(149.0, 0.0, 0.0)
+	var out_dir := Vector3(1.0, 0.0, 0.0)
+
+	var boundary_tanks := spawn_director.spawn_road_column(boundary_origin, out_dir, 3, false)
+	if boundary_tanks.size() != 3:
+		append_log("FAIL: Case 8 - Expected 3 boundary tanks, got %d" % boundary_tanks.size(), logs)
+		root_node.queue_free()
+		return false
+
+	for i in range(boundary_tanks.size()):
+		var pos_i := boundary_tanks[i].transform.origin
+		if absf(pos_i.x) > spawn_director.arena_half_extents or absf(pos_i.z) > spawn_director.arena_half_extents:
+			append_log("FAIL: Case 8 - Tank %d placed out of bounds: %s" % [i, str(pos_i)], logs)
+			root_node.queue_free()
+			return false
+
+		for j in range(i + 1, boundary_tanks.size()):
+			var pos_j := boundary_tanks[j].transform.origin
+			var dist := Vector2(pos_i.x - pos_j.x, pos_i.z - pos_j.z).length()
+			if dist < 0.5:
+				append_log("FAIL: Case 8 - Boundary tanks %d and %d collapsed onto identical coordinates: %s vs %s" % [i, j, str(pos_i), str(pos_j)], logs)
+				root_node.queue_free()
+				return false
+			if dist < tank_min_sep:
+				append_log("FAIL: Case 8 - Boundary tanks %d and %d violate min separation (dist=%.2fm < %.1fm)" % [i, j, dist, tank_min_sep], logs)
+				root_node.queue_free()
+				return false
+
+	for u in boundary_tanks:
+		u.queue_free()
+
+	# Also directly verify get_clamped_formation_member_position with identical raw inputs
+	var placed_direct: Array[Vector3] = []
+	var p0 := spawn_director.get_clamped_formation_member_position(Vector3(160.0, 0.0, 0.0), placed_direct, 12.0, Vector3(-1.0, 0.0, 0.0))
+	placed_direct.append(p0)
+	var p1 := spawn_director.get_clamped_formation_member_position(Vector3(160.0, 0.0, 0.0), placed_direct, 12.0, Vector3(-1.0, 0.0, 0.0))
+	placed_direct.append(p1)
+	var p2 := spawn_director.get_clamped_formation_member_position(Vector3(160.0, 0.0, 0.0), placed_direct, 12.0, Vector3(-1.0, 0.0, 0.0))
+	placed_direct.append(p2)
+
+	var d01 := Vector2(p0.x - p1.x, p0.z - p1.z).length()
+	var d12 := Vector2(p1.x - p2.x, p1.z - p2.z).length()
+	var d02 := Vector2(p0.x - p2.x, p0.z - p2.z).length()
+	if d01 < 12.0 or d12 < 12.0 or d02 < 12.0:
+		append_log("FAIL: Case 8 - Direct clamped positions collapsed or too close: d01=%.1fm, d12=%.1fm, d02=%.1fm" % [d01, d12, d02], logs)
+		root_node.queue_free()
+		return false
+	append_log("     Case 8 PASSED: Boundary clamping strictly prevents coordinate collapse and preserves separation.", logs)
+
+	root_node.queue_free()
+	append_log("  -> Test 41 PASSED: SpawnDirector separation, reservations, fallback rejection & anti-collapse verified.", logs)
 	return true

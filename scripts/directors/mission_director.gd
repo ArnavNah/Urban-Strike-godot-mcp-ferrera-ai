@@ -17,6 +17,8 @@ enum State {
 @export var mission_cooldown: float = 45.0
 @export var auto_start_missions: bool = true
 
+const EliminateEliteMissionClass = preload("res://scripts/missions/eliminate_elite_mission.gd")
+
 var current_state: State = State.IDLE
 var current_mission: StrikeMission = null
 var _state_timer: float = 0.0
@@ -25,7 +27,8 @@ var _hud_update_timer: float = 0.0
 var _mission_queue: Array[String] = [
 	"destroy_radar",
 	"destroy_jammer",
-	"secure_lz"
+	"secure_lz",
+	"eliminate_elite"
 ]
 var _mission_index: int = 0
 var _player: Node3D = null
@@ -126,6 +129,8 @@ func start_mission_by_id(mission_id: String) -> StrikeMission:
 			mission = JammerConvoyMission.new()
 		"secure_lz":
 			mission = SecureLZMission.new()
+		"eliminate_elite":
+			mission = EliminateEliteMissionClass.new()
 		_:
 			mission = DestroyRadarMission.new()
 
@@ -159,7 +164,7 @@ func resolve_mission(success: bool) -> void:
 	if success:
 		current_mission.on_success(self)
 		if eb and eb.has_signal("mission_completed"):
-			var reward_text := "+%d XP  [+1 REQ]" % current_mission.xp_reward
+			var reward_text := current_mission.get_reward_text()
 			eb.emit_signal("mission_completed", current_mission.id, current_mission.title, reward_text)
 	else:
 		current_mission.on_failure(self)

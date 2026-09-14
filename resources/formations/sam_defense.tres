@@ -20,13 +20,13 @@ units = Array[Dictionary]([{
 "cap_tag": "turret",
 "count": 1,
 "is_air": false,
-"offset": Vector3(-5, 0, 0),
+"offset": Vector3(-5.75, 0, 0),
 "scene_path": "res://scenes/enemies/ground_turret.tscn"
 }, {
 "cap_tag": "infantry",
 "count": 1,
 "is_air": false,
-"offset": Vector3(5, 0, 2),
+"offset": Vector3(5.75, 0, 2.3),
 "scene_path": "res://scenes/enemies/infantry_cluster.tscn"
 }])
 required_caps = {

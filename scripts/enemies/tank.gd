@@ -15,25 +15,27 @@ enum State {
 }
 
 @export var archetype: GroundEnemyArchetype = null
-@export var max_health: float = 75.0
+@export var max_health: float = 180.0
 @export var threat_range: float = 55.0
 @export var preferred_range: float = 36.0
 @export var cannon_damage: float = 12.0 # GDD baseline
 @export var aim_prep_time: float = 0.5
-@export var charge_time: float = 0.45 # Visible pre-shot tell
+@export var charge_time: float = 0.9 # Phase 10B: 0.8-1.1s visible pre-shot tell
 @export var reload_time: float = 2.0
 @export var move_speed: float = 7.5
 @export var is_command_unit: bool = false
 @export var escort_leader: Node3D = null
 @export var xp_reward: int = 16
+@export var arming_delay: float = 2.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
-var current_health: float = 75.0
+var current_health: float = 180.0
 var current_state: State = State.REPOSITIONING
 var is_alive: bool = true
 var is_scattered: bool = false
 var _troops_deployed: bool = false
+var _arming_timer: float = 2.5
 
 var _state_timer: float = 0.0
 var _reposition_dir: Vector3 = Vector3.FORWARD
@@ -45,10 +47,13 @@ var _escorts: Array[Tank] = []
 var _lod_frame_counter: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
-var _stuck_timer: float = 0.0
 var _last_tank_pos: Vector3 = Vector3.ZERO
 var _is_recovering: bool = false
 var _recovery_timer: float = 0.0
+var _road_path: PackedVector3Array = PackedVector3Array()
+var _road_path_index: int = 0
+var _road_path_timer: float = 0.0
+var _stuck_sample_timer: float = 0.0
 var _visual_meshes: Array[MeshInstance3D] = []
 static var _flash_mat: StandardMaterial3D = null
 
@@ -79,7 +84,21 @@ func _ready() -> void:
 	else:
 		add_to_group("armored_enemies")
 
+	if not charge_light:
+		charge_light = OmniLight3D.new()
+		charge_light.name = "ChargeLight"
+		charge_light.light_color = Color(1.0, 0.85, 0.2)
+		charge_light.omni_range = 6.0
+		charge_light.visible = false
+		if barrel:
+			barrel.add_child(charge_light)
+		elif turret:
+			turret.add_child(charge_light)
+		else:
+			add_child(charge_light)
+
 	add_to_group("enemies")
+
 	floor_snap_length = 0.6
 	floor_stop_on_slope = true
 	floor_max_angle = deg_to_rad(45.0)
@@ -165,16 +184,20 @@ func _physics_process(delta: float) -> void:
 	# Distance-based AI LOD throttling
 	_lod_frame_counter += 1
 	var step_delta := delta
-	if dist > 130.0 and not is_scattered:
-		return # LOD 3: Culled/Dormant
-	elif dist > 75.0 and not is_scattered:
-		if _lod_frame_counter % 4 != 0:
-			return # LOD 2: 15 Hz update
-		step_delta = delta * 4.0
-	elif dist > 38.0 and not is_scattered:
-		if _lod_frame_counter % 2 != 0:
-			return # LOD 1: 30 Hz update
-		step_delta = delta * 2.0
+	if dist > 280.0 and not is_scattered:
+		return # LOD 4: Dormant beyond 280m
+	elif dist > 120.0 and not is_scattered:
+		if _lod_frame_counter % 8 != 0:
+			return # LOD 3: 7.5 Hz distant corridor approach
+		step_delta = delta * 8.0
+	elif dist > 60.0 and not is_scattered:
+		if _lod_frame_counter % 3 != 0:
+			return # LOD 2: 20 Hz medium approach
+		step_delta = delta * 3.0
+
+	# Phase 10B: Arming timer decay
+	if _arming_timer > 0.0:
+		_arming_timer -= step_delta
 
 	# Throttled LoS check based on LOD
 	_los_timer -= step_delta
@@ -239,8 +262,34 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 		return
 
 	if not is_scattered:
-		# If too far from preferred range, steer toward player
-		if dist > preferred_range or not has_los:
+		# If far or no LoS, navigate along street network
+		if dist > 35.0 or not has_los:
+			_road_path_timer -= delta
+			if _road_path_timer <= 0.0 or _road_path.is_empty():
+				_road_path_timer = randf_range(1.5, 2.5)
+				var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+				if is_instance_valid(streamer):
+					_road_path = streamer.get_road_path(global_position, _player.global_position)
+					_road_path_index = 0
+
+			if not _road_path.is_empty() and _road_path_index < _road_path.size():
+				var wp := _road_path[_road_path_index]
+				var to_wp := (wp - global_position)
+				to_wp.y = 0.0
+				if to_wp.length() < 7.0:
+					_road_path_index += 1
+					if _road_path_index < _road_path.size():
+						wp = _road_path[_road_path_index]
+						to_wp = (wp - global_position)
+						to_wp.y = 0.0
+				if to_wp.length_squared() > 0.1:
+					move_dir = to_wp.normalized()
+			else:
+				var to_player := (_player.global_position - global_position)
+				to_player.y = 0.0
+				move_dir = to_player.normalized()
+		else:
+			# Close range tactical direct pursuit
 			var to_player := (_player.global_position - global_position)
 			to_player.y = 0.0
 			move_dir = to_player.normalized()
@@ -248,21 +297,28 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 		# Steer around buildings and obstacles with whiskers
 		move_dir = _steer_around_obstacles(move_dir)
 
-		# Stuck detection
-		var disp := (global_position - _last_tank_pos).length()
-		if disp < 0.25 * delta * current_speed:
-			_stuck_timer += delta
-			if _stuck_timer >= 1.8:
+		# Stuck detection (< 1.0m over 2.0s with distant target)
+		_stuck_sample_timer += delta
+		if _stuck_sample_timer >= 2.0:
+			var disp := (global_position - _last_tank_pos).length()
+			if disp < 1.0 and dist > 20.0:
 				_is_recovering = true
-				_recovery_timer = 1.0
-				_stuck_timer = 0.0
-				var rev_dir := -move_dir
-				var perp := Vector3(-rev_dir.z, 0.0, rev_dir.x)
-				_reposition_dir = (rev_dir * 0.5 + (perp if randf() > 0.5 else -perp) * 0.5).normalized()
+				_recovery_timer = 1.2
+				var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+				if is_instance_valid(streamer):
+					var road_pt := streamer.get_nearest_road_point(global_position)
+					var to_road := (road_pt - global_position)
+					to_road.y = 0.0
+					_reposition_dir = to_road.normalized() if to_road.length_squared() > 0.01 else -move_dir
+					_road_path = streamer.get_road_path(road_pt, _player.global_position)
+					_road_path_index = 0
+				else:
+					var rev_dir := -move_dir
+					var perp := Vector3(-rev_dir.z, 0.0, rev_dir.x)
+					_reposition_dir = (rev_dir * 0.5 + (perp if randf() > 0.5 else -perp) * 0.5).normalized()
 				move_dir = _reposition_dir
-		else:
-			_stuck_timer = 0.0
 			_last_tank_pos = global_position
+			_stuck_sample_timer = 0.0
 
 	velocity.x = move_dir.x * current_speed
 	velocity.z = move_dir.z * current_speed
@@ -273,7 +329,7 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 		rotation.y = lerp_angle(rotation.y, target_yaw, 4.0 * delta)
 
 	# Check for transition into combat engagement
-	if not is_scattered and dist <= preferred_range and has_los:
+	if not is_scattered and _arming_timer <= 0.0 and dist <= preferred_range and has_los:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
@@ -288,7 +344,7 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 			var angle := randf() * TAU
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
 			_state_timer = 1.0
-		elif dist <= threat_range and has_los:
+		elif not is_scattered and _arming_timer <= 0.0 and dist <= threat_range and has_los:
 			if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
 				_deploy_troops()
 			_transition_to(State.ACQUIRE)
@@ -475,6 +531,7 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 	var query := PhysicsRayQueryParameters3D.create(origin, forward_check, 1) # Layer 1 = World
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 
 	if not hit.is_empty():
@@ -493,11 +550,13 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 	var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 4.2, 1)
 	left_query.collide_with_areas = false
 	left_query.collide_with_bodies = true
+	left_query.exclude = [get_rid()]
 	var left_hit := space.intersect_ray(left_query)
 
 	var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 4.2, 1)
 	right_query.collide_with_areas = false
 	right_query.collide_with_bodies = true
+	right_query.exclude = [get_rid()]
 	var right_hit := space.intersect_ray(right_query)
 
 	if not left_hit.is_empty() and right_hit.is_empty():
@@ -529,7 +588,9 @@ func _fire_cannon() -> void:
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
 	if pool:
-		pool.spawn_projectile(muzzle_pos, fire_dir, false, cannon_damage)
+		var proj := pool.spawn_projectile(muzzle_pos, fire_dir, false, cannon_damage)
+		if proj and CombatDirector.instance:
+			CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
 
 	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
 	if flash_scene:
@@ -582,6 +643,8 @@ func _fire_rocket_burst() -> void:
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(rocket)
 			rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
+			if CombatDirector.instance and i == 0:
+				CombatDirector.instance.transfer_danger_to_projectile(self, rocket, 3.0)
 		if i < count - 1:
 			await get_tree().create_timer(0.18).timeout
 
@@ -590,6 +653,19 @@ func _fire_mortar_shell() -> void:
 		return
 	var target_pos := _player.global_position
 	target_pos.y = 0.05
+
+	# Mortar area denial must not target protected escape sector (Phase 10B rule)
+	var sd := get_tree().get_first_node_in_group("spawn_director") as SpawnDirector
+	if sd and sd.has_method("get_protected_escape_sectors"):
+		var to_tgt := target_pos - _player.global_position
+		to_tgt.y = 0.0
+		if to_tgt.length_squared() > 1.0:
+			var angle := atan2(to_tgt.x, to_tgt.z)
+			var sector := int(round(angle / (TAU / 8.0))) % 8
+			if sector < 0: sector += 8
+			var escape_sectors: Array[int] = sd.get_protected_escape_sectors()
+			if escape_sectors.has(sector):
+				target_pos += Vector3(-to_tgt.z, 0.0, to_tgt.x).normalized() * 10.0
 
 	var warning_node := Node3D.new()
 	var mesh_inst := MeshInstance3D.new()
@@ -609,7 +685,12 @@ func _fire_mortar_shell() -> void:
 	var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 	p.add_child(warning_node)
 
+	if CombatDirector.instance:
+		CombatDirector.instance.transfer_danger_to_projectile(self, warning_node, 2.5)
+
 	get_tree().create_timer(1.6).timeout.connect(func():
+		if CombatDirector.instance:
+			CombatDirector.instance.release_danger_capacity(warning_node, CombatDirector.DANGER_COST_MORTAR_ZONE)
 		if is_instance_valid(warning_node):
 			warning_node.queue_free()
 		var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
@@ -630,8 +711,8 @@ func _fire_mortar_shell() -> void:
 func _deploy_troops() -> void:
 	if not _troops_deployed:
 		_troops_deployed = true
-		var inf_scene := preload("res://scenes/enemies/infantry_cluster.tscn")
-		if inf_scene:
+		var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+		if inf_scene and inf_scene.can_instantiate():
 			var squad := inf_scene.instantiate() as Node3D
 			if squad:
 				var spawn_p: Vector3
@@ -652,17 +733,54 @@ func _check_los() -> bool:
 	var origin := global_position + Vector3(0, 1.8, 0)
 	var target_pos := _player.global_position
 	var query := PhysicsRayQueryParameters3D.create(origin, target_pos, 1) # Layer 1 = World
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 	return hit.is_empty()
 
 func _request_slot() -> bool:
+	if _arming_timer > 0.0:
+		return false
+
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
-		var granted: bool = dir.request_attack_slot(self, false)
+		var token_cost: int = CombatDirector.TOKEN_COST_TANK_CANNON
+		var is_heavy: bool = true
+		var danger_cost: int = CombatDirector.DANGER_COST_CANNON_SHELL
+		var attack_name: String = "cannon"
+
+		if archetype:
+			match archetype.weapon_type:
+				GroundEnemyArchetype.WeaponType.RAPID_MG, GroundEnemyArchetype.WeaponType.JAMMER_ECM:
+					token_cost = CombatDirector.TOKEN_COST_INFANTRY
+					is_heavy = false
+					danger_cost = CombatDirector.DANGER_COST_BULLET
+					attack_name = "rapid_mg"
+				GroundEnemyArchetype.WeaponType.ROCKET_BURST:
+					token_cost = CombatDirector.TOKEN_COST_ROCKET_VOLLEY
+					is_heavy = true
+					danger_cost = CombatDirector.DANGER_COST_ROCKET
+					attack_name = "rocket_volley"
+				GroundEnemyArchetype.WeaponType.MORTAR_SHELL:
+					token_cost = CombatDirector.TOKEN_COST_MORTAR_STRIKE
+					is_heavy = true
+					danger_cost = CombatDirector.DANGER_COST_MORTAR_ZONE
+					attack_name = "mortar"
+				GroundEnemyArchetype.WeaponType.TROOP_DEPLOY:
+					token_cost = CombatDirector.TOKEN_COST_INFANTRY
+					is_heavy = false
+					danger_cost = CombatDirector.DANGER_COST_BULLET
+					attack_name = "troop_deploy"
+
+		var granted: bool = dir.request_attack_permission(self, token_cost, false, is_heavy, false, danger_cost, attack_name)
 		_has_attack_slot = granted
 		return granted
+
 	_has_attack_slot = true
 	return true
 
@@ -672,7 +790,7 @@ func _release_slot() -> void:
 		if not dir and CombatDirector.instance:
 			dir = CombatDirector.instance
 		if dir:
-			dir.release_attack_slot(self, false)
+			dir.release_attack_permission(self)
 	_has_attack_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

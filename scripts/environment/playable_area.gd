@@ -7,9 +7,9 @@ extends Node3D
 ## 2. Warning Border: HUD warning message + return direction + smooth inward steering resistance (185m - 215m)
 ## 3. Hard Boundary: Physical collision + smooth position clamp and outward velocity zeroing (222m)
 
-@export var safe_half_extent: float = 185.0
-@export var warning_half_extent: float = 215.0
-@export var hard_half_extent: float = 222.0
+@export var safe_half_extent: float = 960.0
+@export var warning_half_extent: float = 1000.0
+@export var hard_half_extent: float = 1020.0
 @export var gentle_resistance: float = 18.0
 @export var target_player: Node3D = null
 

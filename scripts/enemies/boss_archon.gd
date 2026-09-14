@@ -136,7 +136,7 @@ func _process_phase_2(delta: float) -> void:
 	_rocket_timer -= delta
 	if _rocket_timer <= 0.0:
 		_rocket_timer = 3.2
-		_fire_rocket_salvo(4)
+		_telegraph_rocket_salvo(4)
 
 func _process_phase_3(delta: float) -> void:
 	# Enraged fast dive runs at player's altitude
@@ -154,7 +154,8 @@ func _process_phase_3(delta: float) -> void:
 	_rocket_timer -= delta
 	if _rocket_timer <= 0.0:
 		_rocket_timer = 2.4
-		_fire_rocket_salvo(6)
+		_telegraph_rocket_salvo(6)
+
 
 func _fly_toward_pos(dest: Vector3, speed: float, delta: float) -> void:
 	var to_dest := dest - global_position
@@ -187,7 +188,19 @@ func _fire_chin_cannon() -> void:
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(flash)
 
+func _telegraph_rocket_salvo(count: int) -> void:
+	if core_light:
+		var prev_energy := core_light.light_energy
+		core_light.light_energy = 4.5
+		var tw := create_tween()
+		tw.tween_property(core_light, "light_energy", prev_energy, 0.4)
+	get_tree().create_timer(0.35, false).timeout.connect(func():
+		if is_alive and is_instance_valid(self):
+			_fire_rocket_salvo(count)
+	)
+
 func _fire_rocket_salvo(count: int) -> void:
+
 	if not is_instance_valid(_player):
 		return
 	var missile_scene: PackedScene = preload("res://scenes/weapons/guided_missile.tscn")

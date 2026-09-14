@@ -20,6 +20,13 @@ enum WeaponType {
 @export var is_elite: bool = false
 @export var formation_tags: Array[String] = []
 
+@export_category("Survivors Population & Roles (Phase 10A)")
+@export var visual_crowd_weight: float = 1.0 ## Raw nodes can count as multiple crowd units (e.g. infantry cluster = 4)
+@export var role_identifier: String = "armored" ## "fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "jammer"
+@export var attack_token_cost: int = 1 ## Attack token budget cost placeholder for Phase 10B
+@export var enemy_tier: String = "ordinary" ## "ordinary", "heavy", "elite", "boss", "objective"
+@export var earliest_permitted_wave: int = 1
+
 @export_category("Survivability")
 @export var max_health: float = 75.0
 @export var is_armored: bool = true

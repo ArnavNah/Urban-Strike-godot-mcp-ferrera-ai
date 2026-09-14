@@ -5,7 +5,7 @@
 
 [sub_resource type="BoxMesh" id="BoxMesh_y1gw7"]
 material = ExtResource("1_883f8")
-size = Vector3(22, 0.12, 60)
+size = Vector3(13, 0.12, 60)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jvpvk"]
 resource_name = "Asphalt"
@@ -14,7 +14,7 @@ roughness = 0.92
 
 [sub_resource type="BoxMesh" id="BoxMesh_2175j"]
 material = SubResource("StandardMaterial3D_jvpvk")
-size = Vector3(18, 0.12, 60)
+size = Vector3(9, 0.12, 60)
 
 [sub_resource type="BoxMesh" id="BoxMesh_31t5y"]
 material = ExtResource("2_5jlfp")
@@ -50,9 +50,9 @@ cast_shadow = 0
 multimesh = SubResource("MultiMesh_kcoak")
 
 [node name="LeftEdgeLine" type="MeshInstance3D" parent="." unique_id=1130004079]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.1, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.3, 0)
 mesh = SubResource("BoxMesh_kh506")
 
 [node name="RightEdgeLine" type="MeshInstance3D" parent="." unique_id=448191997]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.1, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0.3, 0)
 mesh = SubResource("BoxMesh_6448j")

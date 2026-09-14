@@ -53,7 +53,21 @@ func check_completion() -> bool:
 func check_failure() -> bool:
 	return is_failed
 
+func get_reward_text() -> String:
+	var parts: Array[String] = []
+	if xp_reward > 0:
+		parts.append("+%d XP" % xp_reward)
+	if salvage_reward > 0:
+		parts.append("+%d CR" % salvage_reward)
+	if requisition_reward > 0:
+		parts.append("+%d REQ" % requisition_reward)
+	if parts.is_empty():
+		return "OBJECTIVE COMPLETE"
+	return "  ".join(parts)
+
 func on_success(director: Node) -> void:
+	if is_completed and _rewards_granted:
+		return
 	is_active = false
 	is_completed = true
 	_apply_rewards(director)
@@ -64,6 +78,11 @@ func on_failure(_director: Node) -> void:
 
 func cleanup() -> void:
 	is_active = false
+	if is_instance_valid(target_node):
+		if target_node.is_in_group("objectives"):
+			target_node.remove_from_group("objectives")
+	target_node = null
+
 
 func _get_active_node_in_group(tree: SceneTree, group_name: String) -> Node:
 	var nodes: Array = tree.get_nodes_in_group(group_name)

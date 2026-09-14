@@ -21,13 +21,13 @@ units = Array[Dictionary]([{
 "cap_tag": "ifv",
 "count": 1,
 "is_air": false,
-"offset": Vector3(4, 0, 2),
+"offset": Vector3(4.6, 0, 2.3),
 "scene_path": "res://scenes/enemies/ground_assault_ifv.tscn"
 }, {
 "cap_tag": "raider",
 "count": 1,
 "is_air": true,
-"offset": Vector3(0, 16, -15),
+"offset": Vector3(0, 18.4, -17.25),
 "scene_path": "res://scenes/enemies/air_rocket_raider.tscn"
 }])
 required_caps = {

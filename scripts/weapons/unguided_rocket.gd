@@ -83,6 +83,9 @@ func explode(impact_pos: Vector3) -> void:
 			if expl:
 				expl.transform.origin = impact_pos
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(expl)
+				if p:
+					p.add_child(expl)
+	if CombatDirector.instance:
+		CombatDirector.instance.release_danger_capacity(self, CombatDirector.DANGER_COST_ROCKET)
 
 	queue_free()

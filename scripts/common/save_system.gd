@@ -15,11 +15,24 @@ static func get_default_data() -> Dictionary:
 			"extraction_insurance": false
 		},
 		"settings": {
+			"screen_shake_enabled": true,
+			"screen_shake_intensity": 1.0,
+			"damage_flash_enabled": true,
+			"damage_flash_intensity": 1.0,
+			"reduced_flashing": false,
+			"volume_master": 1.0,
+			"volume_sfx": 1.0,
+			"volume_music": 1.0,
 			"move_deadzone": 0.15,
 			"aim_deadzone": 0.12,
+			"aim_sensitivity": 1.0,
+			"aim_exponent": 1.45,
+			"controller_glyph_mode": "auto",
+			"high_contrast_indicators": false,
 			"aim_assist_intensity": 1.0,
 			"camera_shake": 1.0,
-			"screen_vignette": true
+			"screen_vignette": true,
+			"camera_mode": "chase"
 		},
 		"telemetry": {
 			"total_runs": 0,
@@ -65,6 +78,10 @@ static func save_data(data: Dictionary) -> void:
 		file.store_string(JSON.stringify(data, "\t"))
 		file.close()
 
+static func get_all_settings() -> Dictionary:
+	var data := load_data()
+	return data.get("settings", {}).duplicate()
+
 static func get_setting(key: String, default_val: Variant = null) -> Variant:
 	var data := load_data()
 	var settings: Dictionary = data.get("settings", {})
@@ -78,6 +95,10 @@ static func set_setting(key: String, val: Variant) -> void:
 		data["settings"] = {}
 	data["settings"][key] = val
 	save_data(data)
+	var tree := Engine.get_main_loop() as SceneTree
+	var eb: Node = tree.root.get_node_or_null("EventBus") if tree and tree.root else null
+	if eb and eb.has_signal("setting_changed"):
+		eb.emit_signal("setting_changed", key, val)
 
 static func record_run_telemetry(run_stats: Dictionary) -> void:
 	var data := load_data()

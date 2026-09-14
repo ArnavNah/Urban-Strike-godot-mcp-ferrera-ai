@@ -13,7 +13,7 @@ enum State {
 	COOLDOWN
 }
 
-@export var max_health: float = 24.0
+@export var max_health: float = 12.0
 @export var move_speed: float = 5.5
 @export var preferred_range: float = 22.0
 @export var threat_range: float = 34.0
@@ -22,12 +22,18 @@ enum State {
 @export var reload_time: float = 1.3
 @export var damage_per_shot: float = 1.2 # GDD baseline
 @export var xp_reward: int = 3
+@export var visual_crowd_weight: int = 4
+@export var arming_delay: float = 1.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
-var current_health: float = 24.0
+var current_health: float = 12.0
 var current_state: State = State.APPROACH
 var is_alive: bool = true
+var _arming_timer: float = 1.5
+@warning_ignore("unused_private_class_variable")
+var _is_telegraphing: bool = false
+var _snapshot_aim_dir: Vector3 = Vector3.ZERO
 
 var _player: Node3D = null
 var _state_timer: float = 0.0
@@ -38,10 +44,13 @@ var _has_attack_slot: bool = false
 var _lod_frame_counter: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
-var _stuck_timer: float = 0.0
 var _last_pos: Vector3 = Vector3.ZERO
 var _is_recovering: bool = false
 var _recovery_timer: float = 0.0
+var _road_path: PackedVector3Array = PackedVector3Array()
+var _road_path_index: int = 0
+var _road_path_timer: float = 0.0
+var _stuck_sample_timer: float = 0.0
 
 @onready var los_ray: RayCast3D = get_node_or_null("LOSRayCast")
 
@@ -91,16 +100,20 @@ func _physics_process(delta: float) -> void:
 	# Distance-based AI LOD throttling
 	_lod_frame_counter += 1
 	var step_delta := delta
-	if dist > 130.0:
-		return # LOD 3: Culled
-	elif dist > 70.0:
-		if _lod_frame_counter % 4 != 0:
-			return # LOD 2: 15 Hz
-		step_delta = delta * 4.0
-	elif dist > 38.0:
-		if _lod_frame_counter % 2 != 0:
-			return # LOD 1: 30 Hz
-		step_delta = delta * 2.0
+	if dist > 280.0:
+		return # LOD 4: Dormant beyond 280m
+	elif dist > 120.0:
+		if _lod_frame_counter % 8 != 0:
+			return # LOD 3: 7.5 Hz distant corridor advance
+		step_delta = delta * 8.0
+	elif dist > 60.0:
+		if _lod_frame_counter % 3 != 0:
+			return # LOD 2: 20 Hz medium approach
+		step_delta = delta * 3.0
+
+	# Phase 10B: Arming timer decay
+	if _arming_timer > 0.0:
+		_arming_timer -= step_delta
 
 	# Throttled LoS check based on LOD
 	_los_timer -= step_delta
@@ -154,34 +167,69 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 			_is_recovering = false
 		return
 
-	var to_player := (_player.global_position - global_position)
-	to_player.y = 0.0
-	var dir := to_player.normalized()
+	var move_dir := Vector3.FORWARD
 
-	if dist <= preferred_range and has_los:
+	if dist > 35.0 or not has_los:
+		_road_path_timer -= delta
+		if _road_path_timer <= 0.0 or _road_path.is_empty():
+			_road_path_timer = randf_range(1.5, 2.5)
+			var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+			if is_instance_valid(streamer):
+				_road_path = streamer.get_road_path(global_position, _player.global_position)
+				_road_path_index = 0
+
+		if not _road_path.is_empty() and _road_path_index < _road_path.size():
+			var wp := _road_path[_road_path_index]
+			var to_wp := (wp - global_position)
+			to_wp.y = 0.0
+			if to_wp.length() < 6.0:
+				_road_path_index += 1
+				if _road_path_index < _road_path.size():
+					wp = _road_path[_road_path_index]
+					to_wp = (wp - global_position)
+					to_wp.y = 0.0
+			if to_wp.length_squared() > 0.1:
+				move_dir = to_wp.normalized()
+		else:
+			var to_player := (_player.global_position - global_position)
+			to_player.y = 0.0
+			move_dir = to_player.normalized()
+	else:
+		var to_player := (_player.global_position - global_position)
+		to_player.y = 0.0
+		move_dir = to_player.normalized()
+
+	if _arming_timer <= 0.0 and dist <= preferred_range and has_los:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		_transition_to(State.ENGAGE)
 		return
 
 	# Obstacle avoidance steering
-	var move_dir := _steer_around_obstacles(dir)
+	move_dir = _steer_around_obstacles(move_dir)
 
-	# Stuck detection
-	var disp := (global_position - _last_pos).length()
-	if disp < 0.25 * delta * move_speed:
-		_stuck_timer += delta
-		if _stuck_timer >= 1.6:
+	# Stuck detection (< 1.0m over 2.0s with distant target)
+	_stuck_sample_timer += delta
+	if _stuck_sample_timer >= 2.0:
+		var disp := (global_position - _last_pos).length()
+		if disp < 1.0 and dist > 20.0:
 			_is_recovering = true
-			_recovery_timer = 0.8
-			_stuck_timer = 0.0
-			var rev := -move_dir
-			var perp := Vector3(-rev.z, 0.0, rev.x)
-			_reposition_dir = (rev * 0.5 + (perp if randf() > 0.5 else -perp) * 0.5).normalized()
+			_recovery_timer = 1.0
+			var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+			if is_instance_valid(streamer):
+				var road_pt := streamer.get_nearest_road_point(global_position)
+				var to_road := (road_pt - global_position)
+				to_road.y = 0.0
+				_reposition_dir = to_road.normalized() if to_road.length_squared() > 0.01 else -move_dir
+				_road_path = streamer.get_road_path(road_pt, _player.global_position)
+				_road_path_index = 0
+			else:
+				var rev := -move_dir
+				var perp := Vector3(-rev.z, 0.0, rev.x)
+				_reposition_dir = (rev * 0.5 + (perp if randf() > 0.5 else -perp) * 0.5).normalized()
 			move_dir = _reposition_dir
-	else:
-		_stuck_timer = 0.0
 		_last_pos = global_position
+		_stuck_sample_timer = 0.0
 
 	velocity.x = move_dir.x * move_speed
 	velocity.z = move_dir.z * move_speed
@@ -283,6 +331,9 @@ func _transition_to(new_state: State) -> void:
 		State.ATTACK:
 			_shots_left = burst_count
 			_burst_timer = 0.0
+			if is_instance_valid(_player):
+				var origin := global_position + Vector3(0, 1.15, 0)
+				_snapshot_aim_dir = (_player.global_position - origin).normalized()
 		State.REPOSITION:
 			_pick_reposition_dir()
 			_state_timer = randf_range(1.0, 1.6)
@@ -341,6 +392,7 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 	var query := PhysicsRayQueryParameters3D.create(origin, forward_check, 1) # Layer 1 = World
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 
 	if not hit.is_empty():
@@ -359,11 +411,13 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 	var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 2.8, 1)
 	left_query.collide_with_areas = false
 	left_query.collide_with_bodies = true
+	left_query.exclude = [get_rid()]
 	var left_hit := space.intersect_ray(left_query)
 
 	var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 2.8, 1)
 	right_query.collide_with_areas = false
 	right_query.collide_with_bodies = true
+	right_query.exclude = [get_rid()]
 	var right_hit := space.intersect_ray(right_query)
 
 	if not left_hit.is_empty() and right_hit.is_empty():
@@ -380,15 +434,24 @@ func _check_los() -> bool:
 	var origin := global_position + Vector3(0, 0.8, 0)
 	var target_pos := _player.global_position
 	var query := PhysicsRayQueryParameters3D.create(origin, target_pos, 1) # Layer 1 = World
+	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 	return hit.is_empty()
 
 func _request_slot() -> bool:
+	if _arming_timer > 0.0:
+		return false
+
+	# Phase 10B: No silent offscreen attacks
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
-		var granted: bool = dir.request_attack_slot(self, false)
+		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_INFANTRY, false, false, false, CombatDirector.DANGER_COST_BULLET, "infantry")
 		_has_attack_slot = granted
 		return granted
 	_has_attack_slot = true
@@ -400,14 +463,16 @@ func _release_slot() -> void:
 		if not dir and CombatDirector.instance:
 			dir = CombatDirector.instance
 		if dir:
-			dir.release_attack_slot(self, false)
+			dir.release_attack_permission(self)
 	_has_attack_slot = false
 
 func _fire_shot() -> void:
 	if not is_instance_valid(_player):
 		return
-	var origin := global_position + Vector3(0, 1.0, 0)
-	var aim_dir := (_player.global_position - origin).normalized()
+	var origin := global_position + Vector3(0, 1.15, 0)
+	var aim_dir := _snapshot_aim_dir
+	if aim_dir.length_squared() < 0.01:
+		aim_dir = (_player.global_position - origin).normalized()
 	aim_dir += Vector3(randf_range(-0.12, 0.12), randf_range(-0.08, 0.08), randf_range(-0.12, 0.12))
 	aim_dir = aim_dir.normalized()
 

@@ -9,9 +9,9 @@
 [ext_resource type="PackedScene" uid="uid://8boti1nhvhol" path="res://Player model/body.glb" id="4_vxykv"]
 [ext_resource type="Script" uid="uid://b4m3p7fulb3uu" path="res://scripts/weapons/flare_dispenser.gd" id="5_flare"]
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-radius = 0.95
-height = 4.2
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_savs3"]
+radius = 1.9
+height = 9.6
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_savs3"]
 transparency = 1
@@ -20,8 +20,8 @@ albedo_color = Color(0.18, 0.2, 0.22, 0.25)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_g1dng"]
 material = SubResource("StandardMaterial3D_savs3")
-top_radius = 2.65
-bottom_radius = 2.65
+top_radius = 6.0
+bottom_radius = 6.0
 height = 0.01
 radial_segments = 24
 rings = 1
@@ -100,11 +100,12 @@ script = ExtResource("1_heli")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=720460142]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
-shape = SubResource("CapsuleShape3D_1")
+shape = SubResource("CapsuleShape3D_savs3")
 
 [node name="FlightTiltPivot" type="Node3D" parent="." unique_id=1129995288]
 
 [node name="Visuals" type="Node3D" parent="FlightTiltPivot" unique_id=165425412]
+transform = Transform3D(2.264, 0, 0, 0, 2.264, 0, 0, 0, 2.264, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1314457934]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -0.62)
@@ -138,14 +139,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 2.7)
 mesh = SubResource("SphereMesh_wctr3")
 
 [node name="StubWings" type="Node3D" parent="." unique_id=1441639570]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, -0.75)
+transform = Transform3D(2.264, 0, 0, 0, 2.264, 0, 0, 0, 2.264, 0, -0.4, 0)
 
 [node name="MissilePod" parent="StubWings" unique_id=1661510436 instance=ExtResource("4_pod")]
 
 [node name="StableTrackingPoint" type="Marker3D" parent="." unique_id=418993551]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 
 [node name="GunMount" type="Node3D" parent="." unique_id=1971080532]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -1.15)
+transform = Transform3D(2.264, 0, 0, 0, 2.264, 0, 0, 0, 2.264, 0, -1.25, -2.6)
 
 [node name="GunYawPivot" type="Node3D" parent="GunMount" unique_id=1938765534]
 
@@ -154,7 +156,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, -1.15)
 [node name="Chaingun" parent="GunMount/GunYawPivot/GunPitchPivot" unique_id=928366294 instance=ExtResource("3_gun")]
 
 [node name="FlareDispenser" type="Node3D" parent="." unique_id=1954595563]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 3.5)
 script = ExtResource("5_flare")
 
 [node name="TargetingSystem" type="Node3D" parent="." unique_id=286974321]
@@ -174,10 +176,12 @@ target_position = Vector3(0, 0, -50)
 target_position = Vector3(0, -60, 0)
 
 [node name="GroundShadow" type="MeshInstance3D" parent="." unique_id=586650901]
+transform = Transform3D(2.264, 0, 0, 0, 1, 0, 0, 0, 2.264, 0, 0, 0)
 top_level = true
 mesh = SubResource("Mesh_Shadow")
 
 [node name="DownwashDust" type="GPUParticles3D" parent="." unique_id=772618470]
+transform = Transform3D(2.264, 0, 0, 0, 1, 0, 0, 0, 2.264, 0, 0, 0)
 top_level = true
 emitting = false
 amount = 32

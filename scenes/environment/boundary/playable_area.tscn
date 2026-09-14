@@ -3,22 +3,22 @@
 [ext_resource type="Script" uid="uid://b5qk3waa2wo3w" path="res://scripts/environment/playable_area.gd" id="1_nla4w"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_i5yqo"]
-size = Vector3(370, 80, 370)
+size = Vector3(1920, 160, 1920)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_roibc"]
-size = Vector3(430, 80, 430)
+size = Vector3(2000, 160, 2000)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_nla4w"]
-size = Vector3(520, 512, 10)
+size = Vector3(2100, 512, 10)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_022os"]
-size = Vector3(520, 512, 10)
+size = Vector3(2100, 512, 10)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_wh6cj"]
-size = Vector3(10, 512, 520)
+size = Vector3(10, 512, 2100)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_5hwd6"]
-size = Vector3(10, 512, 520)
+size = Vector3(10, 512, 2100)
 
 [node name="PlayableArea" type="Node3D" unique_id=100984454]
 script = ExtResource("1_nla4w")
@@ -30,7 +30,7 @@ collision_mask = 2
 monitorable = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="InnerSafeArea" unique_id=1919028066]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 80, 0)
 shape = SubResource("BoxShape3D_i5yqo")
 
 [node name="WarningBorder" type="Area3D" parent="." unique_id=460421800]
@@ -39,24 +39,24 @@ collision_mask = 2
 monitorable = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WarningBorder" unique_id=1137913381]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 80, 0)
 shape = SubResource("BoxShape3D_roibc")
 
 [node name="HardBoundary" type="StaticBody3D" parent="." unique_id=172620904]
 collision_mask = 0
 
 [node name="WallNorth" type="CollisionShape3D" parent="HardBoundary" unique_id=1771137829]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, -225)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, -1025)
 shape = SubResource("BoxShape3D_nla4w")
 
 [node name="WallSouth" type="CollisionShape3D" parent="HardBoundary" unique_id=668983455]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, 225)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, 1025)
 shape = SubResource("BoxShape3D_022os")
 
 [node name="WallWest" type="CollisionShape3D" parent="HardBoundary" unique_id=1333618008]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -225, 200, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1025, 200, 0)
 shape = SubResource("BoxShape3D_wh6cj")
 
 [node name="WallEast" type="CollisionShape3D" parent="HardBoundary" unique_id=1339733975]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 225, 200, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1025, 200, 0)
 shape = SubResource("BoxShape3D_5hwd6")

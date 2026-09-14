@@ -132,3 +132,46 @@ func _collect() -> void:
 		tw.tween_callback(queue_free)
 	else:
 		queue_free()
+
+## Aggregates excessive idle XP gems within proximity, conserving total value while capping entities.
+static func aggregate_excess_gems(tree: SceneTree, max_count: int = 50) -> int:
+	if not tree:
+		return 0
+	var gems := tree.get_nodes_in_group("xp_gems")
+	if gems.size() <= max_count:
+		return 0
+
+	var idle_gems: Array[XPGem] = []
+	for g in gems:
+		var gem := g as XPGem
+		if is_instance_valid(gem) and not gem.is_queued_for_deletion() and not gem._is_collected and gem.current_state == State.IDLE:
+			idle_gems.append(gem)
+
+	var merged_count: int = 0
+	var i := 0
+	while i < idle_gems.size() - 1 and (gems.size() - merged_count) > max_count:
+		var g1: XPGem = idle_gems[i]
+		if not is_instance_valid(g1) or g1._is_collected:
+			i += 1
+			continue
+
+		var best_dist: float = 30.0 # Proximity merge radius
+		var best_idx: int = -1
+		for j in range(i + 1, idle_gems.size()):
+			var g2: XPGem = idle_gems[j]
+			if is_instance_valid(g2) and not g2._is_collected:
+				var d: float = g1.global_position.distance_to(g2.global_position)
+				if d < best_dist:
+					best_dist = d
+					best_idx = j
+
+		if best_idx != -1:
+			var g2: XPGem = idle_gems[best_idx]
+			g1.xp_value += g2.xp_value
+			g1.scale = clamp(Vector3.ONE * (1.0 + log(float(g1.xp_value)) * 0.22), Vector3.ONE, Vector3.ONE * 2.2)
+			g2._is_collected = true
+			g2.queue_free()
+			merged_count += 1
+		i += 1
+
+	return merged_count

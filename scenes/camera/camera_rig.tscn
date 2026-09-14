@@ -22,4 +22,4 @@ physics_interpolation_mode = 2
 current = true
 fov = 50.0
 near = 0.2
-far = 300.0
+far = 750.0

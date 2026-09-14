@@ -12,12 +12,12 @@ units = Array[Dictionary]([{
 "cap_tag": "technical",
 "count": 2,
 "is_air": false,
-"offset": Vector3(3, 0, 0),
+"offset": Vector3(3.4499998, 0, 0),
 "scene_path": "res://scenes/enemies/ground_rocket_technical.tscn"
 }, {
 "cap_tag": "infantry",
 "count": 1,
 "is_air": false,
-"offset": Vector3(-3, 0, 1),
+"offset": Vector3(-3.4499998, 0, 1.15),
 "scene_path": "res://scenes/enemies/infantry_cluster.tscn"
 }])

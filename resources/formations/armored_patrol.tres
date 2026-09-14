@@ -20,6 +20,6 @@ units = Array[Dictionary]([{
 "cap_tag": "infantry",
 "count": 1,
 "is_air": false,
-"offset": Vector3(-4, 0, 2),
+"offset": Vector3(-4.6, 0, 2.3),
 "scene_path": "res://scenes/enemies/infantry_cluster.tscn"
 }])

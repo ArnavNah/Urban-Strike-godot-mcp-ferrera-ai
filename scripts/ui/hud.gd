@@ -15,9 +15,9 @@ extends Control
 @onready var level_label: Label = %LevelLabel
 @onready var salvage_label: Label = %SalvageLabel
 
-@onready var wave_label: Label = %WaveLabel
-@onready var wave_progress_label: Label = %WaveProgressLabel
-@onready var wave_banner: Label = %WaveBanner
+@onready var wave_label: Label = get_node_or_null("%WaveLabel") as Label
+@onready var wave_progress_label: Label = get_node_or_null("%WaveProgressLabel") as Label
+@onready var wave_banner: Label = get_node_or_null("%WaveBanner") as Label
 @onready var border_warning_banner: Control = %BorderWarningBanner
 @onready var border_warning_label: Label = %BorderWarningLabel
 
@@ -49,11 +49,34 @@ var mission_card: PanelContainer = null
 var mission_title_label: Label = null
 var mission_detail_label: Label = null
 var _mission_banner_timer: float = 0.0
+var _has_active_mission: bool = false
+var _active_mission_pos: Vector3 = Vector3.ZERO
+var _active_mission_title: String = ""
+var _current_mission_base_detail: String = ""
+
+var _damage_flash_enabled: bool = true
+var _damage_flash_intensity: float = 1.0
+var _reduced_flashing: bool = false
+var _high_contrast_indicators: bool = false
 
 func _ready() -> void:
+	_damage_flash_enabled = bool(SaveSystem.get_setting("damage_flash_enabled", true))
+	_damage_flash_intensity = float(SaveSystem.get_setting("damage_flash_intensity", 1.0))
+	_reduced_flashing = bool(SaveSystem.get_setting("reduced_flashing", false))
+	_high_contrast_indicators = bool(SaveSystem.get_setting("high_contrast_indicators", false))
+
 	_player = get_tree().get_first_node_in_group("player") as Node3D
+	# Smooth fade in for HUD elements on startup
+	modulate.a = 0.0
+	var hud_tween := create_tween()
+	hud_tween.tween_interval(0.3)
+	hud_tween.tween_property(self, "modulate:a", 1.0, 0.6)
 	if target_reticle:
 		target_reticle.visible = false
+	if heat_bar:
+		heat_bar.visible = false
+	if missile_bar:
+		missile_bar.visible = false
 	if overheat_warning:
 		overheat_warning.visible = false
 	if missile_warning_panel:
@@ -114,6 +137,8 @@ func _ready() -> void:
 			eb.mission_completed.connect(_on_mission_completed)
 		if eb.has_signal("mission_failed"):
 			eb.mission_failed.connect(_on_mission_failed)
+		if eb.has_signal("setting_changed"):
+			eb.setting_changed.connect(_on_setting_changed)
 
 	_setup_mission_card()
 
@@ -147,6 +172,14 @@ func _process(delta: float) -> void:
 
 	if altitude_label:
 		altitude_label.text = "ALT: %4.1f m" % _player.global_position.y
+
+	# Live mission objective distance readout
+	if _has_active_mission and is_instance_valid(mission_card) and mission_card.visible and is_instance_valid(mission_detail_label) and _mission_banner_timer <= 0.0:
+		if not _current_mission_base_detail.is_empty():
+			mission_detail_label.text = _current_mission_base_detail
+		elif is_instance_valid(_player):
+			var dist_m: float = _player.global_position.distance_to(_active_mission_pos)
+			mission_detail_label.text = "DISTANCE: %.0fm" % dist_m
 
 	# Update 3D projected screen reticle
 	_update_target_reticle()
@@ -220,7 +253,42 @@ func _draw() -> void:
 			var tip := edge_pos + dir_2d * 12.0
 			var side_a := edge_pos - dir_2d * 8.0 + Vector2(-dir_2d.y, dir_2d.x) * 8.0
 			var side_b := edge_pos - dir_2d * 8.0 - Vector2(-dir_2d.y, dir_2d.x) * 8.0
+			if _high_contrast_indicators:
+				var outline := PackedVector2Array([tip, side_a, side_b, tip])
+				draw_polyline(outline, Color(0.02, 0.04, 0.06, 0.95), 2.5)
 			draw_colored_polygon(PackedVector2Array([tip, side_a, side_b]), col)
+
+	# Draw active mission objective indicator
+	if _has_active_mission:
+		var obj_pos := _active_mission_pos + Vector3(0, 1.5, 0)
+		var obj_behind := cam.is_position_behind(obj_pos)
+		var obj_scr := cam.unproject_position(obj_pos)
+		var obj_offscreen := obj_behind or obj_scr.x < margin or obj_scr.x > (vp_rect.size.x - margin) or obj_scr.y < margin or obj_scr.y > (vp_rect.size.y - margin)
+		var obj_col := Color(0.2, 0.95, 0.85, 0.95)
+
+		if obj_offscreen:
+			var obj_dir_2d := -(obj_scr - vp_center).normalized() if obj_behind else (obj_scr - vp_center).normalized()
+			if obj_dir_2d.length_squared() < 0.01:
+				obj_dir_2d = Vector2.UP
+			var obj_edge := vp_center + obj_dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
+			var d_top := obj_edge + obj_dir_2d * 14.0
+			var d_bot := obj_edge - obj_dir_2d * 6.0
+			var d_l := obj_edge + Vector2(-obj_dir_2d.y, obj_dir_2d.x) * 9.0
+			var d_r := obj_edge - Vector2(-obj_dir_2d.y, obj_dir_2d.x) * 9.0
+			var d_pts := PackedVector2Array([d_top, d_r, d_bot, d_l])
+			if _high_contrast_indicators:
+				draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_colored_polygon(d_pts, obj_col)
+		else:
+			var rad := 12.0
+			var d_top := obj_scr + Vector2(0, -rad)
+			var d_r := obj_scr + Vector2(rad, 0)
+			var d_bot := obj_scr + Vector2(0, rad)
+			var d_l := obj_scr + Vector2(-rad, 0)
+			if _high_contrast_indicators:
+				draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), obj_col, 2.0)
+
 
 func _update_target_reticle() -> void:
 	if not target_reticle:
@@ -253,21 +321,31 @@ func _on_health_changed(current: float, maximum: float) -> void:
 		_health_tween.tween_property(health_bar, "value", current, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if health_label:
 		if current <= maximum * 0.30:
-			health_label.text = "CRITICAL: %d / %d" % [int(current), int(maximum)]
-			health_label.modulate = Color(1.0, 0.2, 0.2)
+			health_label.text = "HULL: %d / %d  [!] CRITICAL" % [int(current), int(maximum)]
+			health_label.modulate = Color(1.0, 0.20, 0.20)
+		elif current <= maximum * 0.50:
+			health_label.text = "HULL: %d / %d" % [int(current), int(maximum)]
+			health_label.modulate = Color(1.0, 0.65, 0.15)
 		else:
 			health_label.text = "HULL: %d / %d" % [int(current), int(maximum)]
-			health_label.modulate = Color(1.0, 1.0, 1.0)
+			health_label.modulate = Color(0.20, 0.85, 0.45)
 
 	if current < _prev_health and damage_vignette:
-		var vignette_alpha := 0.32
-		if current <= maximum * 0.30:
-			vignette_alpha = 0.55 # Intense emergency tell when critically damaged
-		damage_vignette.color = Color(0.9, 0.1, 0.1, vignette_alpha)
-		if _vignette_tween:
-			_vignette_tween.kill()
-		_vignette_tween = create_tween()
-		_vignette_tween.tween_property(damage_vignette, "color:a", 0.0, 0.45)
+		if not _damage_flash_enabled or _damage_flash_intensity <= 0.0:
+			damage_vignette.color.a = 0.0
+		else:
+			var vignette_alpha := 0.32 * _damage_flash_intensity
+			var fade_time := 0.45
+			if current <= maximum * 0.30:
+				vignette_alpha = (0.22 if _reduced_flashing else 0.55) * _damage_flash_intensity
+			if _reduced_flashing:
+				vignette_alpha = minf(vignette_alpha, 0.16)
+				fade_time = 0.65
+			damage_vignette.color = Color(0.88, 0.12, 0.12, vignette_alpha)
+			if _vignette_tween:
+				_vignette_tween.kill()
+			_vignette_tween = create_tween()
+			_vignette_tween.tween_property(damage_vignette, "color:a", 0.0, fade_time)
 
 	_prev_health = current
 
@@ -275,6 +353,7 @@ func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> vo
 	if heat_bar:
 		heat_bar.max_value = maximum
 		heat_bar.value = current
+		heat_bar.visible = current > 0.05
 	if overheat_warning:
 		overheat_warning.visible = is_overheated
 
@@ -282,33 +361,26 @@ func _update_missile_status_display() -> void:
 	if not missile_status:
 		return
 
-	var pips := ""
-	for i in range(_max_missiles):
-		if i < _missile_ammo:
-			pips += "▲ "
-		else:
-			pips += "△ "
-
 	if _missile_warning_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d  [%s]  [ ⚠ NO MISSILES ⚠ ]" % [_missile_ammo, _max_missiles, pips.strip_edges()]
-		missile_status.modulate = Color(1.0, 0.2, 0.2, 1.0)
+		missile_status.text = "MISSILES  %d / %d  NO MISSILES" % [_missile_ammo, _max_missiles]
+		missile_status.modulate = Color(1.0, 0.25, 0.25)
 		return
 
 	if _missile_ammo <= 0:
-		missile_status.text = "MISSILES  0 / %d  [%s]  [ EMPTY ]" % [_max_missiles, pips.strip_edges()]
-		missile_status.modulate = Color(0.85, 0.25, 0.25, 0.75) # Dim red
+		missile_status.text = "MISSILES  0 / %d  EMPTY" % _max_missiles
+		missile_status.modulate = Color(0.85, 0.35, 0.35)
 		return
 
-	var jam_suffix := " [EW JAMMED]" if _is_jammed else ""
+	var jam_suffix := "  EW JAMMED" if _is_jammed else ""
 	if _is_missile_locked:
-		missile_status.text = "MISSILES  %d / %d  [%s]  [ LOCKED - RMB ]" % [_missile_ammo, _max_missiles, pips.strip_edges()]
-		missile_status.modulate = Color(0.2, 1.0, 0.3, 1.0)
+		missile_status.text = "MISSILES  %d / %d  LOCKED" % [_missile_ammo, _max_missiles]
+		missile_status.modulate = Color(0.20, 0.85, 0.45)
 	elif _last_lock_progress > 0.05:
-		missile_status.text = "MISSILES  %d / %d  [%s]  [ LOCKING %d%%%s ]" % [_missile_ammo, _max_missiles, pips.strip_edges(), int(_last_lock_progress * 100.0), jam_suffix]
-		missile_status.modulate = Color(1.0, 0.4, 0.2) if _is_jammed else Color(1.0, 0.8, 0.2)
+		missile_status.text = "MISSILES  %d / %d  LOCKING %d%%%s" % [_missile_ammo, _max_missiles, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.modulate = Color(1.0, 0.50, 0.15) if _is_jammed else Color(1.0, 0.75, 0.20)
 	else:
-		missile_status.text = "MISSILES  %d / %d  [%s]  [ READY%s ]" % [_missile_ammo, _max_missiles, pips.strip_edges(), jam_suffix]
-		missile_status.modulate = Color(1.0, 0.5, 0.1) if _is_jammed else Color(0.85, 0.9, 0.95)
+		missile_status.text = "MISSILES  %d / %d  READY%s" % [_missile_ammo, _max_missiles, jam_suffix]
+		missile_status.modulate = Color(1.0, 0.55, 0.15) if _is_jammed else Color(0.85, 0.90, 0.95)
 
 func _on_missile_ammo_changed(current: int, maximum: int) -> void:
 	_missile_ammo = current
@@ -330,20 +402,23 @@ func _on_missile_lock_updated(progress: float, _target: Node3D, is_locked: bool)
 	_is_missile_locked = is_locked
 	if missile_bar:
 		missile_bar.value = progress * 100.0
+		missile_bar.visible = progress > 0.05
 	_update_missile_status_display()
 
 func _on_jammer_status_changed(is_jammed: bool, _count: int) -> void:
 	_is_jammed = is_jammed
 
-func _on_flares_updated(charges_left: int, max_charges: int, _is_ready: bool) -> void:
+func _on_flares_updated(charges_left: int, max_charges: int, is_ready: bool) -> void:
 	if flares_label:
-		var txt := "FLARES [X]: "
-		for i in range(max_charges):
-			if i < charges_left:
-				txt += "[◆] "
-			else:
-				txt += "[◇] "
-		flares_label.text = txt
+		if not is_ready and charges_left < max_charges:
+			flares_label.text = "FLARES: %d/%d  CHARGING" % [charges_left, max_charges]
+			flares_label.modulate = Color(1.0, 0.65, 0.15)
+		elif charges_left <= 0:
+			flares_label.text = "FLARES: 0/%d  DEPLETED" % max_charges
+			flares_label.modulate = Color(0.85, 0.35, 0.35)
+		else:
+			flares_label.text = "FLARES: %d/%d  [X]" % [charges_left, max_charges]
+			flares_label.modulate = Color(0.85, 0.90, 0.95)
 
 func _on_missile_warning(_source_pos: Vector3, is_active: bool) -> void:
 	if missile_warning_panel:
@@ -466,7 +541,7 @@ func _setup_mission_card() -> void:
 	add_child(mission_card)
 	mission_card.visible = false
 
-func _on_mission_started(_id: String, title: String, _desc: String, _pos: Vector3) -> void:
+func _on_mission_started(_id: String, title: String, _desc: String, pos: Vector3) -> void:
 	if not mission_card:
 		_setup_mission_card()
 	if mission_card:
@@ -474,10 +549,15 @@ func _on_mission_started(_id: String, title: String, _desc: String, _pos: Vector
 	if mission_title_label:
 		mission_title_label.text = title
 		mission_title_label.modulate = Color(0.22, 0.98, 0.82)
+	_current_mission_base_detail = "OBJECTIVE ACTIVE"
 	if mission_detail_label:
-		mission_detail_label.text = "IN PROGRESS"
+		mission_detail_label.text = _current_mission_base_detail
 		mission_detail_label.modulate = Color(1.0, 1.0, 1.0)
 	_mission_banner_timer = 0.0
+	_has_active_mission = true
+	_active_mission_pos = pos
+	_active_mission_title = title
+	queue_redraw()
 
 func _on_mission_updated(_id: String, title: String, detail_text: String, _progress: float) -> void:
 	if not mission_card:
@@ -487,9 +567,11 @@ func _on_mission_updated(_id: String, title: String, detail_text: String, _progr
 	if mission_title_label and _mission_banner_timer <= 0.0:
 		mission_title_label.text = title
 		mission_title_label.modulate = Color(0.22, 0.98, 0.82)
+	_current_mission_base_detail = detail_text
 	if mission_detail_label and _mission_banner_timer <= 0.0:
 		mission_detail_label.text = detail_text
 		mission_detail_label.modulate = Color(1.0, 0.85, 0.3)
+	queue_redraw()
 
 func _on_mission_completed(_id: String, title: String, reward_text: String) -> void:
 	if not mission_card:
@@ -503,6 +585,9 @@ func _on_mission_completed(_id: String, title: String, reward_text: String) -> v
 		mission_detail_label.text = reward_text
 		mission_detail_label.modulate = Color(1.0, 0.9, 0.4)
 	_mission_banner_timer = 3.5
+	_has_active_mission = false
+	_active_mission_pos = Vector3.ZERO
+	queue_redraw()
 
 func _on_mission_failed(_id: String, title: String, reason: String) -> void:
 	if not mission_card:
@@ -516,3 +601,20 @@ func _on_mission_failed(_id: String, title: String, reason: String) -> void:
 		mission_detail_label.text = reason if not reason.is_empty() else "TIME EXPIRED"
 		mission_detail_label.modulate = Color(0.85, 0.85, 0.85)
 	_mission_banner_timer = 3.0
+	_has_active_mission = false
+	_active_mission_pos = Vector3.ZERO
+	queue_redraw()
+
+func _on_setting_changed(key: String, val: Variant) -> void:
+	match key:
+		"damage_flash_enabled":
+			_damage_flash_enabled = bool(val)
+			if not _damage_flash_enabled and damage_vignette:
+				damage_vignette.color.a = 0.0
+		"damage_flash_intensity":
+			_damage_flash_intensity = float(val)
+		"reduced_flashing":
+			_reduced_flashing = bool(val)
+		"high_contrast_indicators":
+			_high_contrast_indicators = bool(val)
+			queue_redraw()

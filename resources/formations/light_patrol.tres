@@ -16,6 +16,6 @@ units = Array[Dictionary]([{
 "cap_tag": "buggy",
 "count": 1,
 "is_air": false,
-"offset": Vector3(3.5, 0, -2),
+"offset": Vector3(4.025, 0, -2.3),
 "scene_path": "res://scenes/enemies/ground_scout_buggy.tscn"
 }])

@@ -21,7 +21,7 @@ units = Array[Dictionary]([{
 "cap_tag": "scout",
 "count": 1,
 "is_air": true,
-"offset": Vector3(10, 2, -4),
+"offset": Vector3(11.5, 2.3, -4.6),
 "scene_path": "res://scenes/enemies/air_scout_helicopter.tscn"
 }])
 required_caps = {

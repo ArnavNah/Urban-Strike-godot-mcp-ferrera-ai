@@ -33,6 +33,46 @@ func _ready() -> void:
 			EventBus.missile_pickup_collected.connect(_on_missile_pickup_collected)
 		if EventBus.has_signal("xp_collected"):
 			EventBus.xp_collected.connect(_on_xp_collected)
+		if EventBus.has_signal("setting_changed"):
+			EventBus.setting_changed.connect(_on_setting_changed)
+
+	apply_volume_settings()
+
+func apply_volume_settings() -> void:
+	var master_vol: float = float(SaveSystem.get_setting("volume_master", 1.0))
+	var sfx_vol: float = float(SaveSystem.get_setting("volume_sfx", 1.0))
+	var music_vol: float = float(SaveSystem.get_setting("volume_music", 1.0))
+
+	# Update AudioServer buses if present
+	var master_idx := AudioServer.get_bus_index("Master")
+	if master_idx >= 0:
+		AudioServer.set_bus_volume_db(master_idx, linear_to_db(maxf(0.0001, master_vol)))
+		AudioServer.set_bus_mute(master_idx, master_vol <= 0.001)
+
+	for sfx_bus in ["SFX", "Effects"]:
+		var idx := AudioServer.get_bus_index(sfx_bus)
+		if idx >= 0:
+			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, sfx_vol)))
+			AudioServer.set_bus_mute(idx, sfx_vol <= 0.001)
+
+	var music_idx := AudioServer.get_bus_index("Music")
+	if music_idx >= 0:
+		AudioServer.set_bus_volume_db(music_idx, linear_to_db(maxf(0.0001, music_vol)))
+		AudioServer.set_bus_mute(music_idx, music_vol <= 0.001)
+
+	# Also directly scale internal stream players
+	var eff_sfx_db := linear_to_db(maxf(0.0001, master_vol * sfx_vol))
+	var is_muted := (master_vol * sfx_vol) <= 0.001
+	for p in [chaingun_player, alert_player, explosion_player]:
+		if is_instance_valid(p):
+			p.volume_db = eff_sfx_db
+			if is_muted:
+				p.volume_db = -80.0
+
+func _on_setting_changed(key: String, _val: Variant) -> void:
+	if key.begins_with("volume_"):
+		apply_volume_settings()
+
 
 func _on_heat_changed(_current_heat: float, _max_heat: float, is_overheated: bool) -> void:
 	if is_overheated and not _prev_overheated:

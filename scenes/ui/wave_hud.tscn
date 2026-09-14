@@ -1,24 +1,41 @@
-[gd_scene format=3 uid="uid://dg2m4v8k1r9x7"]
+[gd_scene format=3 uid="uid://dg2m4v8k1sax7"]
 
-[ext_resource type="Script" path="res://scripts/ui/wave_hud.gd" id="1_whud"]
+[ext_resource type="Script" uid="uid://bodok4gweackm" path="res://scripts/ui/wave_hud.gd" id="1_whud"]
+[ext_resource type="FontFile" uid="uid://oqpdnawjrvdg" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="2_2ku3c"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_HeaderBG"]
-bg_color = Color(0.08, 0.1, 0.13, 0.85)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_83yqy"]
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+bg_color = Color(0.06, 0.1, 0.14, 0.85)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.25, 0.35, 0.45, 0.8)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-expand_margin_left = 12.0
-expand_margin_top = 4.0
-expand_margin_right = 12.0
-expand_margin_bottom = 4.0
+border_color = Color(0.2, 0.45, 0.6, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
-[node name="WaveHUD" type="Control"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2ku3c"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.067, 0.094, 0.133, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2, 0.32, 0.44, 0.9)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="WaveHUD" type="Control" unique_id=1324483550]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -28,104 +45,167 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_whud")
 
-[node name="HeaderContainer" type="MarginContainer" parent="."]
+[node name="HeaderContainer" type="MarginContainer" parent="." unique_id=434194631]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -160.0
-offset_top = 16.0
+offset_top = 14.0
 offset_right = 160.0
-offset_bottom = 52.0
+offset_bottom = 48.0
 grow_horizontal = 2
 mouse_filter = 2
 
-[node name="Panel" type="PanelContainer" parent="HeaderContainer"]
+[node name="Panel" type="PanelContainer" parent="HeaderContainer" unique_id=2105866665]
 layout_mode = 2
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_HeaderBG")
+theme_override_styles/panel = SubResource("StyleBoxFlat_83yqy")
 
-[node name="HBox" type="HBoxContainer" parent="HeaderContainer/Panel"]
+[node name="HBox" type="HBoxContainer" parent="HeaderContainer/Panel" unique_id=1878192982]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 alignment = 1
 
-[node name="WaveNumberLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+[node name="WaveNumberLabel" type="Label" parent="HeaderContainer/Panel/HBox" unique_id=1609077020]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
-theme_override_font_sizes/font_size = 15
-text = "WAVE 1 / 10"
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
+theme_override_fonts/font = ExtResource("2_2ku3c")
+theme_override_font_sizes/font_size = 16
+text = "STAGE 1"
 horizontal_alignment = 1
 
-[node name="Sep1" type="Label" parent="HeaderContainer/Panel/HBox"]
+[node name="Sep1" type="Label" parent="HeaderContainer/Panel/HBox" unique_id=668904436]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.45, 0.5, 1)
-text = "|"
+theme_override_colors/font_color = Color(0.25, 0.45, 0.55, 0.6)
+text = "•"
 
-[node name="WaveTimerLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+[node name="WaveTimerLabel" type="Label" parent="HeaderContainer/Panel/HBox" unique_id=891870685]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 0.85, 1, 1)
-theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.92, 0.95, 0.96, 1)
+theme_override_fonts/font = ExtResource("2_2ku3c")
+theme_override_font_sizes/font_size = 16
 text = "0:24"
 horizontal_alignment = 1
 
-[node name="Sep2" type="Label" parent="HeaderContainer/Panel/HBox"]
+[node name="Sep2" type="Label" parent="HeaderContainer/Panel/HBox" unique_id=392921134]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.45, 0.5, 1)
-text = "|"
+theme_override_colors/font_color = Color(0.25, 0.45, 0.55, 0.6)
+text = "•"
 
-[node name="EnemyCountLabel" type="Label" parent="HeaderContainer/Panel/HBox"]
+[node name="EnemyCountLabel" type="Label" parent="HeaderContainer/Panel/HBox" unique_id=1545299439]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
-theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.96, 0.65, 0.14, 1)
+theme_override_fonts/font = ExtResource("2_2ku3c")
+theme_override_font_sizes/font_size = 16
 text = "HOSTILES: 0"
 horizontal_alignment = 1
 
-[node name="CenterNotifications" type="CenterContainer" parent="."]
+[node name="CenterNotifications" type="CenterContainer" parent="." unique_id=1487942553]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = -140.0
-offset_right = 300.0
-offset_bottom = -40.0
+offset_left = -220.0
+offset_top = -20.0
+offset_right = 220.0
+offset_bottom = 60.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="VBox" type="VBoxContainer" parent="CenterNotifications"]
+[node name="VBox" type="VBoxContainer" parent="CenterNotifications" unique_id=1133382094]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="CountdownLabel" type="Label" parent="CenterNotifications/VBox"]
+[node name="CountdownLabel" type="Label" parent="CenterNotifications/VBox" unique_id=1149460964]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.15, 1)
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 38
+theme_override_fonts/font = ExtResource("2_2ku3c")
+theme_override_font_sizes/font_size = 28
 text = "DEPLOYING IN 3"
 horizontal_alignment = 1
 
-[node name="TransitionBannerLabel" type="Label" parent="CenterNotifications/VBox"]
+[node name="TransitionBannerLabel" type="Label" parent="CenterNotifications/VBox" unique_id=1858640585]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 0.9, 1, 1)
+theme_override_colors/font_color = Color(0.9, 0.93, 0.94, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 32
+theme_override_fonts/font = ExtResource("2_2ku3c")
+theme_override_font_sizes/font_size = 20
 text = "WAVE 1"
 horizontal_alignment = 1
+
+[node name="OpeningMissionCard" type="PanelContainer" parent="." unique_id=1036829594]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -150.0
+offset_right = 210.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2ku3c")
+
+[node name="OpeningVBox" type="VBoxContainer" parent="OpeningMissionCard" unique_id=1723823326]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="OpNameLabel" type="Label" parent="OpeningMissionCard/OpeningVBox" unique_id=1692936321]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
+theme_override_font_sizes/font_size = 14
+text = "OPERATION URBAN SHIELD"
+horizontal_alignment = 1
+
+[node name="OpObjectiveLabel" type="Label" parent="OpeningMissionCard/OpeningVBox" unique_id=816072760]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.93, 0.94, 1)
+theme_override_font_sizes/font_size = 12
+text = "MISSION: SECURE METROPOLITAN AIRSPACE"
+horizontal_alignment = 1
+
+[node name="OpThreatLabel" type="Label" parent="OpeningMissionCard/OpeningVBox" unique_id=774098421]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.65, 0.14, 1)
+theme_override_font_sizes/font_size = 11
+text = "THREAT LEVEL: LOW  //  AIRSPACE PATROL"
+horizontal_alignment = 1
+
+[node name="BlackFade" type="ColorRect" parent="." unique_id=1305056452]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)

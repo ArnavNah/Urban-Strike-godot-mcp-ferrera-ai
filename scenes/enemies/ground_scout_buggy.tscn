@@ -25,27 +25,27 @@ weapon_type = 1
 damage_per_shot = 2.0
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_4ws1f"]
-size = Vector3(2, 1.2, 3.2)
+size = Vector3(2.3, 1.38, 3.68)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wrkmb"]
 albedo_color = Color(0.75, 0.55, 0.2, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_1fvd4"]
 material = SubResource("StandardMaterial3D_wrkmb")
-size = Vector3(1.8, 0.7, 3)
+size = Vector3(2.07, 0.80499995, 3.4499998)
 
 [sub_resource type="BoxMesh" id="BoxMesh_jj15u"]
 material = SubResource("StandardMaterial3D_wrkmb")
-size = Vector3(1, 0.5, 1.2)
+size = Vector3(1.15, 0.575, 1.38)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lih3t"]
 albedo_color = Color(0.15, 0.15, 0.15, 1)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_ely5p"]
 material = SubResource("StandardMaterial3D_lih3t")
-top_radius = 0.06
-bottom_radius = 0.06
-height = 1.2
+top_radius = 0.069
+bottom_radius = 0.069
+height = 1.3800001
 
 [node name="GroundScoutBuggy" type="CharacterBody3D" unique_id=798224009]
 collision_layer = 4
@@ -53,32 +53,32 @@ script = ExtResource("1_gw5ex")
 archetype = SubResource("Resource_qjn7s")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1238646720]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.69, 0)
 shape = SubResource("BoxShape3D_4ws1f")
 
 [node name="ChassisMesh" type="MeshInstance3D" parent="." unique_id=1914421757]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.46, 0)
 mesh = SubResource("BoxMesh_1fvd4")
 
 [node name="Turret" type="Node3D" parent="." unique_id=300942868]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.86249995, 0)
 
 [node name="TurretMesh" type="MeshInstance3D" parent="Turret" unique_id=2136976253]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2875, 0)
 mesh = SubResource("BoxMesh_jj15u")
 
 [node name="Barrel" type="Node3D" parent="Turret" unique_id=1803462233]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -0.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2875, -0.69)
 
 [node name="BarrelMesh" type="MeshInstance3D" parent="Turret/Barrel" unique_id=1856825877]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.6)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.69)
 mesh = SubResource("CylinderMesh_ely5p")
 
 [node name="Muzzle" type="Marker3D" parent="Turret/Barrel" unique_id=1923654324]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.38)
 
 [node name="ChargeLight" type="OmniLight3D" parent="Turret/Barrel" unique_id=1675115667]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.38)
 visible = false
 light_color = Color(1, 0.8, 0.2, 1)
-omni_range = 3.0
+omni_range = 3.45

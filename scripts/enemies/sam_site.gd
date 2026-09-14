@@ -11,7 +11,7 @@ enum State {
 	RELOADING
 }
 
-@export var max_health: float = 60.0
+@export var max_health: float = 150.0
 @export var threat_range: float = 85.0
 @export var degraded_threat_range: float = 60.0
 @export var base_lock_time: float = 1.4 # Radar active lock time
@@ -20,12 +20,14 @@ enum State {
 @export var missile_damage: float = 22.0 # GDD baseline
 @export var missile_scene: PackedScene
 @export var xp_reward: int = 25
+@export var arming_delay: float = 2.5
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
-var current_health: float = 60.0
+var current_health: float = 150.0
 var current_state: State = State.SEARCHING
 var is_alive: bool = true
+var _arming_timer: float = 2.5
 
 var _state_timer: float = 0.0
 var _player: Node3D = null
@@ -114,9 +116,12 @@ func _physics_process(delta: float) -> void:
 		var spin_speed: float = 4.0 if _radar_active else 0.8
 		radar_dish.rotate_y(spin_speed * step_delta)
 
+	if _arming_timer > 0.0:
+		_arming_timer -= step_delta
+
 	match current_state:
 		State.SEARCHING:
-			if dist <= effective_range and has_los:
+			if _arming_timer <= 0.0 and dist <= effective_range and has_los:
 				_transition_to(State.TRACKING)
 
 		State.TRACKING:
@@ -196,6 +201,8 @@ func _fire_missile() -> void:
 		var parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 		parent.add_child.call_deferred(missile)
 		missile.call_deferred("launch", spawn_pos, fire_dir, _player, false)
+		if CombatDirector.instance:
+			CombatDirector.instance.transfer_danger_to_projectile(self, missile, 4.0)
 
 func _check_los() -> bool:
 	if not is_instance_valid(_player):
@@ -208,11 +215,26 @@ func _check_los() -> bool:
 	return hit.is_empty()
 
 func _request_slot() -> bool:
+	if _arming_timer > 0.0:
+		return false
+
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+	if cam and not cam.is_position_in_frustum(global_position):
+		return false
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
-		var granted: bool = dir.request_attack_slot(self, false)
+		var granted: bool = dir.request_attack_permission(
+			self,
+			CombatDirector.TOKEN_COST_SAM_MISSILE,
+			false,
+			true, # is_heavy
+			true, # is_homing
+			CombatDirector.DANGER_COST_HOMING_MISSILE,
+			"sam"
+		)
 		_has_attack_slot = granted
 		return granted
 	_has_attack_slot = true
@@ -224,7 +246,7 @@ func _release_slot() -> void:
 		if not dir and CombatDirector.instance:
 			dir = CombatDirector.instance
 		if dir:
-			dir.release_attack_slot(self, false)
+			dir.release_attack_permission(self)
 	_has_attack_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

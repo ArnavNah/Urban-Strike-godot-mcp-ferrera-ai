@@ -125,15 +125,28 @@ func _process(delta: float) -> void:
 		emit_signal("wave_time_changed", elapsed_survival_time)
 
 func start_run() -> void:
-	current_state = State.ACTIVE_WAVE
-	_countdown_seconds = 0
-	emit_signal("deployment_countdown_changed", 0)
-	start_wave(1)
+	if opening_countdown_duration > 0:
+		current_state = State.DEPLOYMENT_COUNTDOWN
+		_countdown_seconds = opening_countdown_duration
+		emit_signal("deployment_countdown_changed", _countdown_seconds)
+		countdown_timer.wait_time = 1.0
+		countdown_timer.start()
+	else:
+		current_state = State.ACTIVE_WAVE
+		_countdown_seconds = 0
+		emit_signal("deployment_countdown_changed", 0)
+		start_wave(1)
 
 func _on_countdown_timer_timeout() -> void:
-	countdown_timer.stop()
-	if current_state != State.ACTIVE_WAVE:
-		start_wave(1)
+	_countdown_seconds -= 1
+	emit_signal("deployment_countdown_changed", _countdown_seconds)
+	if _countdown_seconds <= 0:
+		countdown_timer.stop()
+		if current_state != State.ACTIVE_WAVE:
+			start_wave(1)
+
+func is_deployment_active() -> bool:
+	return current_state == State.DEPLOYMENT_COUNTDOWN
 
 func start_wave(index: int) -> void:
 	current_wave_index = index
@@ -170,8 +183,20 @@ func start_wave(index: int) -> void:
 		if EventBus:
 			EventBus.wave_started.emit(current_wave_index, "ENDLESS OVERDRIVE // WAVE %d (2.0x SALVAGE)" % current_wave_index)
 
+	var wave_dur := 45.0
+	if spawn_director and spawn_director.has_method("get_current_wave_target"):
+		var w_target = spawn_director.get_current_wave_target()
+		if w_target and "duration" in w_target:
+			wave_dur = float(w_target.duration)
+	elif _current_wave_def:
+		wave_dur = _current_wave_def.duration
+	elif index > total_waves:
+		wave_dur = 35.0
+
+	wave_timer.wait_time = wave_dur
+	wave_timer.start()
+
 	if not spawn_director or not spawn_director.is_continuous_mode:
-		wave_timer.start()
 		spawn_timer.start()
 
 	emit_signal("wave_started", current_wave_index, total_waves)

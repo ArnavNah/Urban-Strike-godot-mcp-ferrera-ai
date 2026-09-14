@@ -56,6 +56,14 @@ func toggle_overlay() -> void:
 	if debug_root:
 		debug_root.visible = not debug_root.visible
 
+var _frame_times: Array[float] = []
+
+func _process(delta: float) -> void:
+	if delta > 0.0:
+		_frame_times.append(delta * 1000.0)
+		if _frame_times.size() > 120:
+			_frame_times.pop_front()
+
 func _update_telemetry() -> void:
 	if not is_inside_tree():
 		return
@@ -65,7 +73,18 @@ func _update_telemetry() -> void:
 	# 1. Performance & Runtime
 	if fps_val:
 		var fps := Engine.get_frames_per_second()
-		fps_val.text = "%d FPS" % fps
+		var p50: float = 16.6
+		var p95: float = 16.6
+		var p99: float = 16.6
+		if _frame_times.size() > 10:
+			var sorted := _frame_times.duplicate()
+			sorted.sort()
+			var n := sorted.size()
+			p50 = sorted[int(n * 0.50)]
+			p95 = sorted[min(int(n * 0.95), n - 1)]
+			p99 = sorted[min(int(n * 0.99), n - 1)]
+		var dc: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+		fps_val.text = "%d FPS (p50:%.1f p95:%.1f p99:%.1fms | DC:%d)" % [fps, p50, p95, p99, dc]
 		if fps >= 55:
 			fps_val.modulate = Color(0.3, 0.95, 0.5)
 		elif fps >= 30:
@@ -85,23 +104,59 @@ func _update_telemetry() -> void:
 		if active_target_val:
 			var living := sd.get_living_enemy_count()
 			var target := sd.get_target_active_count()
-			active_target_val.text = "%d / %d" % [living, target]
+			if sd.has_method("get_debug_telemetry"):
+				var telem := sd.get_debug_telemetry()
+				var vis: int = telem.get("visual_crowd", 0)
+				var v_max: int = telem.get("visual_target_max", 12)
+				active_target_val.text = "%d/%d nodes (Vis: %d/%d)" % [living, target, vis, v_max]
+			else:
+				active_target_val.text = "%d / %d" % [living, target]
 			active_target_val.modulate = Color(1.0, 0.4, 0.4) if living < target else Color(0.3, 0.9, 0.5)
 
 		if budget_val:
 			budget_val.text = "G: %3.0f | A: %3.0f" % [sd.continuous_ground_budget, sd.continuous_air_budget]
 
 		if stage_cap_val:
-			stage_cap_val.text = "Stage %d (Cap: %d)" % [sd.get_survival_stage(), sd.get_active_population_cap()]
+			if sd.has_method("get_debug_telemetry"):
+				var telem := sd.get_debug_telemetry()
+				stage_cap_val.text = "W%d %s (Sectors: %d,%d | Esc: %s)" % [
+					telem.get("wave", 1),
+					telem.get("encounter_state", "STREAMING"),
+					telem.get("primary_entry_sector", 0),
+					telem.get("secondary_entry_sector", 1),
+					str(telem.get("protected_escape_sectors", []))
+				]
+			else:
+				stage_cap_val.text = "Stage %d (Cap: %d)" % [sd.get_survival_stage(), sd.get_active_population_cap()]
 
 		if last_formation_val:
 			last_formation_val.text = sd.last_formation_name
 
-		if last_spawn_node_val:
+		var cd := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+		if not cd and CombatDirector.instance:
+			cd = CombatDirector.instance
+		if cd and last_spawn_node_val:
+			var c_telem: Dictionary = cd.get_debug_combat_telemetry()
+			last_spawn_node_val.text = "Tokens G:%d/%d A:%d/%d | Danger:%d/%d | Hvy:%d Hom:%d" % [
+				c_telem.get("ground_used", 0), c_telem.get("ground_max", 0),
+				c_telem.get("air_used", 0), c_telem.get("air_max", 0),
+				c_telem.get("danger_used", 0), c_telem.get("danger_max", 0),
+				c_telem.get("active_heavy_attacks", 0),
+				c_telem.get("active_homing_locks", 0)
+			]
+		elif last_spawn_node_val:
 			last_spawn_node_val.text = sd.last_spawn_source
 
 		if failed_spawns_val:
-			failed_spawns_val.text = "%d rejected" % sd.failed_spawn_attempts
+			var rej_info := "%d rej" % sd.failed_spawn_attempts
+			if cd:
+				var c_telem: Dictionary = cd.get_debug_combat_telemetry()
+				rej_info += " (Reclaimed L:%d D:%d | DPM:%.0f)" % [
+					c_telem.get("watchdog_reclaimed_leases", 0),
+					c_telem.get("watchdog_reclaimed_danger", 0),
+					c_telem.get("player_dpm", 0.0)
+				]
+			failed_spawns_val.text = rej_info
 
 	# 3. Enemy Breakdown
 	if EnemyRegistry.instance:

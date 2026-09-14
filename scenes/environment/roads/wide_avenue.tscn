@@ -6,11 +6,11 @@
 
 [sub_resource type="BoxMesh" id="BoxMesh_gruet"]
 material = ExtResource("1_sjdaq")
-size = Vector3(30, 0.12, 60)
+size = Vector3(20, 0.12, 60)
 
 [sub_resource type="BoxMesh" id="BoxMesh_fjn05"]
 material = ExtResource("2_0gyx0")
-size = Vector3(26, 0.12, 60)
+size = Vector3(16, 0.12, 60)
 
 [sub_resource type="BoxMesh" id="BoxMesh_go3v8"]
 material = ExtResource("3_244mx")
@@ -46,9 +46,9 @@ cast_shadow = 0
 multimesh = SubResource("MultiMesh_e7pve")
 
 [node name="LeftEdgeLine" type="MeshInstance3D" parent="." unique_id=2014324567]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.7, 0.3, 0)
 mesh = SubResource("BoxMesh_jk4a7")
 
 [node name="RightEdgeLine" type="MeshInstance3D" parent="." unique_id=878481882]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.7, 0.3, 0)
 mesh = SubResource("BoxMesh_tgolm")
