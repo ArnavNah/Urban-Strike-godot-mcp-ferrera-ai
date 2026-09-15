@@ -150,8 +150,11 @@ static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -
 				env_node.environment.fog_depth_end = 260.0
 				env_node.environment.volumetric_fog_enabled = false
 			var streamer := root.find_child("CityWorldStreamer", true, false)
-			if streamer and "full_detail_radius" in streamer:
-				streamer.full_detail_radius = detail_rad
+			if streamer:
+				if "full_detail_radius" in streamer:
+					streamer.full_detail_radius = detail_rad
+				if "hlod_radius" in streamer:
+					streamer.hlod_radius = 2 if preset_name.to_lower() == "low" else 3
 	if VfxPool.instance:
 		VfxPool.instance.max_active_explosions = max_explosions
 		VfxPool.instance.max_active_sparks = 6 if preset_name == "low" else 12
