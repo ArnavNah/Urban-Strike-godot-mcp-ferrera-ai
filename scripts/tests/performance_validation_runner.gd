@@ -18,6 +18,7 @@ var next_burst: float = 0.0
 var started: bool = false
 var completed: bool = false
 var loading_screen_captured: bool = false
+var loading_start: int = 0
 var vsync_enabled: bool = false
 var uncapped: bool = false
 
@@ -39,7 +40,7 @@ func _begin() -> void:
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true)
 	DisplayServer.window_move_to_foreground()
 	if not vsync_enabled:
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_MODE_DISABLED)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSyncMode.DISABLED)
 		if not uncapped:
 			Engine.max_fps = 60
 	loading_start = Time.get_ticks_usec()
