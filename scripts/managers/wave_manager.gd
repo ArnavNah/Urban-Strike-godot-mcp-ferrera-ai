@@ -66,8 +66,12 @@ func _ready() -> void:
 				spawn_director = group_sd
 
 	if autostart_run:
-		# Short frame delay to allow other battlefield systems to initialize
-		get_tree().create_timer(0.1, false).timeout.connect(start_run)
+		var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+		if streamer and not streamer.is_playable_ready:
+			streamer.playable_area_ready.connect(start_run, CONNECT_ONE_SHOT)
+		else:
+			# Short frame delay to allow other battlefield systems to initialize
+			get_tree().create_timer(0.1, false).timeout.connect(start_run)
 
 func _setup_timers() -> void:
 	if not wave_timer:

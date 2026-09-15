@@ -1,5 +1,5 @@
 class_name SpawnDirector
-extends Node
+extends Node3D
 
 ## GDD Section 11 & 13: Ten-wave escalation and procedural Threat Director.
 ## Manages ground/air threat budgets, active population caps, air corridors,
@@ -518,13 +518,14 @@ func _get_next_stream_interval(stage: int, is_behind_target: bool) -> float:
 
 		match encounter_state:
 			EncounterState.SURGE:
-				var s_mult: float = difficulty_profile.surge_spawn_mult if difficulty_profile else 1.35
-				return base_int / s_mult
+				var pressure_bonus: float = float(difficulty_profile.get("surge_pressure_bonus"))
+				var s_mult := maxf(1.0, 1.0 + pressure_bonus)
+				return maxf(0.15, base_int / s_mult)
 			EncounterState.RECOVERY:
-				var r_mult: float = difficulty_profile.recovery_spawn_mult if difficulty_profile else 0.30
-				return base_int / r_mult
+				var r_mult := maxf(0.05, float(difficulty_profile.get("recovery_spawn_mult")))
+				return maxf(0.15, base_int / r_mult)
 			_:
-				return base_int
+				return maxf(0.15, base_int)
 
 	# Legacy fallback for test 29 / vanilla EncounterConfig
 	if is_behind_target:
@@ -574,11 +575,13 @@ func _on_stream_timer_timeout() -> void:
 		_queue_deficit_reinforcement(stage, p_pos, randf_range(0.45, 0.75))
 
 	if stream_timer:
+		var next_interval: float
 		if current_living < p_band.x:
 			# Fast pacing (1.0 - 1.5s) to recover population debt quickly
-			stream_timer.wait_time = randf_range(1.0, 1.5)
+			next_interval = randf_range(1.0, 1.5)
 		else:
-			stream_timer.wait_time = _get_next_stream_interval(stage, is_behind_target)
+			next_interval = _get_next_stream_interval(stage, is_behind_target)
+		stream_timer.wait_time = maxf(0.15, next_interval)
 
 func _queue_deficit_reinforcement(stage: int, p_pos: Vector3, delay: float) -> void:
 	_pending_deficit_spawns.append({
@@ -689,6 +692,11 @@ func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger:
 	if not is_instance_valid(unit) or not is_instance_valid(parent):
 		if not res_id.is_empty():
 			release_reservation(res_id)
+		return
+	if not unit.transform.is_finite():
+		if not res_id.is_empty():
+			release_reservation(res_id)
+		unit.queue_free()
 		return
 	if is_first or not stagger:
 		parent.add_child.call_deferred(unit)
@@ -1225,7 +1233,9 @@ func apply_elite_modifier(enemy: Node3D) -> void:
 
 	if "salvage_value" in enemy:
 		enemy.salvage_value = int(enemy.salvage_value * 3)
-	if "xp_value" in enemy:
+	if "xp_reward" in enemy:
+		enemy.xp_reward = int(enemy.xp_reward * 3)
+	elif "xp_value" in enemy:
 		enemy.xp_value = int(enemy.xp_value * 3)
 
 func _process_continuous_survival(delta: float) -> void:
@@ -1301,7 +1311,7 @@ func _process_continuous_survival(delta: float) -> void:
 		diff_scale = float(gm.difficulty_scale)
 
 	continuous_ground_budget += base_ground_budget_rate * time_mult * state_mult * diff_scale * delta
-	if current_wave >= 6:
+	if current_wave >= 3:
 		continuous_air_budget += base_air_budget_rate * time_mult * state_mult * diff_scale * delta
 	else:
 		continuous_air_budget = 0.0
@@ -1555,12 +1565,14 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 
 	var req_rad: float = float(SEPARATION_RADII["air_default"]) if is_air else float(SEPARATION_RADII["ground_default"])
 
-	# 0. Query CityWorldStreamer for natural road sockets or elevated air corridors
+	# 0. Query CityWorldStreamer for natural road sockets or elevated air corridors.
+	# Respect the caller's distance band so continuous threats enter just outside view
+	# instead of appearing so far away that the battlefield feels empty.
 	var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer if is_inside_tree() else null
 	if is_instance_valid(streamer):
 		var cat := "air" if is_air else "ground"
-		var q_min := 160.0 if is_air else 90.0
-		var q_max := 230.0 if is_air else 160.0
+		var q_min := maxf(min_dist, 45.0 if is_air else 38.0)
+		var q_max := maxf(q_min + 8.0, max_dist)
 		var natural_cands := streamer.query_natural_spawn_candidates(player_pos, cat, q_min, q_max)
 		natural_cands.shuffle()
 		for cand in natural_cands:
@@ -1975,7 +1987,8 @@ func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
 	# 2. Multi-tier Fallback: Cheaper formation (Infantry Squad, staggered)
 	if continuous_ground_budget >= 25.0 and can_spawn_formation("infantry_squad"):
 		var s_pos := get_frustum_safe_spawn_pos(p_pos, 35.0, 55.0)
-		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
+		if not s_pos.is_finite() or not _spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos):
+			return false
 		var ang := randf() * TAU
 		var second_raw := s_pos + Vector3(cos(ang), 0.0, sin(ang)) * randf_range(8.5, 12.0)
 		var second_pos := get_clamped_formation_member_position(second_raw, [s_pos], 8.0, Vector3(cos(ang), 0.0, sin(ang)), false)
@@ -1997,7 +2010,8 @@ func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
 
 	if continuous_ground_budget >= 15.0:
 		var f_pos := get_frustum_safe_spawn_pos(p_pos, 32.0, 52.0)
-		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, f_pos)
+		if not f_pos.is_finite() or not _spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, f_pos):
+			return false
 		continuous_ground_budget -= 15.0
 		last_formation_name = "basic_fodder (Fallback)"
 		return true
@@ -2050,8 +2064,8 @@ func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
 		_record_formation("road_column")
 		return true
 
-	# Air Patrol (2 Scouts) available in Stage 1 & 2 (Wave 6+ only)
-	if current_wave >= 6 and continuous_air_budget >= 8.0 and can_spawn_formation("air_patrol") and get_active_air_count("scouts") + 2 <= cap_scout:
+	# Air Patrol (2 Scouts) becomes available once air threats enter the run.
+	if current_wave >= 3 and continuous_air_budget >= 8.0 and can_spawn_formation("air_patrol") and get_active_air_count("scouts") + 2 <= cap_scout:
 		var entry := get_air_corridor_entry(p_pos, 40.0, 65.0)
 		spawn_air_patrol(entry["position"], entry["heading"])
 		continuous_air_budget -= 8.0
@@ -2102,7 +2116,7 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 	# Minimum budget guarantee when below target count to prevent starving
 	if current_living < target_count:
 		continuous_ground_budget = maxf(continuous_ground_budget, 25.0)
-		if continuous_air_budget < 4.0 and stage >= 1 and current_wave >= 6:
+		if continuous_air_budget < 4.0 and stage >= 1 and current_wave >= 3:
 			continuous_air_budget = maxf(continuous_air_budget, 4.0)
 
 	# --- Data-driven profile path (Phase 10A) ---
@@ -2124,9 +2138,13 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		var max_mortar: int = int(target.get("max_mortar")) if target else cap_mortar
 		var max_heavy: int = int(target.get("max_heavy")) if target else 99
 		var max_med: int = int(target.get("max_medium_armored")) if target else 99
-		var max_air: int = int(target.get("max_air")) if target else (0 if current_wave < 6 else air_cap)
+		var max_air: int = int(target.get("max_air")) if target else (0 if current_wave < 3 else air_cap)
+		# Introduce one scout in wave 3 so the air state machine is part of normal
+		# play, then let authored wave caps take over from wave 6 onward.
+		if current_wave >= 3 and max_air <= 0:
+			max_air = 1
 
-		var can_spawn_air: bool = (current_wave >= 6) and (cur_air < max_air) and (air_living < air_cap) and (continuous_air_budget >= 4.0)
+		var can_spawn_air: bool = (current_wave >= 3) and (cur_air < max_air) and (air_living < air_cap) and (continuous_air_budget >= 4.0)
 		var can_spawn_ground: bool = (ground_living < ground_cap) and (continuous_ground_budget >= 15.0)
 
 		var spawn_air_now: bool = false
@@ -2301,7 +2319,9 @@ func _is_air_scene(scene: PackedScene) -> bool:
 	if not scene:
 		return false
 	var p := scene.resource_path.to_lower()
-	return "hunter" in p or "gunship" in p or "raider" in p or "air" in p
+	if "ground_" in p or "tank" in p or "infantry" in p or "turret" in p or "sam_" in p or "dummy" in p:
+		return false
+	return "hunter" in p or "gunship" in p or "raider" in p or "air" in p or "boss_archon" in p
 
 func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: float, forced_pos: Vector3 = Vector3.INF) -> Node3D:
 	if not scene:
@@ -2389,6 +2409,16 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 	parent.add_child.call_deferred(enemy)
 	_register_spawned_node(enemy)
 	return enemy
+
+func register_mission_enemy(enemy: Node3D) -> void:
+	# Mission targets share the same population bookkeeping and cleanup path as
+	# continuously spawned enemies without pausing or resetting the stream.
+	_register_spawned_node(enemy)
+
+func get_mission_spawn_position(is_air: bool, min_distance: float = 45.0, max_distance: float = 75.0) -> Dictionary:
+	var player := _get_player()
+	var player_pos := player.global_position if is_instance_valid(player) else Vector3.ZERO
+	return get_dynamic_encounter_spawn_point(is_air, player_pos, min_distance, max_distance)
 
 func _register_spawned_node(enemy: Node3D) -> void:
 	if not is_instance_valid(enemy):
@@ -3634,6 +3664,9 @@ func _try_spawn_authored_pickup() -> Node3D:
 # --- FORMATION SPAWNING IMPLEMENTATIONS ---
 
 func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3, stagger: bool = true) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("scouts") + 2 > cap_scout:
 		return spawned
@@ -3672,6 +3705,9 @@ func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3, stagger: bool = t
 	return spawned
 
 func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3, stagger: bool = true) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("rocket_raiders") + 1 > cap_raider or get_active_air_count("scouts") + 2 > cap_scout:
 		return spawned
@@ -3715,6 +3751,9 @@ func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3, stagger: bo
 	return spawned
 
 func spawn_reinforcement_drop(spawn_origin: Vector3, heading: Vector3, with_escort: bool = true) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("transports") + 1 > cap_transport:
 		return spawned
@@ -3763,6 +3802,9 @@ func spawn_reinforcement_drop(spawn_origin: Vector3, heading: Vector3, with_esco
 	return spawned
 
 func spawn_air_intercept(spawn_origin: Vector3, heading: Vector3, scout_count: int = 1) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("attack_gunships") + 1 > cap_gunship:
 		return spawned
@@ -3806,6 +3848,9 @@ func spawn_air_intercept(spawn_origin: Vector3, heading: Vector3, scout_count: i
 	return spawned
 
 func spawn_electronic_strike_group(spawn_origin: Vector3, heading: Vector3, with_scout: bool = false) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("jammers") + 1 > cap_jammer or get_active_air_count("attack_gunships") + 1 > cap_gunship:
 		return spawned
@@ -3862,6 +3907,9 @@ func spawn_electronic_strike_group(spawn_origin: Vector3, heading: Vector3, with
 	return spawned
 
 func spawn_elite_air_encounter(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	if get_active_air_count("ace_gunships") + 1 > cap_ace:
 		return spawned
@@ -3909,6 +3957,9 @@ func spawn_elite_air_encounter(spawn_origin: Vector3, heading: Vector3) -> Array
 	return spawned
 
 func spawn_combined_arms_formation(spawn_origin: Vector3, heading: Vector3) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 	var dir := heading.normalized()
@@ -3964,6 +4015,9 @@ func spawn_combined_arms_formation(spawn_origin: Vector3, heading: Vector3) -> A
 	return spawned
 
 func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count: int = 3, stagger: bool = true) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_origin.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 	var dir := approach_direction.normalized()
@@ -3996,6 +4050,9 @@ func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count
 	return spawned
 
 func spawn_sam_nest(center_pos: Vector3, with_radar: bool = false) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not center_pos.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 
@@ -4032,6 +4089,9 @@ func spawn_sam_nest(center_pos: Vector3, with_radar: bool = false) -> Array[Node
 	return spawned
 
 func spawn_two_direction_pincer(center_target: Vector3, distance: float = 65.0) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not center_target.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 
@@ -4067,6 +4127,9 @@ func spawn_two_direction_pincer(center_target: Vector3, distance: float = 65.0) 
 	return spawned
 
 func spawn_interceptor_pair(spawn_pos: Vector3, heading: Vector3) -> Array[Node3D]:
+	# A failed safe-placement query must not create non-finite transforms.
+	if not spawn_pos.is_finite():
+		return []
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 
@@ -4106,11 +4169,12 @@ func spawn_interceptor_pair(spawn_pos: Vector3, heading: Vector3) -> Array[Node3
 func _spawn_enemy(scene: PackedScene, player_pos: Vector3, altitude: float) -> void:
 	if not scene or not scene.can_instantiate():
 		return
+	var spawn_pos := get_frustum_safe_spawn_pos(player_pos, 32.0, 68.0)
+	if not spawn_pos.is_finite() or not is_finite(altitude):
+		return
 	var enemy: Node3D = scene.instantiate() as Node3D
 	if not enemy:
 		return
-
-	var spawn_pos := get_frustum_safe_spawn_pos(player_pos, 32.0, 68.0)
 	enemy.transform.origin = Vector3(spawn_pos.x, altitude, spawn_pos.z)
 	var parent := _get_spawn_parent()
 	parent.add_child.call_deferred(enemy)

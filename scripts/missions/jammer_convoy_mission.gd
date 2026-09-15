@@ -24,18 +24,24 @@ func start(director: Node) -> void:
 		return
 
 	var root := tree.current_scene
-	var spawn_pos := Vector3(0.0, 0.3, -190.0)
+	var spawn_pos := Vector3(0.0, 0.3, -70.0)
+	var spawner := _get_spawn_director(tree)
+	var player := tree.get_first_node_in_group("player") as Node3D
+	var player_pos := player.global_position if is_instance_valid(player) else Vector3.ZERO
 
-	# Try to find an authored ground entrance
-	if root:
+	# Use the director's validated road entry so the convoy arrives within the
+	# active combat ring and respects current spawn separation.
+	if spawner:
+		var spawn_data := spawner.get_authored_ground_spawn("road_column", player_pos, 45.0)
+		if bool(spawn_data.get("success", false)):
+			spawn_pos = spawn_data.get("position", spawn_pos)
+	elif root:
 		var entrance := root.get_node_or_null("GroundSpawnSources/RoadEntrance_North") as Marker3D
-		if not entrance:
-			entrance = root.get_node_or_null("GroundSpawnSources/IndustrialEntrance") as Marker3D
 		if entrance:
 			spawn_pos = entrance.global_position
 
 	target_position = spawn_pos
-	var parent: Node = root if root else tree.root
+	var parent: Node = _get_enemy_parent(tree)
 
 	# Spawn Jammer Vehicle
 	var jammer_scene: PackedScene = load("res://scenes/enemies/ground_jammer_vehicle.tscn")
@@ -47,9 +53,11 @@ func start(director: Node) -> void:
 		if j:
 			j.transform.origin = spawn_pos
 			j.add_to_group("jammers")
+			j.add_to_group("mission_jammers")
 			j.add_to_group("objectives")
 			j.add_to_group("enemies")
 			parent.add_child(j)
+			_register_mission_enemy(tree, j)
 			jammer_unit = j
 			target_node = j
 			target_position = j.global_position
@@ -57,13 +65,25 @@ func start(director: Node) -> void:
 	# Spawn 2 Escorts
 	var escort_scene: PackedScene = load("res://scenes/enemies/ground_scout_buggy.tscn")
 	if escort_scene:
-		for offset_x in [-6.0, 6.0]:
+		var escort_positions: Array[Vector3] = []
+		for offset_x in [-14.0, 14.0]:
+			var escort_pos := spawn_pos + Vector3(offset_x, 0.0, 10.0)
+			if spawner:
+				escort_pos = spawner.get_clamped_formation_member_position(
+					escort_pos, escort_positions, 10.0, (player_pos - spawn_pos).normalized(), false
+				)
+				if not spawner.is_spawn_position_clear(escort_pos, false, 10.0):
+					var fallback := spawner.get_mission_spawn_position(false, 45.0, 75.0)
+					if bool(fallback.get("success", false)):
+						escort_pos = fallback.get("position", escort_pos)
 			var escort := escort_scene.instantiate() as Node3D
 			if escort:
-				escort.transform.origin = spawn_pos + Vector3(offset_x, 0.0, 8.0)
+				escort.transform.origin = escort_pos
 				escort.add_to_group("enemies")
 				parent.add_child(escort)
+				_register_mission_enemy(tree, escort)
 				escort_units.append(escort)
+				escort_positions.append(escort_pos)
 
 	# Trigger immediate jammer state update
 	var eb: Node = EventBus if is_instance_valid(EventBus) else (tree.root.get_node_or_null("EventBus") if tree else null)

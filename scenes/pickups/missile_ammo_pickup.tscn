@@ -48,14 +48,17 @@ shape = SubResource("CylinderShape3D_12uyy")
 
 [node name="CrateBase" type="MeshInstance3D" parent="VisualRoot" unique_id=1742836052]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.32, 0)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_qlkio")
 
 [node name="CrateLid" type="MeshInstance3D" parent="VisualRoot" unique_id=34551660]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66, 0)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_ty2vv")
 
 [node name="MissileStripe" type="MeshInstance3D" parent="VisualRoot" unique_id=1484600511]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0, 0.73, 0)
+cast_shadow = 0
 mesh = SubResource("CylinderMesh_iww5q")
 
 [node name="BeaconLight" type="OmniLight3D" parent="VisualRoot" unique_id=297457086]

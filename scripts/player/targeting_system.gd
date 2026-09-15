@@ -19,19 +19,31 @@ extends Node3D
 @export var persistence_score_bonus: float = 0.35
 @export var switch_score_threshold_ratio: float = 0.15
 
+const ACQUISITION_INTERVAL: float = 0.12 # ~8.33 Hz full searches per second (in 5-10 Hz budget)
+const MAX_RAYCAST_CANDIDATES: int = 6   # Raycast limited to top scoring candidates only
+const LOS_LOST_GRACE_TIME: float = 0.35 # Retain lock briefly across small poles/props
+
 var current_target: Node3D = null
 var is_manual_aim: bool = false
 var manual_aim_point: Vector3 = Vector3.ZERO
 
 var _manual_settle_timer: float = 0.0
 var _stickiness_timer: float = 0.0
+var _acquisition_timer: float = 0.0
+var _los_break_timer: float = 0.0
 var _cached_candidate_count: int = 0
 var _current_target_has_los: bool = false
+var _last_raycast_count: int = 0
+var _total_acquisitions_count: int = 0
+var _total_raycasts_count: int = 0
 
 signal target_changed(new_target: Node3D)
 signal manual_aim_toggled(is_manual: bool)
 
 func _physics_process(delta: float) -> void:
+	if not is_inside_tree() or not get_world_3d():
+		return
+
 	if _manual_settle_timer > 0.0:
 		_manual_settle_timer -= delta
 		if _manual_settle_timer <= 0.0:
@@ -40,11 +52,48 @@ func _physics_process(delta: float) -> void:
 	if _stickiness_timer > 0.0:
 		_stickiness_timer -= delta
 
-	_update_auto_target()
+	# Immediate target validation: if current target dies or leaves world bounds, drop immediately
+	if current_target != null:
+		if not _is_target_valid_basic(current_target):
+			_clear_target()
+			_acquisition_timer = 0.0 # Trigger immediate re-acquisition
+
+	# Throttled full target acquisition (5-10 Hz)
+	if _acquisition_timer > 0.0:
+		_acquisition_timer -= delta
+
+	if _acquisition_timer <= 0.0:
+		_acquisition_timer = ACQUISITION_INTERVAL
+		_update_auto_target()
+
+func _is_target_valid_basic(target: Node3D) -> bool:
+	if not is_instance_valid(target) or target.is_queued_for_deletion():
+		return false
+	if "is_alive" in target and not target.is_alive:
+		return false
+
+	var gun_origin: Vector3 = to_global(Vector3(0.0, -0.4, -1.2))
+	var target_pos: Vector3 = _get_target_center(target)
+	var dist: float = gun_origin.distance_to(target_pos)
+	if dist > (acquisition_range + hysteresis_dist_threshold) or dist < 0.5:
+		return false
+
+	var local_to_target: Vector3 = to_local(target_pos)
+	var yaw: float = atan2(-local_to_target.x, -local_to_target.z)
+	var flat_dist: float = Vector2(local_to_target.x, local_to_target.z).length()
+	var pitch: float = atan2(local_to_target.y, flat_dist)
+
+	if max_yaw_arc_deg < 179.9 and absf(yaw) > deg_to_rad(max_yaw_arc_deg) + 0.08:
+		return false
+	if pitch < deg_to_rad(min_pitch_deg) - 0.08 or pitch > deg_to_rad(max_pitch_deg) + 0.08:
+		return false
+
+	return true
 
 func trigger_manual_aim(world_point: Vector3) -> void:
 	manual_aim_point = world_point
 	_manual_settle_timer = manual_override_settle_time
+	_acquisition_timer = 0.0
 	if not is_manual_aim:
 		_set_manual_aim(true)
 
@@ -57,11 +106,23 @@ func _set_manual_aim(manual: bool) -> void:
 			eb.emit_signal("manual_aim_state_changed", is_manual_aim)
 
 func is_jammed() -> bool:
-	var jammers := get_tree().get_nodes_in_group("jammers")
-	for j in jammers:
-		if is_instance_valid(j) and not (j as Node).is_queued_for_deletion():
-			if not ("is_alive" in j) or j.is_alive:
-				return true
+	var jammers: Array = get_tree().get_nodes_in_group("jammers")
+	for jammer in jammers:
+		var j := jammer as Node3D
+		if not is_instance_valid(j) or j.is_queued_for_deletion():
+			continue
+		if "is_alive" in j and not j.is_alive:
+			continue
+
+		# The active convoy mission disrupts targeting until its objective unit is
+		# destroyed. Ambient jammer enemies only affect the player within range.
+		if j.is_in_group("mission_jammers"):
+			return true
+		var effect_range: float = 90.0
+		if "jammer_effect_range" in j:
+			effect_range = maxf(1.0, float(j.jammer_effect_range))
+		if global_position.distance_to(j.global_position) <= effect_range:
+			return true
 	return false
 
 ## Computes target position with projectile lead prediction based on target velocity.
@@ -104,24 +165,31 @@ func _get_target_center(target_node: Node3D) -> Vector3:
 	return target_node.global_position + Vector3(0.0, y_off, 0.0)
 
 func _update_auto_target() -> void:
+	if not is_inside_tree() or not get_world_3d():
+		return
+
+	_total_acquisitions_count += 1
 	var space := get_world_3d().direct_space_state
 	var player_node := get_parent() as CollisionObject3D
 	var player_rid: RID = player_node.get_rid() if player_node else RID()
 
 	var gun_origin: Vector3 = to_global(Vector3(0.0, -0.4, -1.2))
 
-	# 1. Gather all living enemies in range (EnemyRegistry spatial query + group fallback)
+	# 1. Gather all living enemies in range (EnemyRegistry spatial hash query + fallback)
+	var search_range: float = acquisition_range + (hysteresis_dist_threshold if is_instance_valid(current_target) else 0.0)
 	var candidate_enemies: Array[Node3D] = []
 	if EnemyRegistry.instance and is_instance_valid(EnemyRegistry.instance) and not EnemyRegistry.instance.is_queued_for_deletion():
-		candidate_enemies = EnemyRegistry.instance.get_enemies_in_radius(gun_origin, acquisition_range)
+		candidate_enemies = EnemyRegistry.instance.get_enemies_in_radius(gun_origin, search_range)
+	else:
+		var raw_nodes := get_tree().get_nodes_in_group("enemies")
+		for n in raw_nodes:
+			var e := n as Node3D
+			if is_instance_valid(e):
+				candidate_enemies.append(e)
 
-	var raw_nodes := get_tree().get_nodes_in_group("enemies")
-	for n in raw_nodes:
-		var e := n as Node3D
-		if is_instance_valid(e) and not candidate_enemies.has(e):
-			candidate_enemies.append(e)
-
-	var valid_candidates: Array[Dictionary] = []
+	# 2. Fast candidate pre-filtering (Zero raycasts performed here)
+	var prefiltered: Array[Dictionary] = []
+	var total_alive_in_arc: int = 0
 
 	for enemy in candidate_enemies:
 		if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
@@ -135,10 +203,13 @@ func _update_auto_target() -> void:
 
 		var target_pos: Vector3 = _get_target_center(enemy)
 		var dist: float = gun_origin.distance_to(target_pos)
-		if dist > acquisition_range or dist < 0.5:
+
+		var is_cur: bool = (enemy == current_target)
+		var allowed_dist: float = acquisition_range + (hysteresis_dist_threshold if is_cur else 0.0)
+		if dist > allowed_dist or dist < 0.5:
 			continue
 
-		# 2. Check gun allowed aiming arc using accurate to_local transform
+		# Gun allowed aiming arc check
 		var local_to_target: Vector3 = to_local(target_pos)
 		var yaw: float = atan2(-local_to_target.x, -local_to_target.z)
 		var flat_dist: float = Vector2(local_to_target.x, local_to_target.z).length()
@@ -149,9 +220,66 @@ func _update_auto_target() -> void:
 		if pitch < deg_to_rad(min_pitch_deg) - 0.005 or pitch > deg_to_rad(max_pitch_deg) + 0.005:
 			continue
 
-		# 3. Raycast Line of Sight check (World Layer 1 blocks LoS)
-		# Exclude both player and the target enemy itself so the enemy never occludes itself
-		var ray_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(gun_origin, target_pos, 1)
+		total_alive_in_arc += 1
+		prefiltered.append({
+			"node": enemy,
+			"dist": dist,
+			"yaw": yaw,
+			"pos": target_pos,
+			"is_cur": is_cur
+		})
+
+	_cached_candidate_count = total_alive_in_arc
+
+	if prefiltered.is_empty():
+		_last_raycast_count = 0
+		_current_target_has_los = false
+		_los_break_timer = 0.0
+		_clear_target()
+		return
+
+	# 3. Pre-score all geometrically valid candidates BEFORE raycasting
+	for c in prefiltered:
+		var node: Node3D = c["node"] as Node3D
+		c["score"] = _calculate_candidate_score(node, c["dist"], c["yaw"], total_alive_in_arc)
+
+	# 4. Sort candidates descending by preliminary score
+	prefiltered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a["score"] > b["score"]
+	)
+
+	# 5. Limit candidates for raycasting to top MAX_RAYCAST_CANDIDATES
+	var raycast_candidates: Array[Dictionary] = []
+	var cur_included: bool = false
+
+	var limit: int = mini(prefiltered.size(), MAX_RAYCAST_CANDIDATES)
+	for i in range(limit):
+		var cand: Dictionary = prefiltered[i]
+		raycast_candidates.append(cand)
+		if cand["is_cur"]:
+			cur_included = true
+
+	# Ensure current target is tested if present in prefiltered
+	if not cur_included and is_instance_valid(current_target):
+		for cand in prefiltered:
+			if cand["is_cur"]:
+				raycast_candidates.append(cand)
+				break
+
+	# 6. Perform LoS raycasts ONLY on the limited candidate subset
+	_last_raycast_count = raycast_candidates.size()
+	_total_raycasts_count += _last_raycast_count
+
+	var valid_candidates: Array[Dictionary] = []
+	var cur_target_los_clean: bool = false
+	var cur_target_score: float = -INF
+
+	for c in raycast_candidates:
+		var enemy: Node3D = c["node"] as Node3D
+		var target_pos: Vector3 = c["pos"]
+		var score: float = c["score"]
+
+		var ray_query := PhysicsRayQueryParameters3D.create(gun_origin, target_pos, 1)
 		var excludes: Array[RID] = []
 		if player_rid.is_valid():
 			excludes.append(player_rid)
@@ -162,48 +290,58 @@ func _update_auto_target() -> void:
 		ray_query.exclude = excludes
 
 		var hit: Dictionary = space.intersect_ray(ray_query)
-		if hit.is_empty() or hit.get("collider") == enemy:
-			valid_candidates.append({
-				"node": enemy,
-				"dist": dist,
-				"yaw": yaw
-			})
+		var clear_los: bool = hit.is_empty() or hit.get("collider") == enemy
 
-	_cached_candidate_count = valid_candidates.size()
+		if clear_los:
+			valid_candidates.append(c)
+			if c["is_cur"]:
+				cur_target_los_clean = true
+				cur_target_score = score
+		elif c["is_cur"]:
+			# LoS blocked for current target: check grace period
+			if _los_break_timer < LOS_LOST_GRACE_TIME:
+				cur_target_score = score * 0.85
+				c["score"] = cur_target_score
+				valid_candidates.append(c)
 
-	# 4. Score all candidates with Proximity, Mission-Aware & Density-Aware rules
+	# Update LoS grace state for current target
+	if cur_target_los_clean:
+		_los_break_timer = 0.0
+		_current_target_has_los = true
+	elif is_instance_valid(current_target):
+		_los_break_timer += ACQUISITION_INTERVAL
+		if _los_break_timer < LOS_LOST_GRACE_TIME:
+			_current_target_has_los = true
+		else:
+			_current_target_has_los = false
+			cur_target_score = -INF
+	else:
+		_current_target_has_los = false
+		_los_break_timer = 0.0
+
+	# 7. Select best candidate
 	var best_candidate: Node3D = null
 	var best_score: float = -INF
-	var current_target_score: float = -INF
 
 	for c in valid_candidates:
-		var node: Node3D = c["node"] as Node3D
-		var score: float = _calculate_candidate_score(node, c["dist"], c["yaw"], _cached_candidate_count)
-		c["score"] = score
-
-		if node == current_target:
-			current_target_score = score
-
+		var score: float = c["score"]
 		if score > best_score:
 			best_score = score
-			best_candidate = node
+			best_candidate = c["node"] as Node3D
 
-	# 5. Target selection with persistence, stickiness, and hysteresis
-	if is_instance_valid(current_target) and current_target_score > -INF:
-		_current_target_has_los = true
-
+	# 8. Target selection with persistence, stickiness, and hysteresis
+	if is_instance_valid(current_target) and cur_target_score > -INF:
 		var req_multiplier: float = 1.0 + switch_score_threshold_ratio
 		if _stickiness_timer > 0.0:
 			req_multiplier += 0.15 # Stronger resistance while sticky
 
 		if best_candidate != null and best_candidate != current_target:
-			if best_score > current_target_score * req_multiplier:
+			if best_score > cur_target_score * req_multiplier:
 				_set_current_target(best_candidate)
 				_stickiness_timer = target_stickiness_time
 		return
 
 	# No valid current target with LoS
-	_current_target_has_los = false
 	if best_candidate != null:
 		_set_current_target(best_candidate)
 		_stickiness_timer = target_stickiness_time
@@ -354,3 +492,12 @@ func get_candidate_count() -> int:
 
 func has_los_to_current() -> bool:
 	return _current_target_has_los
+
+func get_last_raycast_count() -> int:
+	return _last_raycast_count
+
+func get_total_acquisitions() -> int:
+	return _total_acquisitions_count
+
+func get_total_raycasts() -> int:
+	return _total_raycasts_count

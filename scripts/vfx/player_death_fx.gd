@@ -10,6 +10,7 @@ extends Node3D
 @onready var flash_light: OmniLight3D = $FlashLight
 
 func _ready() -> void:
+	SaveSystem._apply_particle_budget(self, SaveSystem.low_particles)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	if flash_light:

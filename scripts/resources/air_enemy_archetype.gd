@@ -30,7 +30,7 @@ enum WeaponType {
 @export_category("Survivability")
 @export var max_health: float = 30.0
 @export var salvage_reward: int = 40
-@export var xp_reward: int = 40
+@export var xp_reward: int = 12
 
 @export_category("Flight Mobility")
 @export var cruise_speed: float = 28.0

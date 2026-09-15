@@ -18,6 +18,9 @@ var air_enemies: Array[Node3D] = []
 var _spatial_grid: Dictionary = {}
 var _enemy_cells: Dictionary = {} # Node3D -> Vector2i
 var _enemy_air_status: Dictionary = {} # Node3D -> bool
+var _cleanup_timer: float = 0.0
+var _update_slice_index: int = 0
+const SLICE_SIZE: int = 15
 
 func _enter_tree() -> void:
 	instance = self
@@ -90,7 +93,7 @@ func update_enemy_position(enemy: Node3D) -> void:
 		_remove_from_cell(enemy, old_cell_val as Vector2i)
 		_insert_into_cell(enemy, new_cell)
 
-func get_enemies_in_radius(origin: Vector3, radius: float) -> Array[Node3D]:
+func get_enemies_in_radius(origin: Vector3, radius: float, max_results: int = 0) -> Array[Node3D]:
 	var results: Array[Node3D] = []
 	var radius_sq := radius * radius
 
@@ -118,6 +121,8 @@ func get_enemies_in_radius(origin: Vector3, radius: float) -> Array[Node3D]:
 				if d_sq <= radius_sq:
 					if not results.has(enemy):
 						results.append(enemy)
+						if max_results > 0 and results.size() >= max_results:
+							return results
 
 	return results
 
@@ -195,12 +200,30 @@ func _clean_dead_references() -> void:
 			valid_air.append(e)
 	air_enemies = valid_air
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	# Periodic spatial refresh of mobile enemies
-	_clean_dead_references()
-	for enemy in all_enemies:
-		if is_instance_valid(enemy) and enemy.is_inside_tree():
-			update_enemy_position(enemy)
+	_cleanup_timer -= delta
+	if _cleanup_timer <= 0.0:
+		_cleanup_timer = 1.0 # 1 Hz cleanup sweep fallback; unregister_enemy handles immediate unregistration
+		_clean_dead_references()
+
+	var count := all_enemies.size()
+	if count == 0:
+		return
+
+	# Rotating batch update: refresh SLICE_SIZE enemies per frame
+	# 60 enemies with SLICE_SIZE=15 gets fully refreshed every 4 frames (15 Hz)
+	var end_idx := mini(_update_slice_index + SLICE_SIZE, count)
+	for i in range(_update_slice_index, end_idx):
+		if i < all_enemies.size():
+			var enemy := all_enemies[i]
+			if is_instance_valid(enemy) and enemy.is_inside_tree():
+				update_enemy_position(enemy)
+
+	if end_idx >= count:
+		_update_slice_index = 0
+	else:
+		_update_slice_index = end_idx
 
 ## Static helper to extract Phase 10A archetype metadata from any enemy node
 static func get_enemy_metadata(enemy: Node) -> Dictionary:

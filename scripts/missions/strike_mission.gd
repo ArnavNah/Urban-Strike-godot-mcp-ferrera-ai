@@ -84,6 +84,29 @@ func cleanup() -> void:
 	target_node = null
 
 
+func _get_spawn_director(tree: SceneTree) -> SpawnDirector:
+	if not tree:
+		return null
+	for node in tree.get_nodes_in_group("spawn_director"):
+		if is_instance_valid(node) and not node.is_queued_for_deletion():
+			return node as SpawnDirector
+	return null
+
+func _get_enemy_parent(tree: SceneTree) -> Node:
+	if tree and tree.current_scene:
+		var container := tree.current_scene.get_node_or_null("EnemyContainer")
+		if not container:
+			container = tree.current_scene.find_child("EnemyContainer", true, false)
+		if container:
+			return container
+		return tree.current_scene
+	return tree.root if tree else null
+
+func _register_mission_enemy(tree: SceneTree, enemy: Node3D) -> void:
+	var spawner := _get_spawn_director(tree)
+	if spawner and is_instance_valid(enemy):
+		spawner.register_mission_enemy(enemy)
+
 func _get_active_node_in_group(tree: SceneTree, group_name: String) -> Node:
 	var nodes: Array = tree.get_nodes_in_group(group_name)
 	for i in range(nodes.size() - 1, -1, -1):

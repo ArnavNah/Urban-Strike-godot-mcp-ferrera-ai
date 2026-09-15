@@ -45,6 +45,7 @@ rings = 1
 
 [node name="Trunk" type="MeshInstance3D" parent="Intact" unique_id=496304907]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+cast_shadow = 0
 mesh = SubResource("CylinderMesh_1njt3")
 
 [node name="LowerCrown" type="MeshInstance3D" parent="Intact" unique_id=1732787338]

@@ -17,6 +17,7 @@ var _has_exploded: bool = false
 
 func _ready() -> void:
 	add_to_group("homing_missiles")
+	SaveSystem._apply_particle_budget(self, SaveSystem.low_particles)
 
 func launch(start_pos: Vector3, initial_dir: Vector3, missile_target: Node3D, from_player: bool = true) -> void:
 	global_position = start_pos

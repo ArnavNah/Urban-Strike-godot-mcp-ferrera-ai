@@ -115,7 +115,7 @@ func _buy_insurance() -> void:
 		_update_ui()
 
 func _on_deploy_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/battlefield/battlefield.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 
 func _on_menu_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")

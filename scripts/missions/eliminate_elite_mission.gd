@@ -25,18 +25,21 @@ func start(director: Node) -> void:
 
 	var root := tree.current_scene
 	var spawn_pos := Vector3(45.0, 18.0, -45.0)
+	var spawner := _get_spawn_director(tree)
 
-	# Locate air spawn source or objective marker if available
-	if root:
-		var marker := root.get_node_or_null("AirSpawnSources/AirSpawn_North") as Marker3D
-		if not marker:
-			marker = root.get_node_or_null("ObjectiveLocations/MilitaryObjective") as Marker3D
+	# Use the same validated offscreen corridor as the continuous air director.
+	if spawner:
+		var spawn_data := spawner.get_mission_spawn_position(true, 55.0, 85.0)
+		if bool(spawn_data.get("success", false)):
+			spawn_pos = spawn_data.get("position", spawn_pos)
+	elif root:
+		var marker := root.get_node_or_null("AirSpawnSources/AirEntry_North") as Marker3D
 		if marker:
 			spawn_pos = marker.global_position
-			spawn_pos.y = maxf(spawn_pos.y, 18.0)
+	spawn_pos.y = maxf(spawn_pos.y, 18.0)
 
 	target_position = spawn_pos
-	var parent: Node = root if root else tree.root
+	var parent: Node = _get_enemy_parent(tree)
 
 	# Check for existing ace gunship or spawn one
 	var existing_ace: Node3D = null
@@ -65,6 +68,7 @@ func start(director: Node) -> void:
 				spawned.add_to_group("enemies")
 				spawned.add_to_group("objectives")
 				parent.add_child(spawned)
+				_register_mission_enemy(tree, spawned)
 				elite_unit = spawned
 				target_node = spawned
 				target_position = spawned.global_position

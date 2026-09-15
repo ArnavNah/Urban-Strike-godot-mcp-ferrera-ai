@@ -94,6 +94,16 @@ var _smoothed_throttle: float = 0.0
 var _smoothed_strafe: float = 0.0
 
 # Node references
+static var instance: PlayerHelicopter = null
+var _magnet_fallback_timer: float = 0.0
+
+func _enter_tree() -> void:
+	instance = self
+
+func _exit_tree() -> void:
+	if instance == self:
+		instance = null
+
 @onready var flight_tilt_pivot: Node3D = $FlightTiltPivot
 @onready var visuals: Node3D = $FlightTiltPivot/Visuals
 @onready var main_rotor: Node3D = $FlightTiltPivot/Visuals/MainRotor
@@ -141,6 +151,10 @@ func _ready() -> void:
 		if not xp_magnet_area.area_entered.is_connected(_on_xp_magnet_area_entered):
 			xp_magnet_area.area_entered.connect(_on_xp_magnet_area_entered)
 	if xp_collect_area:
+		var col_shape := xp_collect_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
+		if col_shape and col_shape.shape is CylinderShape3D:
+			(col_shape.shape as CylinderShape3D).height = 4.0
+			(col_shape.shape as CylinderShape3D).radius = 3.5
 		if not xp_collect_area.area_entered.is_connected(_on_xp_collect_area_entered):
 			xp_collect_area.area_entered.connect(_on_xp_collect_area_entered)
 
@@ -153,8 +167,28 @@ func _on_xp_magnet_area_entered(area: Area3D) -> void:
 		area.set_magnet_target(self)
 
 func _on_xp_collect_area_entered(area: Area3D) -> void:
-	if not is_instance_valid(area):
+	if not is_instance_valid(area) or area.is_queued_for_deletion():
 		return
+	# State guard: Gems must first be attracted/magnetized and travel to the helicopter cabin.
+	# Idle ground gems must NEVER be collected directly through vertical area overlap.
+	if "current_state" in area:
+		if area.get("current_state") != 1: # State.MAGNETIZED == 1, IDLE == 0
+			return
+
+	# Distance validation: verify true 3D Euclidean distance to tracking point
+	var tracking_pos := global_position + Vector3(0.0, 1.2, 0.0)
+	if has_node("StableTrackingPoint"):
+		var marker: Node3D = get_node("StableTrackingPoint") as Node3D
+		if marker:
+			tracking_pos = marker.global_position
+	var dist_3d := area.global_position.distance_to(tracking_pos)
+	var max_allowed := 3.8
+	if "collection_radius" in area:
+		max_allowed = maxf(max_allowed, float(area.get("collection_radius")) + 0.8)
+
+	if dist_3d > max_allowed:
+		return
+
 	if area.has_method("_try_collect"):
 		area.call("_try_collect", self)
 	elif area.has_method("_collect"):
@@ -541,31 +575,36 @@ func _handle_magnet() -> void:
 			elif area.has_method("set_magnet_target"):
 				area.set_magnet_target(self)
 
-	# Direct fallback ensures pickups spawn-inside or flat-ground gems are never missed across supported altitudes
-	var rad_sq := magnet_radius * magnet_radius
-	var gems := get_tree().get_nodes_in_group("xp_gems")
-	for g in gems:
-		if not is_instance_valid(g) or g.is_queued_for_deletion():
-			continue
-		var offset: Vector3 = g.global_position - global_position
-		var flat_offset := Vector2(offset.x, offset.z)
-		if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
-			if g.has_method("magnetize_to"):
-				g.magnetize_to(self)
-			elif g.has_method("set_magnet_target"):
-				g.set_magnet_target(self)
+	# Throttled direct fallback (4-5 times per sec instead of 60) prevents missing gems while eliminating 92% of full-tree group scans
+	_magnet_fallback_timer -= get_physics_process_delta_time()
+	if _magnet_fallback_timer <= 0.0:
+		_magnet_fallback_timer = 0.22
+		var rad_sq := magnet_radius * magnet_radius
+		var gems := get_tree().get_nodes_in_group("xp_gems")
+		for g in gems:
+			if not is_instance_valid(g) or g.is_queued_for_deletion():
+				continue
+			if "is_active" in g and not g.is_active:
+				continue
+			var offset: Vector3 = g.global_position - global_position
+			var flat_offset := Vector2(offset.x, offset.z)
+			if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
+				if g.has_method("magnetize_to"):
+					g.magnetize_to(self)
+				elif g.has_method("set_magnet_target"):
+					g.set_magnet_target(self)
 
-	var crates := get_tree().get_nodes_in_group("salvage_crates")
-	for c in crates:
-		if not is_instance_valid(c) or c.is_queued_for_deletion():
-			continue
-		var offset: Vector3 = c.global_position - global_position
-		var flat_offset := Vector2(offset.x, offset.z)
-		if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
-			if c.has_method("magnetize_to"):
-				c.magnetize_to(self)
-			elif c.has_method("set_magnet_target"):
-				c.set_magnet_target(self)
+		var crates := get_tree().get_nodes_in_group("salvage_crates")
+		for c in crates:
+			if not is_instance_valid(c) or c.is_queued_for_deletion():
+				continue
+			var offset: Vector3 = c.global_position - global_position
+			var flat_offset := Vector2(offset.x, offset.z)
+			if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
+				if c.has_method("magnetize_to"):
+					c.magnetize_to(self)
+				elif c.has_method("set_magnet_target"):
+					c.set_magnet_target(self)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:

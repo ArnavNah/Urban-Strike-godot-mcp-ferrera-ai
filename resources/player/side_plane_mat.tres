@@ -1,0 +1,9 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://crjtjfgg4sl7"]
+
+[ext_resource type="Texture2D" uid="uid://cq3ydwq2hw6sc" path="res://Player model/side plane/player sideplane_texture_car.png" id="1_cg7nu"]
+
+[resource]
+resource_name = "SidePlaneMat"
+albedo_texture = ExtResource("1_cg7nu")
+metallic = 0.2
+roughness = 0.65

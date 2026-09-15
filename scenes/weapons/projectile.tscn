@@ -1,27 +1,28 @@
-[gd_scene format=3 uid="uid://b7h4k1p9x3w6e"]
+[gd_scene format=3 uid="uid://b7h4k1qax3w6e"]
 
-[ext_resource type="Script" path="res://scripts/weapons/projectile.gd" id="1_proj"]
+[ext_resource type="Script" uid="uid://bcq8hk5jxtl5n" path="res://scripts/weapons/projectile.gd" id="1_proj"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vl370"]
 shading_mode = 0
-albedo_color = Color(1, 0.85, 0.2, 1)
+albedo_color = Color(1, 0.88, 0.25, 1)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
-material = SubResource("StandardMaterial3D_1")
-top_radius = 0.06
-bottom_radius = 0.06
-height = 0.9
+[sub_resource type="CylinderMesh" id="CylinderMesh_qp4n5"]
+material = SubResource("StandardMaterial3D_vl370")
+top_radius = 0.035
+bottom_radius = 0.075
+height = 1.2
+radial_segments = 6
+rings = 1
 
-[node name="Projectile" type="Node3D"]
+[node name="Projectile" type="Node3D" unique_id=1530031264]
 script = ExtResource("1_proj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=804062242]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
-mesh = SubResource("CylinderMesh_1")
+mesh = SubResource("CylinderMesh_qp4n5")
 
-[node name="RayCast3D" type="RayCast3D" parent="."]
+[node name="RayCast3D" type="RayCast3D" parent="." unique_id=431238119]
 target_position = Vector3(0, 0, -2)
 collision_mask = 5
 hit_from_inside = true
 collide_with_areas = true
-collide_with_bodies = true

@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Dirt"
-albedo_color = Color(0.5058824, 0.44705883, 0.34117648, 1)
-roughness = 0.92
+albedo_color = Color(0.58, 0.46, 0.32, 1)
+roughness = 0.9

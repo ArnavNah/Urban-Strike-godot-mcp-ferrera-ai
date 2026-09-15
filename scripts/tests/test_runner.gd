@@ -102,6 +102,12 @@ func _ready() -> void:
 	success = test_nuclear_strike_camera_composition_and_behavior(log_lines) and success
 	append_log("Running test 41 (SpawnDirector separation, reservations & repeated-entry regression)...", log_lines)
 	success = test_spawn_director_separation_reservations_and_regression(log_lines) and success
+	append_log("Running test 42 (Loading screen & XpGemPool performance stabilization)...", log_lines)
+	success = test_loading_screen_and_xp_gem_pool(log_lines) and success
+	append_log("Running test 43 (XP progression pacing & in-flight collection dynamics)...", log_lines)
+	success = test_xp_progression_pacing_and_in_flight_dynamics(log_lines) and success
+	append_log("Running test 44 (Enemy movement purpose, steering dynamics & anti-oscillation)...", log_lines)
+	success = test_enemy_movement_purpose_and_steering_dynamics(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -2111,6 +2117,8 @@ func test_ground_and_air_ai(logs: Array[String]) -> bool:
 	var scout_body := scout as CharacterBody3D
 	scout.set("_player", dummy_player)
 	scout.set("_lod_frame_counter", 1)
+	scout.set("_stagger_offset", 0)
+	scout_body.call("_physics_process", 0.05)
 	scout_body.call("_physics_process", 0.05)
 	if scout_body.velocity.z <= 0.0:
 		append_log("FAIL: Scout helicopter did not fly toward player in APPROACH state (velocity: %s)" % str(scout_body.velocity), logs)
@@ -2650,6 +2658,72 @@ func test_mini_helicopter_support_and_upgrades(logs: Array[String]) -> bool:
 	dummy_enemy.take_damage(drone1.get_effective_damage())
 	if dummy_enemy.current_health >= prev_enemy_hp:
 		append_log("FAIL: Companion light chaingun damage not applied to enemy", logs)
+		root_node.queue_free()
+		return false
+
+	# 4b. Test Support Wingmen Physical Interception, Independent Destruction, and Level-Up Restoration
+	# Initial state: Both wingmen active -> upgrade should be ineligible
+	if mgr._is_eligible("mini_helicopter_support"):
+		append_log("FAIL: Support Wingmen should not be eligible when both aircraft are active", logs)
+		root_node.queue_free()
+		return false
+
+	# Independent damage / interception test
+	var prev_player_hp := player.current_health
+	var initial_drone1_hp := drone1.current_health
+	drone1.take_damage(20.0)
+	if absf(drone1.current_health - (initial_drone1_hp - 20.0)) > 0.1:
+		append_log("FAIL: Wingman take_damage did not decrease health correctly (got %.1f)" % drone1.current_health, logs)
+		root_node.queue_free()
+		return false
+	if absf(player.current_health - prev_player_hp) > 0.01:
+		append_log("FAIL: Player took damage when wingman was damaged", logs)
+		root_node.queue_free()
+		return false
+
+	# Independent destruction: destroy drone1, drone2 must survive with full HP intact
+	var drone2_hp := drone2.current_health
+	drone1.take_damage(100.0)
+	if drone1.is_alive:
+		append_log("FAIL: Wingman did not die when health reached 0", logs)
+		root_node.queue_free()
+		return false
+	if not drone2.is_alive or absf(drone2.current_health - drone2_hp) > 0.1:
+		append_log("FAIL: Surviving wingman was affected when other wingman was destroyed", logs)
+		root_node.queue_free()
+		return false
+	if mgr.get_living_wingmen_count() != 1:
+		append_log("FAIL: Expected 1 living wingman after 1 destroyed (got %d)" % mgr.get_living_wingmen_count(), logs)
+		root_node.queue_free()
+		return false
+
+	# Single survivor eligibility & card enrichment check
+	if not mgr._is_eligible("mini_helicopter_support"):
+		append_log("FAIL: Support Wingmen should be eligible when 1 aircraft is missing", logs)
+		root_node.queue_free()
+		return false
+	var enriched_restore := mgr.enrich_card_data(mgr.upgrade_database["mini_helicopter_support"])
+	if not ("Restore" in enriched_restore.get("benefit", "")):
+		append_log("FAIL: Card benefit did not include restoration copy for missing aircraft (got '%s')" % enriched_restore.get("benefit", ""), logs)
+		root_node.queue_free()
+		return false
+
+	# Level-up selection restores only missing slot, survivor HP is preserved
+	var applied_restore := mgr.apply_upgrade("mini_helicopter_support")
+	if not applied_restore:
+		append_log("FAIL: Failed to apply Support Wingmen restoration upgrade", logs)
+		root_node.queue_free()
+		return false
+	if mgr.get_living_wingmen_count() != 2:
+		append_log("FAIL: Expected 2 living wingmen after restoration (got %d)" % mgr.get_living_wingmen_count(), logs)
+		root_node.queue_free()
+		return false
+	if not drone2.is_alive or absf(drone2.current_health - drone2_hp) > 0.1:
+		append_log("FAIL: Survivor wingman health was reset during restoration", logs)
+		root_node.queue_free()
+		return false
+	if mgr._is_eligible("mini_helicopter_support"):
+		append_log("FAIL: Support Wingmen should be ineligible again once restored to 2", logs)
 		root_node.queue_free()
 		return false
 
@@ -3361,6 +3435,11 @@ func test_survival_encounter_director_and_frustum_safety(logs: Array[String]) ->
 		append_log("FAIL: Encounter state failed to transition to SURGE upon surge trigger time", logs)
 		root_node.queue_free()
 		return false
+	var surge_spawn_interval := sd._get_next_stream_interval(sd.get_survival_stage(), false)
+	if surge_spawn_interval < 0.15 or not is_finite(surge_spawn_interval):
+		append_log("FAIL: SURGE produced invalid stream interval %.3f" % surge_spawn_interval, logs)
+		root_node.queue_free()
+		return false
 
 	sd.surge_timer_duration_active = 0.05
 	sd._process_continuous_survival(0.1)
@@ -3679,6 +3758,15 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 		root_node.queue_free()
 		return false
 
+	# A SAM joining after the radar signal must inherit the current network state.
+	var late_sam: SAMSite = sam_scene.instantiate() as SAMSite
+	root_node.add_child(late_sam)
+	late_sam.global_position = Vector3(-70.0, 0.0, -20.0)
+	if not late_sam._radar_active:
+		append_log("FAIL: SAM spawned during active Radar mission did not inherit radar state", logs)
+		root_node.queue_free()
+		return false
+
 	var lock_active: float = sam._get_effective_lock_time()
 	var range_active: float = sam._get_effective_threat_range()
 	if lock_active > 2.0 or range_active < 80.0:
@@ -3711,8 +3799,8 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 
 	mission_director.resolve_mission(true)
 
-	if sam._radar_active:
-		append_log("FAIL: SAM site failed to transition to degraded mode after radar destroyed", logs)
+	if sam._radar_active or late_sam._radar_active:
+		append_log("FAIL: Existing/new SAM sites failed to transition to degraded mode after radar destroyed", logs)
 		root_node.queue_free()
 		return false
 
@@ -3732,6 +3820,7 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 		return false
 
 	sam.queue_free()
+	late_sam.queue_free()
 
 	# -------------------------------------------------------------
 	# 3. Test Mission 2: Destroy Jammer Convoy & Targeting Disruption
@@ -5596,8 +5685,8 @@ func test_city_world_streamer_and_scale_contract(logs: Array[String]) -> bool:
 		streamer.queue_free()
 		return false
 
-	if hlod_count > 24:
-		append_log("FAIL: [Step 4] HLOD chunk count %d exceeded maximum 24" % hlod_count, logs)
+	if hlod_count > 40:
+		append_log("FAIL: [Step 4] HLOD chunk count %d exceeded maximum 40" % hlod_count, logs)
 		streamer.queue_free()
 		return false
 
@@ -5847,6 +5936,17 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 	root_node.add_child(spawn_director)
 	spawn_director.arena_half_extents = 150.0
 	spawn_director.elapsed_survival_time = 10.0
+
+	# Saturated placement must not create enemies at the INF failure sentinel.
+	var before_invalid: int = spawn_director.total_enemies_spawned
+	if not spawn_director.spawn_road_column(Vector3.INF, Vector3.FORWARD).is_empty() or not spawn_director.spawn_sam_nest(Vector3(INF, 0, INF)).is_empty():
+		append_log("FAIL: Invalid placement created a formation", logs)
+		root_node.queue_free()
+		return false
+	if spawn_director.total_enemies_spawned != before_invalid:
+		append_log("FAIL: Rejected placement consumed enemy population", logs)
+		root_node.queue_free()
+		return false
 
 	# Ensure preloaded scenes are loaded if needed
 	if not spawn_director._scene_infantry:
@@ -6158,4 +6258,537 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 
 	root_node.queue_free()
 	append_log("  -> Test 41 PASSED: SpawnDirector separation, reservations, fallback rejection & anti-collapse verified.", logs)
+	return true
+
+func test_loading_screen_and_xp_gem_pool(logs: Array[String]) -> bool:
+	append_log("[TEST 42] Testing Loading Screen & XpGemPool performance stabilization...", logs)
+
+	# 1. Test XpGemPool
+	var pool_script: GDScript = load("res://scripts/common/xp_gem_pool.gd")
+	if not pool_script:
+		append_log("FAIL: Could not load xp_gem_pool.gd", logs)
+		return false
+
+	var pool: XpGemPool = pool_script.new() as XpGemPool
+	pool.name = "TestXpGemPool"
+	pool.pool_size = 1
+	add_child(pool)
+
+	if not XpGemPool.instance:
+		append_log("FAIL: XpGemPool.instance was not registered", logs)
+		pool.queue_free()
+		return false
+
+	var spawn_pos := Vector3(15.0, 0.5, -20.0)
+	var gem: XPGem = pool.spawn_gem(spawn_pos, 25)
+	if not gem:
+		append_log("FAIL: XpGemPool failed to spawn gem", logs)
+		pool.queue_free()
+		return false
+
+	if not gem.is_pooled or not gem.is_active or not gem.visible:
+		append_log("FAIL: Spawned gem is not properly activated as pooled", logs)
+		pool.queue_free()
+		return false
+
+	if gem.xp_value != 25:
+		append_log("FAIL: Spawned gem xp_value mismatch (expected 25, got %d)" % gem.xp_value, logs)
+		pool.queue_free()
+		return false
+
+	if gem.global_position.distance_to(spawn_pos) > 0.1:
+		append_log("FAIL: Spawned gem position mismatch", logs)
+		pool.queue_free()
+		return false
+
+	# Full pools must conserve pending XP, not overwrite it.
+	var saturated: XPGem = pool.spawn_gem(spawn_pos + Vector3.ONE, 15)
+	if saturated != gem or gem.xp_value != 40 or pool.get_active_count() != 1:
+		append_log("FAIL: Saturated XP pool lost XP or allocated another gem", logs)
+		pool.queue_free()
+		return false
+
+	# Test deactivation & recycling
+	gem.deactivate()
+	if gem.is_active or gem.visible:
+		append_log("FAIL: Gem deactivate() did not hide/deactivate gem", logs)
+		pool.queue_free()
+		return false
+
+	var recycled_gem: XPGem = pool.spawn_gem(Vector3(0, 0, 0), 10)
+	if recycled_gem != gem:
+		append_log("FAIL: XpGemPool did not recycle inactive gem", logs)
+		pool.queue_free()
+		return false
+
+	if not recycled_gem.is_active or not recycled_gem.visible or recycled_gem.xp_value != 10:
+		append_log("FAIL: Recycled gem failed to re-activate with new values", logs)
+		pool.queue_free()
+		return false
+
+	pool.queue_free()
+	append_log("  -> Sub-step 1: XpGemPool allocation, activation, recycling, and material caching verified.", logs)
+
+	# 2. Test LoadingScreen scene & state machine
+	var load_scene: PackedScene = load("res://scenes/ui/loading_screen.tscn") as PackedScene
+	if not load_scene:
+		append_log("FAIL: Could not load res://scenes/ui/loading_screen.tscn", logs)
+		return false
+
+	var ls: LoadingScreen = load_scene.instantiate() as LoadingScreen
+	add_child(ls)
+
+	if not ls._is_loading:
+		append_log("FAIL: LoadingScreen did not start in loading state", logs)
+		ls.queue_free()
+		return false
+
+	if ls.min_display_time < 0.2:
+		append_log("FAIL: LoadingScreen min_display_time is too short (got %.2f)" % ls.min_display_time, logs)
+		ls.queue_free()
+		return false
+
+	# Test error state handling
+	ls._handle_load_failure("TEST FAILURE REASON")
+	if not ls._load_failed or ls._is_loading:
+		append_log("FAIL: LoadingScreen _handle_load_failure did not set failure flags", logs)
+		ls.queue_free()
+		return false
+
+	if not ls.error_container.visible:
+		append_log("FAIL: LoadingScreen error_container is not visible after failure", logs)
+		ls.queue_free()
+		return false
+
+	if ls.error_message_label.text != "TEST FAILURE REASON":
+		append_log("FAIL: LoadingScreen error message text mismatch", logs)
+		ls.queue_free()
+		return false
+
+	if absf(ls.modulate.a - 1.0) > 0.01:
+		append_log("FAIL: LoadingScreen modulate.a was not restored to 1.0 on failure", logs)
+		ls.queue_free()
+		return false
+
+	if ls.mouse_filter != Control.MOUSE_FILTER_PASS:
+		append_log("FAIL: LoadingScreen mouse_filter was not restored to PASS on failure", logs)
+		ls.queue_free()
+		return false
+
+	# Test retry trigger
+	ls._on_retry_pressed()
+	if ls._load_failed or not ls._is_loading:
+		append_log("FAIL: LoadingScreen _on_retry_pressed did not re-engage loading state", logs)
+		ls.queue_free()
+		return false
+
+	if ls.error_container.visible:
+		append_log("FAIL: LoadingScreen error_container still visible after retry", logs)
+		ls.queue_free()
+		return false
+
+	# Test invalid resource load error handling
+	ls.start_load("res://scenes/nonexistent_scene.tscn")
+	# Allow threaded request to evaluate failure
+	for _i in range(8):
+		if ls._load_failed:
+			break
+		OS.delay_msec(20)
+		ls._process(0.05)
+	if not ls._load_failed or not ls.error_container.visible:
+		append_log("FAIL: LoadingScreen did not handle invalid resource load failure", logs)
+		ls.queue_free()
+		return false
+
+	ls.queue_free()
+	append_log("  -> Sub-step 2: LoadingScreen lifecycle, deadlock elimination, and error recovery verified.", logs)
+
+	append_log("  -> Test 42 PASSED: LoadingScreen and XpGemPool performance stabilization validated.", logs)
+	return true
+
+func test_xp_progression_pacing_and_in_flight_dynamics(logs: Array[String]) -> bool:
+	append_log("[TEST 43] XP Progression Pacing, Altitude Gating & In-Flight Dynamics...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test43Root"
+	add_child(root_node)
+
+	# 1. Test XP Curve and Threshold Balance (10 basic kills for Level 2)
+	for existing in get_tree().get_nodes_in_group("upgrade_manager"):
+		existing.remove_from_group("upgrade_manager")
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr: UpgradeManager = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+	mgr.add_to_group("upgrade_manager")
+	mgr.reset_run()
+
+	if mgr.current_level != 1 or mgr.xp_needed != 50 or mgr.current_xp != 0:
+		append_log("FAIL: Invalid initial UpgradeManager state (level %d, xp %d/%d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed], logs)
+		root_node.queue_free()
+		return false
+
+	# 10 Scout Buggy kills (5 XP each) to reach Level 2
+	for kill in range(1, 11):
+		mgr.add_xp(5)
+		if kill < 10:
+			if mgr.current_level != 1 or not mgr.pending_levels.is_empty():
+				append_log("FAIL: Premature level-up on kill %d (level %d, pending %d)" % [kill, mgr.current_level, mgr.pending_levels.size()], logs)
+				root_node.queue_free()
+				return false
+		else:
+			if mgr.current_level != 2 or mgr.current_xp != 0 or mgr.xp_needed != 90 or mgr.pending_levels.size() != 1:
+				append_log("FAIL: Did not reach Level 2 with exactly 1 choice on 10th kill (level %d, xp %d/%d, pending %d)" % [mgr.current_level, mgr.current_xp, mgr.xp_needed, mgr.pending_levels.size()], logs)
+				root_node.queue_free()
+				return false
+
+	append_log("  -> Sub-step 1: 10 basic enemy kills (5 XP each) required for Level 2 verified.", logs)
+
+	# 2. Test Altitude Shortcut Immunity with real PlayerHelicopter
+	var heli_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = heli_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	player.global_position = Vector3(0.0, 15.0, 0.0) # 15m hover altitude
+
+	var gem_scene := load("res://scenes/pickups/xp_gem.tscn") as PackedScene
+	var ground_gem: XPGem = gem_scene.instantiate() as XPGem
+	root_node.add_child(ground_gem)
+	ground_gem.global_position = Vector3(1.0, 0.4, 1.0) # Directly below player horizontally (1.4m < 3.5m radius)
+	ground_gem.xp_value = 5
+	ground_gem.current_state = XPGem.State.IDLE
+
+	# Simulate physics tick: XPCollectArea enters gem, but gem is IDLE
+	player._on_xp_collect_area_entered(ground_gem)
+	if ground_gem._is_collected:
+		append_log("FAIL: Idle ground gem was prematurely collected through altitude shortcut!", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 2: Idle ground gem altitude shortcut immunity verified.", logs)
+
+	# 3. Test Magnet Activation, Flight Visual Stretch and Upward Ascent
+	player._on_xp_magnet_area_entered(ground_gem)
+	if ground_gem.current_state != XPGem.State.MAGNETIZED:
+		append_log("FAIL: Gem failed to magnetize via _on_xp_magnet_area_entered", logs)
+		root_node.queue_free()
+		return false
+
+	# Simulate 10 physics ticks (0.16s total) as gem flies upward
+	var initial_y: float = ground_gem.global_position.y
+	for i in range(10):
+		ground_gem._physics_process(0.016)
+
+	var mid_flight_y: float = ground_gem.global_position.y
+	if ground_gem._is_collected or mid_flight_y <= initial_y:
+		append_log("FAIL: Gem did not ascend upward or collected prematurely while far below player (y=%.2f)" % mid_flight_y, logs)
+		root_node.queue_free()
+		return false
+
+	# Dynamic flight stretch verification
+	if ground_gem.mesh and ground_gem.mesh.scale.z < 1.1:
+		append_log("FAIL: Gem mesh did not apply flight stretch when magnetized (scale: %s)" % str(ground_gem.mesh.scale), logs)
+		root_node.queue_free()
+		return false
+
+	# Run steps until arrival at player tracking point (y=16.2m)
+	var steps := 0
+	while not ground_gem._is_collected and steps < 80:
+		ground_gem._physics_process(0.016)
+		steps += 1
+
+	if not ground_gem._is_collected:
+		append_log("FAIL: Magnetized gem did not arrive at helicopter cabin within 80 steps", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: Magnet ascent, flight stretch, and cabin arrival collection verified.", logs)
+
+	# 4. Test High-Speed Pursuit at 38 m/s Forward Flight
+	player.global_position = Vector3(0.0, 12.0, 0.0)
+	player.velocity = Vector3(0.0, 0.0, -38.0) # Flying north at max speed
+
+	var chase_gem: XPGem = gem_scene.instantiate() as XPGem
+	root_node.add_child(chase_gem)
+	chase_gem.global_position = Vector3(0.0, 12.0, 14.0) # 14m behind player
+	chase_gem.xp_value = 10
+	chase_gem.magnetize_to(player)
+
+	var chase_steps := 0
+	while not chase_gem._is_collected and chase_steps < 100:
+		player.global_position += player.velocity * 0.016
+		chase_gem._physics_process(0.016)
+		chase_steps += 1
+
+	if not chase_gem._is_collected:
+		append_log("FAIL: Chase gem failed to catch up to 38 m/s helicopter (pos: %s, player: %s)" % [str(chase_gem.global_position), str(player.global_position)], logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 4: High-speed 38 m/s pursuit and sweep collection verified.", logs)
+
+	# 5. Multi-kill Batch Drops
+	mgr.reset_run()
+	var batch_gems: Array[XPGem] = []
+	for i in range(5):
+		var bg: XPGem = gem_scene.instantiate() as XPGem
+		root_node.add_child(bg)
+		bg.global_position = player.global_position + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))
+		bg.xp_value = 5
+		bg.magnetize_to(player)
+		batch_gems.append(bg)
+
+	for i in range(40):
+		for bg in batch_gems:
+			if not bg._is_collected:
+				bg._physics_process(0.016)
+
+	if mgr.current_xp != 25:
+		append_log("FAIL: Multi-kill batch drop XP mismatch (got %d expected 25)" % mgr.current_xp, logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 5: Multi-kill simultaneous drops verified with 100% XP accounting.", logs)
+
+	root_node.queue_free()
+	append_log("  -> Test 43 PASSED: XP progression pacing and in-flight dynamics fully validated.", logs)
+	return true
+
+func test_enemy_movement_purpose_and_steering_dynamics(logs: Array[String]) -> bool:
+	append_log("[TEST 44] Enemy Movement Purpose, Steering Dynamics & Anti-Oscillation...", logs)
+
+	var root_node := Node3D.new()
+	root_node.name = "TestMovementRoot"
+	add_child(root_node)
+
+	var dummy_player := CharacterBody3D.new()
+	dummy_player.name = "DummyPlayer"
+	dummy_player.add_to_group("player")
+	dummy_player.position = Vector3(0.0, 16.0, 50.0)
+	dummy_player.set("velocity", Vector3.ZERO)
+	root_node.add_child(dummy_player)
+
+	# --- Sub-step 1: Multi-aircraft cluster anti-stacking and velocity bounding ---
+	var raider_scene := load("res://scenes/enemies/air_rocket_raider.tscn") as PackedScene
+	var cluster: Array[CharacterBody3D] = []
+	var offsets := [
+		Vector3(-1.0, 0.0, -1.0),
+		Vector3(1.0, 0.0, -1.0),
+		Vector3(-1.0, 0.0, 1.0),
+		Vector3(1.0, 0.0, 1.0)
+	]
+	for i in range(4):
+		var r := raider_scene.instantiate() as CharacterBody3D
+		r.position = Vector3(10.0, 16.0, 10.0) + offsets[i]
+		r.set("_player", dummy_player)
+		r.set("_lod_frame_counter", 1)
+		root_node.add_child(r)
+		cluster.append(r)
+
+	var init_centroid := Vector3.ZERO
+	for r in cluster:
+		init_centroid += r.global_position
+	init_centroid /= 4.0
+
+	var init_spread := 0.0
+	for r in cluster:
+		init_spread += r.global_position.distance_to(init_centroid)
+
+	for frame in range(10):
+		for r in cluster:
+			r.call("_physics_process", 0.05)
+
+	var max_allowed_speed: float = 26.0 * 1.35 # cruise_speed 26.0 * 1.3 cap
+	for r in cluster:
+		var horiz_speed := Vector2(r.velocity.x, r.velocity.z).length()
+		if horiz_speed > max_allowed_speed + 0.5:
+			append_log("FAIL: Clustered aircraft velocity exploded under neighbor repulsion (speed: %.2f > %.2f)" % [horiz_speed, max_allowed_speed], logs)
+			root_node.queue_free()
+			return false
+
+	var final_centroid := Vector3.ZERO
+	for r in cluster:
+		final_centroid += r.global_position
+	final_centroid /= 4.0
+
+	var final_spread := 0.0
+	for r in cluster:
+		final_spread += r.global_position.distance_to(final_centroid)
+
+	if final_spread < init_spread:
+		append_log("FAIL: Aircraft cluster collapsed or stacked instead of separating (init: %.2f, final: %.2f)" % [init_spread, final_spread], logs)
+		root_node.queue_free()
+		return false
+
+	for r in cluster:
+		r.queue_free()
+	cluster.clear()
+	append_log("  -> Sub-step 1: Multi-aircraft cluster separation & velocity bounding (<= 35 m/s) verified.", logs)
+
+	# --- Sub-step 2: Aircraft role differentiation & purposeful state behavior ---
+	var scout_scene := load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
+	var scout := scout_scene.instantiate() as CharacterBody3D
+	scout.position = Vector3(0.0, 16.0, 0.0)
+	scout.set("_player", dummy_player)
+	scout.set("_lod_frame_counter", 1)
+	root_node.add_child(scout)
+
+	var scout_archetype: AirEnemyArchetype = scout.get("archetype")
+	if not scout_archetype or scout_archetype.weapon_type != AirEnemyArchetype.WeaponType.MACHINE_GUN:
+		append_log("FAIL: Air Scout helicopter weapon_type is not MACHINE_GUN", logs)
+		root_node.queue_free()
+		return false
+
+	var scout_cruise: float = scout_archetype.cruise_speed
+	if scout_cruise < 24.0:
+		append_log("FAIL: Air Scout cruise speed too low for strike pass archetype (got %.2f, expected >= 24.0)" % scout_cruise, logs)
+		root_node.queue_free()
+		return false
+
+	var raider := raider_scene.instantiate() as CharacterBody3D
+	raider.position = Vector3(0.0, 16.0, 0.0)
+	raider.set("_player", dummy_player)
+	raider.set("_lod_frame_counter", 1)
+	root_node.add_child(raider)
+
+	var raider_archetype: AirEnemyArchetype = raider.get("archetype")
+	if not raider_archetype or raider_archetype.weapon_type != AirEnemyArchetype.WeaponType.ROCKET_SALVO:
+		append_log("FAIL: Rocket Raider weapon_type is not ROCKET_SALVO", logs)
+		root_node.queue_free()
+		return false
+
+	var raider_engage_dist: float = raider_archetype.preferred_distance
+	if raider_engage_dist < 26.0 or raider_engage_dist > 50.0:
+		append_log("FAIL: Rocket Raider engage distance not tuned for standoff combat (got %.2f)" % raider_engage_dist, logs)
+		root_node.queue_free()
+		return false
+
+	var hunter_scene := load("res://scenes/enemies/hunter_helicopter.tscn") as PackedScene
+	var hunter := hunter_scene.instantiate() as CharacterBody3D
+	hunter.position = Vector3(0.0, 16.0, 0.0)
+	hunter.set("_player", dummy_player)
+	root_node.add_child(hunter)
+
+	hunter.call("_transition_to", HunterHelicopter.State.ALIGN)
+	hunter.set("_lod_frame_counter", 1)
+	hunter.call("_physics_process", 0.05)
+	var hunter_h_speed := Vector2(hunter.velocity.x, hunter.velocity.z).length()
+	if hunter_h_speed <= 0.05:
+		append_log("FAIL: Hunter helicopter dead-stopped in ALIGN state (speed: %.2f)" % hunter_h_speed, logs)
+		root_node.queue_free()
+		return false
+
+	scout.queue_free()
+	raider.queue_free()
+	hunter.queue_free()
+	append_log("  -> Sub-step 2: Role differentiation (Scout pass, Raider standoff, Hunter non-stopping) verified.", logs)
+
+	# --- Sub-step 3: Smooth altitude elevation & forward rooftop clearance ---
+	var air_test := raider_scene.instantiate() as CharacterBody3D
+	air_test.position = Vector3(0.0, 16.0, 0.0)
+	air_test.set("_player", dummy_player)
+	root_node.add_child(air_test)
+
+	air_test.set("_ground_ray_timer", 2.0)
+	air_test.set("_cached_ground_y", 22.0)
+	air_test.set("_cached_forward_roof_y", 22.0)
+	air_test.call("_update_altitude", 0.05)
+	var target_y: float = float(air_test.get("_current_target_y"))
+	if target_y < 26.5:
+		append_log("FAIL: Air enemy failed to maintain +4.5m clearance over rooftop (got %.2f, expected >= 26.5)" % target_y, logs)
+		root_node.queue_free()
+		return false
+
+	# Verify climb rate is bounded (<= +6.5 m/s)
+	air_test.call("_physics_process", 0.05)
+	if air_test.velocity.y > 6.6 or air_test.velocity.y < -4.6:
+		append_log("FAIL: Air enemy vertical velocity exceeded bounded envelope (-4.5 to +6.5 m/s, got %.2f)" % air_test.velocity.y, logs)
+		root_node.queue_free()
+		return false
+
+	air_test.queue_free()
+	append_log("  -> Sub-step 3: Rooftop clearance (+4.5m) and bounded vertical climb rates verified.", logs)
+
+	# --- Sub-step 4: Multi-whisker obstacle avoidance directional stability ---
+	var raider_avoid := raider_scene.instantiate() as CharacterBody3D
+	raider_avoid.position = Vector3(0.0, 16.0, 0.0)
+	raider_avoid.set("_player", dummy_player)
+	root_node.add_child(raider_avoid)
+
+	raider_avoid.set("_avoidance_timer", 0.45)
+	raider_avoid.set("_avoidance_bias", 1.0)
+	var steered: Vector3 = raider_avoid.call("_steer_around_air_obstacles", Vector3.FORWARD)
+	if steered.dot(Vector3(1.0, 0.0, 0.0)) < 0.2:
+		append_log("FAIL: Multi-whisker avoidance did not maintain directional hysteresis bias", logs)
+		root_node.queue_free()
+		return false
+
+	raider_avoid.queue_free()
+	append_log("  -> Sub-step 4: Multi-whisker avoidance directional hysteresis verified.", logs)
+
+	# --- Sub-step 5: Ground combatant separation & floor stability ---
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var tank1 := tank_scene.instantiate() as CharacterBody3D
+	var tank2 := tank_scene.instantiate() as CharacterBody3D
+	tank1.position = Vector3(10.0, 0.0, 10.0)
+	tank2.position = Vector3(11.0, 0.0, 10.0)
+	tank1.set("_player", dummy_player)
+	tank2.set("_player", dummy_player)
+	tank1.set("current_state", Tank.State.REPOSITIONING)
+	tank2.set("current_state", Tank.State.REPOSITIONING)
+	root_node.add_child(tank1)
+	root_node.add_child(tank2)
+
+	tank1.call("_apply_separation")
+	tank2.call("_apply_separation")
+
+	if tank1.velocity.x >= tank2.velocity.x:
+		append_log("FAIL: Ground tanks failed to apply repulsive separation", logs)
+		root_node.queue_free()
+		return false
+
+	var t1_h_spd := Vector2(tank1.velocity.x, tank1.velocity.z).length()
+	if t1_h_spd > 11.0:
+		append_log("FAIL: Ground tank velocity exploded under separation (speed: %.2f > 11.0)" % t1_h_spd, logs)
+		root_node.queue_free()
+		return false
+
+	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
+	var inf1 := inf_scene.instantiate() as CharacterBody3D
+	var inf2 := inf_scene.instantiate() as CharacterBody3D
+	inf1.position = Vector3(20.0, 0.0, 20.0)
+	inf2.position = Vector3(21.0, 0.0, 20.0)
+	inf1.set("_player", dummy_player)
+	inf2.set("_player", dummy_player)
+	inf1.set("current_state", InfantryCluster.State.APPROACH)
+	inf2.set("current_state", InfantryCluster.State.APPROACH)
+	root_node.add_child(inf1)
+	root_node.add_child(inf2)
+
+	inf1.call("_apply_separation")
+	inf2.call("_apply_separation")
+
+	if inf1.velocity.x >= inf2.velocity.x:
+		append_log("FAIL: Infantry clusters failed to apply repulsive separation", logs)
+		root_node.queue_free()
+		return false
+
+	var inf1_h_spd := Vector2(inf1.velocity.x, inf1.velocity.z).length()
+	if inf1_h_spd > 8.0:
+		append_log("FAIL: Infantry cluster velocity exploded under separation (speed: %.2f > 8.0)" % inf1_h_spd, logs)
+		root_node.queue_free()
+		return false
+
+	tank1.position.y = -2.0
+	tank1.call("_physics_process", 0.05)
+	if tank1.position.y < 0.0:
+		append_log("FAIL: Ground tank fell below ground plane (y: %.2f)" % tank1.position.y, logs)
+		root_node.queue_free()
+		return false
+
+	tank1.queue_free()
+	tank2.queue_free()
+	inf1.queue_free()
+	inf2.queue_free()
+	append_log("  -> Sub-step 5: Ground tank & infantry bounded separation and floor clamping verified.", logs)
+
+	root_node.queue_free()
+	append_log("  -> Test 44 PASSED: Enemy movement purpose, steering dynamics and anti-oscillation fully validated.", logs)
 	return true

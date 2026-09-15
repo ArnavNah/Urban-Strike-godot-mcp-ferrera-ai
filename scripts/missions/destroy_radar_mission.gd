@@ -50,8 +50,9 @@ func start(director: Node) -> void:
 			var spawned := radar_scene.instantiate() as Node3D
 			if spawned:
 				spawned.transform.origin = target_position
-				var spawn_parent: Node = root if root else tree.root
+				var spawn_parent: Node = _get_enemy_parent(tree)
 				spawn_parent.add_child(spawned)
+				_register_mission_enemy(tree, spawned)
 				radar_station = spawned
 				target_node = spawned
 

@@ -59,6 +59,121 @@ const RoofMetalMat := preload("res://resources/environment/roof_metal.tres")
 const RustMat := preload("res://resources/environment/rust.tres")
 const BrickMat := preload("res://resources/environment/brick.tres")
 
+# Static shared meshes and materials for props (instantiated once project-wide)
+static var _shared_props_initialized: bool = false
+static var _tree_trunk_mesh: CylinderMesh = null
+static var _tree_lower_crown_mesh: CylinderMesh = null
+static var _tree_upper_crown_mesh: CylinderMesh = null
+static var _barrier_mesh: BoxMesh = null
+static var _helipad_pole_mesh: CylinderMesh = null
+static var _helipad_lens_mesh: SphereMesh = null
+static var _crate_mesh: BoxMesh = null
+static var _fence_mesh: BoxMesh = null
+static var _truck_chassis_mesh: BoxMesh = null
+static var _truck_cab_mesh: BoxMesh = null
+
+static func _init_shared_prop_resources() -> void:
+	if _shared_props_initialized:
+		return
+	_shared_props_initialized = true
+
+	var dirt_mat := StandardMaterial3D.new()
+	dirt_mat.resource_name = "Dirt"
+	dirt_mat.albedo_color = Color(0.5058824, 0.44705883, 0.34117648, 1.0)
+	dirt_mat.roughness = 0.92
+
+	_tree_trunk_mesh = CylinderMesh.new()
+	_tree_trunk_mesh.material = dirt_mat
+	_tree_trunk_mesh.top_radius = 0.35
+	_tree_trunk_mesh.bottom_radius = 0.35
+	_tree_trunk_mesh.height = 3.0
+	_tree_trunk_mesh.radial_segments = 12
+	_tree_trunk_mesh.rings = 1
+
+	var tree_mat := StandardMaterial3D.new()
+	tree_mat.resource_name = "Tree"
+	tree_mat.albedo_color = Color(0.28627452, 0.3647059, 0.2627451, 1.0)
+	tree_mat.roughness = 0.92
+
+	_tree_lower_crown_mesh = CylinderMesh.new()
+	_tree_lower_crown_mesh.material = tree_mat
+	_tree_lower_crown_mesh.top_radius = 0.4
+	_tree_lower_crown_mesh.bottom_radius = 2.9
+	_tree_lower_crown_mesh.height = 4.0
+	_tree_lower_crown_mesh.radial_segments = 12
+	_tree_lower_crown_mesh.rings = 1
+
+	var grass_mat := StandardMaterial3D.new()
+	grass_mat.resource_name = "Grass"
+	grass_mat.albedo_color = Color(0.38431373, 0.42745098, 0.29411766, 1.0)
+	grass_mat.roughness = 0.92
+
+	_tree_upper_crown_mesh = CylinderMesh.new()
+	_tree_upper_crown_mesh.material = grass_mat
+	_tree_upper_crown_mesh.top_radius = 0.05
+	_tree_upper_crown_mesh.bottom_radius = 2.0
+	_tree_upper_crown_mesh.height = 3.5
+	_tree_upper_crown_mesh.radial_segments = 12
+	_tree_upper_crown_mesh.rings = 1
+
+	var bar_mat := StandardMaterial3D.new()
+	bar_mat.albedo_color = Color(0.65, 0.65, 0.62, 1.0)
+	bar_mat.roughness = 0.9
+
+	_barrier_mesh = BoxMesh.new()
+	_barrier_mesh.material = bar_mat
+	_barrier_mesh.size = Vector3(3.0, 1.0, 0.8)
+
+	var pole_mat := StandardMaterial3D.new()
+	pole_mat.albedo_color = Color(0.15, 0.17, 0.20, 1.0)
+	pole_mat.roughness = 0.9
+
+	_helipad_pole_mesh = CylinderMesh.new()
+	_helipad_pole_mesh.top_radius = 0.12
+	_helipad_pole_mesh.bottom_radius = 0.15
+	_helipad_pole_mesh.height = 0.7
+	_helipad_pole_mesh.material = pole_mat
+
+	var light_mat := StandardMaterial3D.new()
+	light_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	light_mat.albedo_color = Color(0.31, 0.88, 0.93, 1.0)
+
+	_helipad_lens_mesh = SphereMesh.new()
+	_helipad_lens_mesh.radius = 0.22
+	_helipad_lens_mesh.height = 0.44
+	_helipad_lens_mesh.material = light_mat
+
+	var crate_mat := StandardMaterial3D.new()
+	crate_mat.albedo_color = Color(0.42, 0.36, 0.26, 1.0)
+	crate_mat.roughness = 0.9
+
+	_crate_mesh = BoxMesh.new()
+	_crate_mesh.size = Vector3(1.3, 1.1, 1.3)
+	_crate_mesh.material = crate_mat
+
+	var fence_mat := StandardMaterial3D.new()
+	fence_mat.albedo_color = Color(0.20, 0.22, 0.25, 1.0)
+
+	_fence_mesh = BoxMesh.new()
+	_fence_mesh.size = Vector3(12.0, 0.9, 0.15)
+	_fence_mesh.material = fence_mat
+
+	var truck_mat := StandardMaterial3D.new()
+	truck_mat.albedo_color = Color(0.24, 0.28, 0.32, 1.0)
+	truck_mat.roughness = 0.8
+
+	_truck_chassis_mesh = BoxMesh.new()
+	_truck_chassis_mesh.size = Vector3(2.4, 1.1, 5.2)
+	_truck_chassis_mesh.material = truck_mat
+
+	var cab_mat := StandardMaterial3D.new()
+	cab_mat.albedo_color = Color(0.18, 0.35, 0.42, 1.0)
+	cab_mat.roughness = 0.7
+
+	_truck_cab_mesh = BoxMesh.new()
+	_truck_cab_mesh.size = Vector3(2.2, 1.0, 1.8)
+	_truck_cab_mesh.material = cab_mat
+
 var coord: Vector2i = Vector2i.ZERO
 var detail_level: DetailLevel = DetailLevel.UNLOADED
 var district_type: DistrictType = DistrictType.RESIDENTIAL
@@ -258,354 +373,156 @@ func _build_roads() -> void:
 	roads_root.name = "Roads"
 	add_child(roads_root)
 
-	# 1. Parcel underlay
-	var base_mesh := MeshInstance3D.new()
-	base_mesh.name = "GroundBase"
-	var bm := BoxMesh.new()
-	bm.size = Vector3(CHUNK_SIZE, 0.1, CHUNK_SIZE)
-	bm.material = ConcreteAgedMat
-	base_mesh.mesh = bm
-	base_mesh.position = Vector3(0.0, 0.05, 0.0)
-	roads_root.add_child(base_mesh)
-
-	# 2. Road geometry: NS Road
 	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
 	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
-
-	var ns_shoulder := MeshInstance3D.new()
-	ns_shoulder.name = "NS_Shoulder"
-	var ns_sm := BoxMesh.new()
-	ns_sm.size = Vector3(ns_shoulder_w, 0.12, CHUNK_SIZE)
-	ns_sm.material = ConcreteSidewalkMat
-	ns_shoulder.mesh = ns_sm
-	ns_shoulder.position = Vector3(0.0, 0.07, 0.0)
-	roads_root.add_child(ns_shoulder)
-
-	var ns_asphalt := MeshInstance3D.new()
-	ns_asphalt.name = "NS_Asphalt"
-	var ns_am := BoxMesh.new()
-	ns_am.size = Vector3(ns_asphalt_w, 0.14, CHUNK_SIZE)
-	ns_am.material = AsphaltMat
-	ns_asphalt.mesh = ns_am
-	ns_asphalt.position = Vector3(0.0, 0.08, 0.0)
-	roads_root.add_child(ns_asphalt)
-
-	# 3. Road geometry: EW Road
 	var ew_asphalt_w: float = 16.0 if ew_is_avenue else 9.0
 	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
 
-	var ew_shoulder := MeshInstance3D.new()
-	ew_shoulder.name = "EW_Shoulder"
-	var ew_sm := BoxMesh.new()
-	ew_sm.size = Vector3(CHUNK_SIZE, 0.12, ew_shoulder_w)
-	ew_sm.material = ConcreteSidewalkMat
-	ew_shoulder.mesh = ew_sm
-	ew_shoulder.position = Vector3(0.0, 0.075, 0.0)
-	roads_root.add_child(ew_shoulder)
+	var boxes_by_mat: Dictionary = {}
+	var add_box := func(mat: Material, size: Vector3, pos: Vector3) -> void:
+		if not boxes_by_mat.has(mat):
+			boxes_by_mat[mat] = []
+		boxes_by_mat[mat].append([size, pos])
 
-	var ew_asphalt := MeshInstance3D.new()
-	ew_asphalt.name = "EW_Asphalt"
-	var ew_am := BoxMesh.new()
-	ew_am.size = Vector3(CHUNK_SIZE, 0.145, ew_asphalt_w)
-	ew_am.material = AsphaltMat
-	ew_asphalt.mesh = ew_am
-	ew_asphalt.position = Vector3(0.0, 0.085, 0.0)
-	roads_root.add_child(ew_asphalt)
+	# 1. Parcel underlay
+	add_box.call(ConcreteAgedMat, Vector3(CHUNK_SIZE, 0.1, CHUNK_SIZE), Vector3(0.0, 0.05, 0.0))
+
+	# 2. Road geometry: NS Road
+	add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.12, CHUNK_SIZE), Vector3(0.0, 0.07, 0.0))
+	add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.14, CHUNK_SIZE), Vector3(0.0, 0.08, 0.0))
+
+	# 3. Road geometry: EW Road
+	add_box.call(ConcreteSidewalkMat, Vector3(CHUNK_SIZE, 0.12, ew_shoulder_w), Vector3(0.0, 0.075, 0.0))
+	add_box.call(AsphaltMat, Vector3(CHUNK_SIZE, 0.145, ew_asphalt_w), Vector3(0.0, 0.085, 0.0))
 
 	# 4. Center intersection marking / patch
-	var inter := MeshInstance3D.new()
-	inter.name = "Intersection"
-	var im := BoxMesh.new()
-	im.size = Vector3(ns_asphalt_w + 1.0, 0.15, ew_asphalt_w + 1.0)
-	im.material = AsphaltMat
-	inter.mesh = im
-	inter.position = Vector3(0.0, 0.09, 0.0)
-	roads_root.add_child(inter)
+	add_box.call(AsphaltMat, Vector3(ns_asphalt_w + 1.0, 0.15, ew_asphalt_w + 1.0), Vector3(0.0, 0.09, 0.0))
 
 	# 5. Thin geometry overlays: crosswalks, stop lines, yellow centerlines
-	_build_road_markings(roads_root, ns_asphalt_w, ew_asphalt_w)
-
-	# 6. Helipad staging for chunk (0, 0)
-	if coord == Vector2i.ZERO:
-		_build_helipad_staging(roads_root)
-
-func _build_road_markings(parent: Node3D, ns_w: float, ew_w: float) -> void:
-	var markings_node := Node3D.new()
-	markings_node.name = "RoadMarkings"
-	parent.add_child(markings_node)
-
 	var line_y: float = 0.153
 	var stop_mat := LineWhiteMat
 	var dash_mat := LineMat
 	var wear_mat := AsphaltWornMat
 
 	# North intersection approach: stop line and crosswalk
-	var n_stop := MeshInstance3D.new()
-	n_stop.name = "N_StopLine"
-	var n_sm := BoxMesh.new()
-	n_sm.size = Vector3(ns_w * 0.9, 0.015, 0.45)
-	n_sm.material = stop_mat
-	n_stop.mesh = n_sm
-	n_stop.position = Vector3(0.0, line_y, -ew_w * 0.5 - 1.2)
-	n_stop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(n_stop)
-
-	for stripe_x in [-ns_w * 0.35, -ns_w * 0.18, ns_w * 0.18, ns_w * 0.35]:
-		var stripe := MeshInstance3D.new()
-		var stm := BoxMesh.new()
-		stm.size = Vector3(0.55, 0.015, 2.4)
-		stm.material = stop_mat
-		stripe.mesh = stm
-		stripe.position = Vector3(stripe_x, line_y, -ew_w * 0.5 - 3.2)
-		stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(stripe)
+	add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, -ew_asphalt_w * 0.5 - 1.2))
+	for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+		add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, -ew_asphalt_w * 0.5 - 3.2))
 
 	# South intersection approach: stop line and crosswalk
-	var s_stop := MeshInstance3D.new()
-	s_stop.name = "S_StopLine"
-	var s_sm := BoxMesh.new()
-	s_sm.size = Vector3(ns_w * 0.9, 0.015, 0.45)
-	s_sm.material = stop_mat
-	s_stop.mesh = s_sm
-	s_stop.position = Vector3(0.0, line_y, ew_w * 0.5 + 1.2)
-	s_stop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(s_stop)
-
-	for stripe_x in [-ns_w * 0.35, -ns_w * 0.18, ns_w * 0.18, ns_w * 0.35]:
-		var stripe := MeshInstance3D.new()
-		var stm := BoxMesh.new()
-		stm.size = Vector3(0.55, 0.015, 2.4)
-		stm.material = stop_mat
-		stripe.mesh = stm
-		stripe.position = Vector3(stripe_x, line_y, ew_w * 0.5 + 3.2)
-		stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(stripe)
+	add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, ew_asphalt_w * 0.5 + 1.2))
+	for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+		add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, ew_asphalt_w * 0.5 + 3.2))
 
 	# East intersection approach: stop line and crosswalk
-	var e_stop := MeshInstance3D.new()
-	e_stop.name = "E_StopLine"
-	var e_sm := BoxMesh.new()
-	e_sm.size = Vector3(0.45, 0.015, ew_w * 0.9)
-	e_sm.material = stop_mat
-	e_stop.mesh = e_sm
-	e_stop.position = Vector3(ns_w * 0.5 + 1.2, line_y, 0.0)
-	e_stop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(e_stop)
-
-	for stripe_z in [-ew_w * 0.35, -ew_w * 0.18, ew_w * 0.18, ew_w * 0.35]:
-		var stripe := MeshInstance3D.new()
-		var stm := BoxMesh.new()
-		stm.size = Vector3(2.4, 0.015, 0.55)
-		stm.material = stop_mat
-		stripe.mesh = stm
-		stripe.position = Vector3(ns_w * 0.5 + 3.2, line_y, stripe_z)
-		stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(stripe)
+	add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(ns_asphalt_w * 0.5 + 1.2, line_y, 0.0))
+	for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+		add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(ns_asphalt_w * 0.5 + 3.2, line_y, stripe_z))
 
 	# West intersection approach: stop line and crosswalk
-	var w_stop := MeshInstance3D.new()
-	w_stop.name = "W_StopLine"
-	var w_sm := BoxMesh.new()
-	w_sm.size = Vector3(0.45, 0.015, ew_w * 0.9)
-	w_sm.material = stop_mat
-	w_stop.mesh = w_sm
-	w_stop.position = Vector3(-ns_w * 0.5 - 1.2, line_y, 0.0)
-	w_stop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(w_stop)
-
-	for stripe_z in [-ew_w * 0.35, -ew_w * 0.18, ew_w * 0.18, ew_w * 0.35]:
-		var stripe := MeshInstance3D.new()
-		var stm := BoxMesh.new()
-		stm.size = Vector3(2.4, 0.015, 0.55)
-		stm.material = stop_mat
-		stripe.mesh = stm
-		stripe.position = Vector3(-ns_w * 0.5 - 3.2, line_y, stripe_z)
-		stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(stripe)
+	add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(-ns_asphalt_w * 0.5 - 1.2, line_y, 0.0))
+	for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+		add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(-ns_asphalt_w * 0.5 - 3.2, line_y, stripe_z))
 
 	# Dashed yellow centerlines (NS road)
-	var z_cur: float = -ew_w * 0.5 - 6.5
+	var z_cur: float = -ew_asphalt_w * 0.5 - 6.5
 	while z_cur > -62.0:
-		var dash := MeshInstance3D.new()
-		var dm := BoxMesh.new()
-		dm.size = Vector3(0.24, 0.015, 2.6)
-		dm.material = dash_mat
-		dash.mesh = dm
-		dash.position = Vector3(0.0, line_y, z_cur)
-		dash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(dash)
+		add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
 		z_cur -= 5.2
 
-	z_cur = ew_w * 0.5 + 6.5
+	z_cur = ew_asphalt_w * 0.5 + 6.5
 	while z_cur < 62.0:
-		var dash := MeshInstance3D.new()
-		var dm := BoxMesh.new()
-		dm.size = Vector3(0.24, 0.015, 2.6)
-		dm.material = dash_mat
-		dash.mesh = dm
-		dash.position = Vector3(0.0, line_y, z_cur)
-		dash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(dash)
+		add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
 		z_cur += 5.2
 
 	# Dashed yellow centerlines (EW road)
-	var x_cur: float = ns_w * 0.5 + 6.5
+	var x_cur: float = ns_asphalt_w * 0.5 + 6.5
 	while x_cur < 62.0:
-		var dash := MeshInstance3D.new()
-		var dm := BoxMesh.new()
-		dm.size = Vector3(2.6, 0.015, 0.24)
-		dm.material = dash_mat
-		dash.mesh = dm
-		dash.position = Vector3(x_cur, line_y, 0.0)
-		dash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(dash)
+		add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
 		x_cur += 5.2
 
-	x_cur = -ns_w * 0.5 - 6.5
+	x_cur = -ns_asphalt_w * 0.5 - 6.5
 	while x_cur > -62.0:
-		var dash := MeshInstance3D.new()
-		var dm := BoxMesh.new()
-		dm.size = Vector3(2.6, 0.015, 0.24)
-		dm.material = dash_mat
-		dash.mesh = dm
-		dash.position = Vector3(x_cur, line_y, 0.0)
-		dash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(dash)
+		add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
 		x_cur -= 5.2
 
 	# Asphalt wear / utility patches
-	var patch1 := MeshInstance3D.new()
-	var pm1 := BoxMesh.new()
-	pm1.size = Vector3(2.6, 0.01, 3.8)
-	pm1.material = wear_mat
-	patch1.mesh = pm1
-	patch1.position = Vector3(-ns_w * 0.25, line_y - 0.002, -26.0)
-	patch1.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(patch1)
-
-	var patch2 := MeshInstance3D.new()
-	var pm2 := BoxMesh.new()
-	pm2.size = Vector3(3.6, 0.01, 2.2)
-	pm2.material = wear_mat
-	patch2.mesh = pm2
-	patch2.position = Vector3(24.0, line_y - 0.002, ew_w * 0.25)
-	patch2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(patch2)
+	add_box.call(wear_mat, Vector3(2.6, 0.01, 3.8), Vector3(-ns_asphalt_w * 0.25, line_y - 0.002, -26.0))
+	add_box.call(wear_mat, Vector3(3.6, 0.01, 2.2), Vector3(24.0, line_y - 0.002, ew_asphalt_w * 0.25))
 
 	# Lane direction arrows (North and South intersection approaches)
-	var arrow_n_stem := MeshInstance3D.new()
-	var ans_m := BoxMesh.new()
-	ans_m.size = Vector3(0.35, 0.015, 2.2)
-	ans_m.material = stop_mat
-	arrow_n_stem.mesh = ans_m
-	arrow_n_stem.position = Vector3(-ns_w * 0.25, line_y, -ew_w * 0.5 - 10.0)
-	arrow_n_stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(arrow_n_stem)
-
-	var arrow_s_stem := MeshInstance3D.new()
-	var ass_m := BoxMesh.new()
-	ass_m.size = Vector3(0.35, 0.015, 2.2)
-	ass_m.material = stop_mat
-	arrow_s_stem.mesh = ass_m
-	arrow_s_stem.position = Vector3(ns_w * 0.25, line_y, ew_w * 0.5 + 10.0)
-	arrow_s_stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	markings_node.add_child(arrow_s_stem)
+	add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(-ns_asphalt_w * 0.25, line_y, -ew_asphalt_w * 0.5 - 10.0))
+	add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(ns_asphalt_w * 0.25, line_y, ew_asphalt_w * 0.5 + 10.0))
 
 	# Yellow corner curb markings (hazard curb paint near intersection)
 	var curb_corners: Array[Vector3] = [
-		Vector3(-ns_w * 0.5 - 0.35, line_y - 0.005, -ew_w * 0.5 - 3.0),
-		Vector3(ns_w * 0.5 + 0.35, line_y - 0.005, -ew_w * 0.5 - 3.0),
-		Vector3(-ns_w * 0.5 - 0.35, line_y - 0.005, ew_w * 0.5 + 3.0),
-		Vector3(ns_w * 0.5 + 0.35, line_y - 0.005, ew_w * 0.5 + 3.0)
+		Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
+		Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
+		Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0),
+		Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0)
 	]
 	for c_pos in curb_corners:
-		var curb_strip := MeshInstance3D.new()
-		var csm := BoxMesh.new()
-		csm.size = Vector3(0.35, 0.015, 4.0)
-		csm.material = dash_mat
-		curb_strip.mesh = csm
-		curb_strip.position = c_pos
-		curb_strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		markings_node.add_child(curb_strip)
+		add_box.call(dash_mat, Vector3(0.35, 0.015, 4.0), c_pos)
+
+	# Helipad flat surfaces if chunk (0,0)
+	if coord == Vector2i.ZERO:
+		add_box.call(AsphaltMat, Vector3(24.0, 0.14, 24.0), Vector3(0.0, 0.07, 0.0))
+		add_box.call(LineMat, Vector3(23.6, 0.15, 23.6), Vector3(0.0, 0.075, 0.0))
+		add_box.call(ConcreteMat, Vector3(22.0, 0.16, 22.0), Vector3(0.0, 0.08, 0.0))
+		add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(-2.5, 0.17, 0.0))
+		add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(2.5, 0.17, 0.0))
+		add_box.call(LineMat, Vector3(4.5, 0.02, 0.9), Vector3(0.0, 0.17, 0.0))
+
+	# Commit merged static mesh with 1 surface per material
+	var merged_mesh := ArrayMesh.new()
+	for mat: Material in boxes_by_mat:
+		var items: Array = boxes_by_mat[mat]
+		if items.is_empty():
+			continue
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.set_material(mat)
+		for box_data in items:
+			var b_size: Vector3 = box_data[0]
+			var b_pos: Vector3 = box_data[1]
+			var bm := BoxMesh.new()
+			bm.size = b_size
+			st.append_from(bm, 0, Transform3D(Basis(), b_pos))
+		st.commit(merged_mesh)
+		var surf_idx: int = merged_mesh.get_surface_count() - 1
+		merged_mesh.surface_set_material(surf_idx, mat)
+
+	var roads_mesh_inst := MeshInstance3D.new()
+	roads_mesh_inst.name = "MergedRoadGeometry"
+	roads_mesh_inst.mesh = merged_mesh
+	roads_mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	roads_root.add_child(roads_mesh_inst)
+
+	# Helipad 3D staging props for chunk (0, 0)
+	if coord == Vector2i.ZERO:
+		_build_helipad_staging(roads_root)
 
 func _build_helipad_staging(parent: Node3D) -> void:
 	var staging := Node3D.new()
 	staging.name = "HelipadStaging"
 	parent.add_child(staging)
 
-	# 1. Main Landing Apron (24m x 24m)
-	var pad_base := MeshInstance3D.new()
-	pad_base.name = "PadBase"
-	var bm := BoxMesh.new()
-	bm.size = Vector3(24.0, 0.14, 24.0)
-	bm.material = AsphaltMat
-	pad_base.mesh = bm
-	pad_base.position = Vector3(0.0, 0.07, 0.0)
-	staging.add_child(pad_base)
+	_init_shared_prop_resources()
 
-	# 2. Outer Safety Perimeter Rim (Yellow hazard border)
-	var rim_mesh := MeshInstance3D.new()
-	rim_mesh.name = "PerimeterRim"
-	var rm := BoxMesh.new()
-	rm.size = Vector3(23.6, 0.15, 23.6)
-	rm.material = LineMat
-	rim_mesh.mesh = rm
-	rim_mesh.position = Vector3(0.0, 0.075, 0.0)
-	staging.add_child(rim_mesh)
+	# 1. Perimeter Boundary Lights (4 corners) with MultiMesh
+	var mm_poles := MultiMeshInstance3D.new()
+	mm_poles.name = "PerimeterPolesMultiMesh"
+	var p_mm := MultiMesh.new()
+	p_mm.transform_format = MultiMesh.TRANSFORM_3D
+	p_mm.instance_count = 4
+	p_mm.mesh = _helipad_pole_mesh
 
-	var inner_pad := MeshInstance3D.new()
-	inner_pad.name = "InnerPad"
-	var ipm := BoxMesh.new()
-	ipm.size = Vector3(22.0, 0.16, 22.0)
-	ipm.material = ConcreteMat
-	inner_pad.mesh = ipm
-	inner_pad.position = Vector3(0.0, 0.08, 0.0)
-	staging.add_child(inner_pad)
-
-	# 3. Yellow 'H' Marking in Center
-	var h_left := MeshInstance3D.new()
-	h_left.name = "H_Left"
-	var hm_bar := BoxMesh.new()
-	hm_bar.size = Vector3(0.9, 0.02, 7.5)
-	hm_bar.material = LineMat
-	h_left.mesh = hm_bar
-	h_left.position = Vector3(-2.5, 0.17, 0.0)
-	staging.add_child(h_left)
-
-	var h_right := MeshInstance3D.new()
-	h_right.name = "H_Right"
-	h_right.mesh = hm_bar
-	h_right.position = Vector3(2.5, 0.17, 0.0)
-	staging.add_child(h_right)
-
-	var h_mid := MeshInstance3D.new()
-	h_mid.name = "H_Mid"
-	var hm_mid := BoxMesh.new()
-	hm_mid.size = Vector3(4.5, 0.02, 0.9)
-	hm_mid.material = LineMat
-	h_mid.mesh = hm_mid
-	h_mid.position = Vector3(0.0, 0.17, 0.0)
-	staging.add_child(h_mid)
-
-	# 4. Perimeter Boundary Lights (4 corners) with emissive cyan lenses
-	var light_mat := StandardMaterial3D.new()
-	light_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	light_mat.albedo_color = Color(0.31, 0.88, 0.93, 1.0)
-
-	var pole_mat := StandardMaterial3D.new()
-	pole_mat.albedo_color = Color(0.15, 0.17, 0.20, 1.0)
-	pole_mat.roughness = 0.9
-
-	var pole_mesh := CylinderMesh.new()
-	pole_mesh.top_radius = 0.12
-	pole_mesh.bottom_radius = 0.15
-	pole_mesh.height = 0.7
-	pole_mesh.material = pole_mat
-
-	var lens_mesh := SphereMesh.new()
-	lens_mesh.radius = 0.22
-	lens_mesh.height = 0.44
-	lens_mesh.material = light_mat
+	var mm_lenses := MultiMeshInstance3D.new()
+	mm_lenses.name = "PerimeterLensesMultiMesh"
+	var l_mm := MultiMesh.new()
+	l_mm.transform_format = MultiMesh.TRANSFORM_3D
+	l_mm.instance_count = 4
+	l_mm.mesh = _helipad_lens_mesh
 
 	var light_corners: Array[Vector3] = [
 		Vector3(-11.0, 0.0, -11.0),
@@ -614,62 +531,46 @@ func _build_helipad_staging(parent: Node3D) -> void:
 		Vector3(11.0, 0.0, 11.0)
 	]
 
-	for idx: int in range(light_corners.size()):
-		var lp := Node3D.new()
-		lp.name = "PerimeterLight_%d" % idx
-		lp.position = light_corners[idx]
+	for idx in range(4):
+		var p_pos: Vector3 = light_corners[idx] + Vector3(0.0, 0.35, 0.0)
+		var l_pos: Vector3 = light_corners[idx] + Vector3(0.0, 0.75, 0.0)
+		p_mm.set_instance_transform(idx, Transform3D(Basis(), p_pos))
+		l_mm.set_instance_transform(idx, Transform3D(Basis(), l_pos))
 
-		var pole := MeshInstance3D.new()
-		pole.mesh = pole_mesh
-		pole.position = Vector3(0.0, 0.35, 0.0)
-		lp.add_child(pole)
+	mm_poles.multimesh = p_mm
+	mm_poles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	staging.add_child(mm_poles)
 
-		var lens := MeshInstance3D.new()
-		lens.mesh = lens_mesh
-		lens.position = Vector3(0.0, 0.75, 0.0)
-		lp.add_child(lens)
+	mm_lenses.multimesh = l_mm
+	mm_lenses.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	staging.add_child(mm_lenses)
 
-		staging.add_child(lp)
-
-	# 5. Support Staging Props (Off to the sides, clear takeoff path)
+	# 2. Support Staging Props (Off to the sides, clear takeoff path)
 	var truck := Node3D.new()
 	truck.name = "SupportTruck"
 	truck.position = Vector3(14.5, 0.0, 8.5)
 	truck.rotation.y = deg_to_rad(-25.0)
 
-	var truck_mat := StandardMaterial3D.new()
-	truck_mat.albedo_color = Color(0.24, 0.28, 0.32, 1.0)
-	truck_mat.roughness = 0.8
-
-	var cab_mat := StandardMaterial3D.new()
-	cab_mat.albedo_color = Color(0.18, 0.35, 0.42, 1.0)
-	cab_mat.roughness = 0.7
-
 	var chassis := MeshInstance3D.new()
-	var cm := BoxMesh.new()
-	cm.size = Vector3(2.4, 1.1, 5.2)
-	cm.material = truck_mat
-	chassis.mesh = cm
+	chassis.mesh = _truck_chassis_mesh
 	chassis.position = Vector3(0.0, 0.8, 0.0)
+	chassis.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	truck.add_child(chassis)
 
 	var cab := MeshInstance3D.new()
-	var kbm := BoxMesh.new()
-	kbm.size = Vector3(2.2, 1.0, 1.8)
-	kbm.material = cab_mat
-	cab.mesh = kbm
+	cab.mesh = _truck_cab_mesh
 	cab.position = Vector3(0.0, 1.6, -1.2)
+	cab.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	truck.add_child(cab)
 	staging.add_child(truck)
 
-	# B. Supply Crates Stack (at X=-14m, Z=+9m)
-	var crate_mat := StandardMaterial3D.new()
-	crate_mat.albedo_color = Color(0.42, 0.36, 0.26, 1.0)
-	crate_mat.roughness = 0.9
-
-	var crate_mesh := BoxMesh.new()
-	crate_mesh.size = Vector3(1.3, 1.1, 1.3)
-	crate_mesh.material = crate_mat
+	# 3. Supply Crates Stack with MultiMesh
+	var mm_crates := MultiMeshInstance3D.new()
+	mm_crates.name = "SupplyCratesMultiMesh"
+	var c_mm := MultiMesh.new()
+	c_mm.transform_format = MultiMesh.TRANSFORM_3D
+	c_mm.instance_count = 4
+	c_mm.mesh = _crate_mesh
 
 	var crate_positions: Array[Vector3] = [
 		Vector3(-14.2, 0.55, 8.5),
@@ -677,31 +578,24 @@ func _build_helipad_staging(parent: Node3D) -> void:
 		Vector3(-12.8, 0.55, 9.2),
 		Vector3(-13.5, 1.65, 9.2)
 	]
-	for c_idx: int in range(crate_positions.size()):
-		var crate := MeshInstance3D.new()
-		crate.name = "SupplyCrate_%d" % c_idx
-		crate.mesh = crate_mesh
-		crate.position = crate_positions[c_idx]
-		staging.add_child(crate)
+	for c_idx in range(4):
+		c_mm.set_instance_transform(c_idx, Transform3D(Basis(), crate_positions[c_idx]))
+	mm_crates.multimesh = c_mm
+	mm_crates.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	staging.add_child(mm_crates)
 
-	# C. Restrained Perimeter Security Fencing
-	var fence_mat := StandardMaterial3D.new()
-	fence_mat.albedo_color = Color(0.20, 0.22, 0.25, 1.0)
-	var fence_mesh := BoxMesh.new()
-	fence_mesh.size = Vector3(12.0, 0.9, 0.15)
-	fence_mesh.material = fence_mat
-
-	var fence1 := MeshInstance3D.new()
-	fence1.name = "SecurityFence_East"
-	fence1.mesh = fence_mesh
-	fence1.position = Vector3(13.5, 0.45, 13.0)
-	staging.add_child(fence1)
-
-	var fence2 := MeshInstance3D.new()
-	fence2.name = "SecurityFence_West"
-	fence2.mesh = fence_mesh
-	fence2.position = Vector3(-13.5, 0.45, 13.0)
-	staging.add_child(fence2)
+	# 4. Security Fences with MultiMesh
+	var mm_fences := MultiMeshInstance3D.new()
+	mm_fences.name = "SecurityFencesMultiMesh"
+	var f_mm := MultiMesh.new()
+	f_mm.transform_format = MultiMesh.TRANSFORM_3D
+	f_mm.instance_count = 2
+	f_mm.mesh = _fence_mesh
+	f_mm.set_instance_transform(0, Transform3D(Basis(), Vector3(13.5, 0.45, 13.0)))
+	f_mm.set_instance_transform(1, Transform3D(Basis(), Vector3(-13.5, 0.45, 13.0)))
+	mm_fences.multimesh = f_mm
+	mm_fences.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	staging.add_child(mm_fences)
 
 func _build_buildings(rng: RandomNumberGenerator) -> void:
 	buildings_root = Node3D.new()
@@ -885,9 +779,17 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 			v_node.name = "Vehicle_%d" % idx
 			v_node.position = spawn_pos
 			v_node.rotation.y = rot_y
+			# Distance-based shadow LOD at creation time: only central chunks cast vehicle shadows
+			if coord.length() > 1.0:
+				for vc in v_node.find_children("*", "GeometryInstance3D", true, false):
+					var v_gi := vc as GeometryInstance3D
+					if v_gi:
+						v_gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			props_root.add_child(v_node)
 
 func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
+	_init_shared_prop_resources()
+
 	var tree_positions: Array[Vector3] = [
 		Vector3(-15.0, 0.0, -48.0),
 		Vector3(-15.0, 0.0, 48.0),
@@ -898,40 +800,83 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 		Vector3(-48.0, 0.0, 15.0),
 		Vector3(48.0, 0.0, 15.0)
 	]
+	var count: int = tree_positions.size()
 
-	for idx in range(tree_positions.size()):
-		var t_inst := TreeClusterScene.instantiate() as Node3D
-		if t_inst:
-			t_inst.name = "TreeCluster_%d" % idx
-			var scale_val: float = rng.randf_range(0.85, 1.22)
-			t_inst.position = tree_positions[idx]
-			t_inst.scale = Vector3(scale_val, scale_val, scale_val)
-			t_inst.rotation.y = rng.randf_range(0.0, TAU)
-			props_root.add_child(t_inst)
+	var mm_trunks := MultiMeshInstance3D.new()
+	mm_trunks.name = "TreeTrunksMultiMesh"
+	var trunk_mm := MultiMesh.new()
+	trunk_mm.transform_format = MultiMesh.TRANSFORM_3D
+	trunk_mm.instance_count = count
+	trunk_mm.mesh = _tree_trunk_mesh
+
+	var mm_lower := MultiMeshInstance3D.new()
+	mm_lower.name = "TreeLowerCrownsMultiMesh"
+	var lower_mm := MultiMesh.new()
+	lower_mm.transform_format = MultiMesh.TRANSFORM_3D
+	lower_mm.instance_count = count
+	lower_mm.mesh = _tree_lower_crown_mesh
+
+	var mm_upper := MultiMeshInstance3D.new()
+	mm_upper.name = "TreeUpperCrownsMultiMesh"
+	var upper_mm := MultiMesh.new()
+	upper_mm.transform_format = MultiMesh.TRANSFORM_3D
+	upper_mm.instance_count = count
+	upper_mm.mesh = _tree_upper_crown_mesh
+
+	var shadow_crowns: GeometryInstance3D.ShadowCastingSetting = (
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if coord.length() > 1.5 
+		else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+
+	for idx in range(count):
+		var scale_val: float = rng.randf_range(0.85, 1.22)
+		var rot_y: float = rng.randf_range(0.0, TAU)
+		var b := Basis().rotated(Vector3.UP, rot_y).scaled(Vector3(scale_val, scale_val, scale_val))
+		var pos: Vector3 = tree_positions[idx]
+
+		trunk_mm.set_instance_transform(idx, Transform3D(b, pos + Vector3(0.0, 1.5 * scale_val, 0.0)))
+		lower_mm.set_instance_transform(idx, Transform3D(b, pos + Vector3(0.0, 4.0 * scale_val, 0.0)))
+		upper_mm.set_instance_transform(idx, Transform3D(b, pos + Vector3(0.0, 6.0 * scale_val, 0.0)))
+
+	mm_trunks.multimesh = trunk_mm
+	mm_trunks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	props_root.add_child(mm_trunks)
+
+	mm_lower.multimesh = lower_mm
+	mm_lower.cast_shadow = shadow_crowns
+	props_root.add_child(mm_lower)
+
+	mm_upper.multimesh = upper_mm
+	mm_upper.cast_shadow = shadow_crowns
+	props_root.add_child(mm_upper)
 
 func _build_micro_scenes(rng: RandomNumberGenerator) -> void:
+	_init_shared_prop_resources()
+	var barrier_transforms: Array[Transform3D] = []
+
 	if district_type == DistrictType.INDUSTRIAL:
 		if rng.randf() < 0.6:
-			var b1 := BarrierScene.instantiate() as Node3D
-			if b1:
-				b1.name = "RoadsideBarrier_1"
-				b1.position = Vector3(13.2, 0.0, 24.0)
-				b1.rotation.y = deg_to_rad(12.0)
-				props_root.add_child(b1)
-			var b2 := BarrierScene.instantiate() as Node3D
-			if b2:
-				b2.name = "RoadsideBarrier_2"
-				b2.position = Vector3(13.2, 0.0, 28.0)
-				b2.rotation.y = deg_to_rad(-8.0)
-				props_root.add_child(b2)
+			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(12.0)), Vector3(13.2, 0.5, 24.0))
+			barrier_transforms.append(b1)
+			var b2 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(-8.0)), Vector3(13.2, 0.5, 28.0))
+			barrier_transforms.append(b2)
 	elif district_type == DistrictType.RESIDENTIAL:
 		if rng.randf() < 0.4:
-			var b1 := BarrierScene.instantiate() as Node3D
-			if b1:
-				b1.name = "RoadsideBarrier_1"
-				b1.position = Vector3(-13.2, 0.0, -22.0)
-				b1.rotation.y = deg_to_rad(5.0)
-				props_root.add_child(b1)
+			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(5.0)), Vector3(-13.2, 0.5, -22.0))
+			barrier_transforms.append(b1)
+
+	if not barrier_transforms.is_empty():
+		var mm_barriers := MultiMeshInstance3D.new()
+		mm_barriers.name = "RoadsideBarriersMultiMesh"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = barrier_transforms.size()
+		mm.mesh = _barrier_mesh
+		for b_idx in range(barrier_transforms.size()):
+			mm.set_instance_transform(b_idx, barrier_transforms[b_idx])
+		mm_barriers.multimesh = mm
+		mm_barriers.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		props_root.add_child(mm_barriers)
 
 # ==============================================================================
 # CANDIDATE POSITION EXTRACTION (Global World Coordinates)

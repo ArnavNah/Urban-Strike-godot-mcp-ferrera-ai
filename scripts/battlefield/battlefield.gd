@@ -27,7 +27,15 @@ func _ready() -> void:
 		flares.name = "FlarePool"
 		add_child(flares)
 
-	# 4. Initialize tactical SpawnDirector / SpawnSystem
+	# 4. Initialize XpGemPool for pre-allocated, zero-allocation XP gems
+	if not XpGemPool.instance:
+		var gem_pool := XpGemPool.new()
+		gem_pool.name = "XpGemPool"
+		add_child(gem_pool)
+
+	SaveSystem.apply_graphics_preset(str(SaveSystem.get_setting("graphics_preset", "medium")), get_tree())
+
+	# 5. Initialize tactical SpawnDirector / SpawnSystem
 	var spawner := get_node_or_null("SpawnSystem") as SpawnDirector
 	if not spawner:
 		spawner = SpawnDirector.new()
@@ -37,6 +45,6 @@ func _ready() -> void:
 	else:
 		spawner.autostart_wave = false
 
-	# 5. Link WaveManager to SpawnDirector
+	# 6. Link WaveManager to SpawnDirector
 	if wave_manager:
 		wave_manager.spawn_director = spawner

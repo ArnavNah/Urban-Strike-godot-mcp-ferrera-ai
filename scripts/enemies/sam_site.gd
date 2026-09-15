@@ -34,6 +34,7 @@ var _player: Node3D = null
 var _radar_active: bool = false
 var _has_attack_slot: bool = false
 var _lod_frame_counter: int = 0
+var _stagger_offset: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
 
@@ -49,11 +50,23 @@ func _ready() -> void:
 		EnemyRegistry.instance.register_enemy(self, false)
 	current_health = max_health
 	_player = get_tree().get_first_node_in_group("player")
+	_stagger_offset = randi() % 60
 	if not missile_scene:
 		missile_scene = preload("res://scenes/weapons/guided_missile.tscn")
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("radar_status_changed"):
 		eb.radar_status_changed.connect(_on_radar_status_changed)
+
+	# A SAM can spawn after the radar mission has already begun. Signals only
+	# describe future changes, so initialize from the current network state too.
+	var spawn_director := get_tree().get_first_node_in_group("spawn_director")
+	if is_instance_valid(spawn_director) and "is_radar_active" in spawn_director:
+		_radar_active = bool(spawn_director.is_radar_active)
+	else:
+		for objective in get_tree().get_nodes_in_group("objectives"):
+			if is_instance_valid(objective) and objective is RadarStation and objective.is_active:
+				_radar_active = true
+				break
 
 func _exit_tree() -> void:
 	if EnemyRegistry.instance:
@@ -90,16 +103,17 @@ func _physics_process(delta: float) -> void:
 	# Distance-based AI LOD throttling (Gap 11)
 	_lod_frame_counter += 1
 	var step_delta := delta
+	var frame_stagger := _lod_frame_counter + _stagger_offset
 	if dist > 130.0:
 		if radar_dish:
 			radar_dish.rotate_y(0.5 * delta)
 		return # LOD 3: Culled/Dormant
 	elif dist > 75.0:
-		if _lod_frame_counter % 4 != 0:
+		if frame_stagger % 4 != 0:
 			return # LOD 2: 15 Hz
 		step_delta = delta * 4.0
 	elif dist > 40.0:
-		if _lod_frame_counter % 2 != 0:
+		if frame_stagger % 2 != 0:
 			return # LOD 1: 30 Hz
 		step_delta = delta * 2.0
 
@@ -319,12 +333,16 @@ func _spawn_xp() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			if "xp_value" in gem:
-				gem.xp_value = xp_reward
-			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var spawn_pos := global_position + Vector3(0, 1.0, 0)
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(spawn_pos, xp_reward)
+	else:
+		var xp_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn") as PackedScene
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_reward
+				gem.transform.origin = spawn_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)

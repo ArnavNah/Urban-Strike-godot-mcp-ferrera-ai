@@ -6,9 +6,6 @@
 [sub_resource type="BoxShape3D" id="BoxShape3D_0mj4p"]
 size = Vector3(26.26, 12, 29.52)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_357tr"]
-size = Vector3(1.8, 6.16, 1.8)
-
 [node name="WarehouseSawtooth" type="StaticBody3D" unique_id=968418856]
 collision_mask = 0
 
@@ -23,10 +20,6 @@ transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 6, 12, 4)
 [node name="CollisionWarehouseModel" type="CollisionShape3D" parent="." unique_id=205983156]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
 shape = SubResource("BoxShape3D_0mj4p")
-
-[node name="CollisionRoofChimney" type="CollisionShape3D" parent="." unique_id=1472271186]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 15.08, 4)
-shape = SubResource("BoxShape3D_357tr")
 
 [node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=1720531640]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12.12, 0)

@@ -12,6 +12,7 @@ var zone_radius: float = 22.0
 var max_altitude: float = 35.0
 
 var lz_area: Area3D = null
+var _owns_lz_area: bool = false
 var _player_in_zone: bool = false
 var _director_ref: Node = null
 
@@ -29,6 +30,7 @@ func start(director: Node) -> void:
 	_director_ref = director
 	current_hold_time = 0.0
 	_player_in_zone = false
+	_owns_lz_area = false
 
 	var tree := director.get_tree() if is_instance_valid(director) else null
 	if not tree:
@@ -58,7 +60,26 @@ func start(director: Node) -> void:
 			col.shape = cyl
 			col.transform.origin = Vector3(0.0, max_altitude * 0.5, 0.0)
 			lz_area.add_child(col)
+
+			var zone_visual := MeshInstance3D.new()
+			zone_visual.name = "SecureLZMarker"
+			var disc := CylinderMesh.new()
+			disc.top_radius = zone_radius
+			disc.bottom_radius = zone_radius
+			disc.height = 0.12
+			var zone_material := StandardMaterial3D.new()
+			zone_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			zone_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			zone_material.albedo_color = Color(0.1, 0.95, 0.55, 0.22)
+			zone_material.emission_enabled = true
+			zone_material.emission = Color(0.05, 0.65, 0.35)
+			disc.material = zone_material
+			zone_visual.mesh = disc
+			zone_visual.position = Vector3(0.0, 0.08, 0.0)
+			lz_area.add_child(zone_visual)
+
 			root.add_child(lz_area)
+			_owns_lz_area = true
 
 		if lz_area:
 			lz_area.body_entered.connect(_on_body_entered)
@@ -77,10 +98,10 @@ func update(delta: float, player: Node3D) -> Dictionary:
 	if is_instance_valid(player):
 		var p_pos := player.global_position
 		dist = Vector2(p_pos.x - target_position.x, p_pos.z - target_position.z).length()
-		var altitude := p_pos.y
+		var relative_altitude := p_pos.y - target_position.y
 
-		# Dual detection: Area3D or radius + altitude check
-		var in_bounds := _player_in_zone or (dist <= zone_radius and altitude >= 0.0 and altitude <= max_altitude)
+		# Dual detection: Area3D or radius + altitude check relative to the LZ.
+		var in_bounds := _player_in_zone or (dist <= zone_radius and relative_altitude >= 0.0 and relative_altitude <= max_altitude)
 
 		if in_bounds:
 			current_hold_time = minf(required_hold_time, current_hold_time + delta)
@@ -120,7 +141,10 @@ func cleanup() -> void:
 			lz_area.body_entered.disconnect(_on_body_entered)
 		if lz_area.body_exited.is_connected(_on_body_exited):
 			lz_area.body_exited.disconnect(_on_body_exited)
+		if _owns_lz_area:
+			lz_area.queue_free()
 	super.cleanup()
+	_owns_lz_area = false
 	lz_area = null
 	target_node = null
 

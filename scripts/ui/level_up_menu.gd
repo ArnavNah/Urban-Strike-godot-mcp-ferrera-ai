@@ -48,6 +48,18 @@ func display_cards(choices: Array[Dictionary], earned_level: int = 0) -> bool:
 	$CenterContainer/VBoxContainer/Subtitle.text = "Choose one system modification. Each standard upgrade creates strengths and trade-offs." if not choices.is_empty() else "No eligible upgrades remain. Continue to retain your earned progress."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	visible = true
+
+	# Staggered card entrance animation
+	var card_idx := 0
+	for child in card_container.get_children():
+		if child is Control:
+			var c := child as Control
+			c.modulate.a = 0.0
+			var tw := create_tween()
+			tw.tween_interval(float(card_idx) * 0.05)
+			tw.tween_property(c, "modulate:a", 1.0, 0.15)
+			card_idx += 1
+
 	_buttons[0].grab_focus()
 	return true
 
@@ -181,8 +193,22 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 	var raw_cat: String = str(data.get("category", "UPGRADE")).to_upper()
 	if not is_empty_card and raw_cat != "UPGRADE" and raw_cat != "EVOLUTION" and raw_cat != "LEGENDARY":
 		var cat_label := Label.new()
-		cat_label.text = "|  " + raw_cat
-		cat_label.modulate = Color(0.7, 0.8, 0.85)
+		var prefix := "• "
+		var cat_col := Color(0.75, 0.85, 0.90)
+		if "PRIMARY" in raw_cat or "WEAPON" in raw_cat:
+			prefix = "⚔ "
+			cat_col = Color(1.0, 0.72, 0.25)
+		elif "AIRFRAME" in raw_cat or "DEFENSE" in raw_cat:
+			prefix = "🛡 "
+			cat_col = Color(0.25, 0.90, 0.85)
+		elif "SUPPORT" in raw_cat or "DRONE" in raw_cat or "ESCORT" in raw_cat:
+			prefix = "🛸 "
+			cat_col = Color(0.85, 0.55, 1.0)
+		elif "AVIONICS" in raw_cat:
+			prefix = "📡 "
+			cat_col = Color(0.40, 0.80, 1.0)
+		cat_label.text = "|  " + prefix + raw_cat
+		cat_label.modulate = cat_col
 		cat_label.add_theme_font_size_override("font_size", 12)
 		meta_row.add_child(cat_label)
 

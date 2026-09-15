@@ -1,0 +1,167 @@
+[gd_scene format=3 uid="uid://bp57b8kh4dlne"]
+
+[ext_resource type="Theme" uid="uid://dbpewnr4dtmhr" path="res://resources/ui/menu_theme.tres" id="1_s2kth"]
+[ext_resource type="Script" uid="uid://bxyyi8gs32kr1" path="res://scripts/ui/loading_screen.gd" id="2_s41fs"]
+[ext_resource type="FontFile" uid="uid://oqpdnawjrvdg" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="3_y06jl"]
+[ext_resource type="FontFile" uid="uid://c0o5e1d8pafa7" path="res://assets/ui/fonts/Inter-Regular.ttf" id="4_g5iak"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2hmxs"]
+bg_color = Color(0.08, 0.12, 0.18, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.45, 0.6, 0.4)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jwu8f"]
+bg_color = Color(0.31, 0.88, 0.93, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="LoadingScreen" type="Control" unique_id=881119816]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("1_s2kth")
+script = ExtResource("2_s41fs")
+
+[node name="Background" type="ColorRect" parent="." unique_id=37263095]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.02, 0.03, 0.06, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=430005103]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 80
+theme_override_constants/margin_bottom = 50
+
+[node name="MainLayout" type="VBoxContainer" parent="SafeArea" unique_id=807557625]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="HeaderBox" type="VBoxContainer" parent="SafeArea/MainLayout" unique_id=1825118689]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="SafeArea/MainLayout/HeaderBox" unique_id=1148519218]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.97, 0.98, 1)
+theme_override_fonts/font = ExtResource("3_y06jl")
+theme_override_font_sizes/font_size = 52
+text = "HELI-STRIKE"
+
+[node name="SubtitleLabel" type="Label" parent="SafeArea/MainLayout/HeaderBox" unique_id=531978136]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.64, 0.74, 1)
+theme_override_fonts/font = ExtResource("3_y06jl")
+theme_override_font_sizes/font_size = 17
+text = "URBAN AIR COMBAT"
+
+[node name="CenterArea" type="CenterContainer" parent="SafeArea/MainLayout" unique_id=23827498]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="RadarReticle" type="Control" parent="SafeArea/MainLayout/CenterArea" unique_id=2436409]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 160)
+layout_mode = 2
+
+[node name="ErrorContainer" type="VBoxContainer" parent="SafeArea/MainLayout" unique_id=535170812]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="ErrorMessageLabel" type="Label" parent="SafeArea/MainLayout/ErrorContainer" unique_id=1338353200]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+theme_override_fonts/font = ExtResource("3_y06jl")
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+
+[node name="ErrorButtonsHBox" type="HBoxContainer" parent="SafeArea/MainLayout/ErrorContainer" unique_id=963102371]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="RetryButton" type="Button" parent="SafeArea/MainLayout/ErrorContainer/ErrorButtonsHBox" unique_id=1702032383]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 44)
+layout_mode = 2
+text = "RETRY"
+
+[node name="MenuButton" type="Button" parent="SafeArea/MainLayout/ErrorContainer/ErrorButtonsHBox" unique_id=748439056]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 44)
+layout_mode = 2
+text = "RETURN TO MENU"
+
+[node name="FooterBox" type="VBoxContainer" parent="SafeArea/MainLayout" unique_id=227027083]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatusHBox" type="HBoxContainer" parent="SafeArea/MainLayout/FooterBox" unique_id=722454329]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="SafeArea/MainLayout/FooterBox/StatusHBox" unique_id=650817618]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
+theme_override_fonts/font = ExtResource("3_y06jl")
+theme_override_font_sizes/font_size = 18
+text = "INITIALIZING TACTICAL AIRSPACE..."
+
+[node name="ProgressLabel" type="Label" parent="SafeArea/MainLayout/FooterBox/StatusHBox" unique_id=1832300990]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.97, 0.98, 1)
+theme_override_fonts/font = ExtResource("3_y06jl")
+theme_override_font_sizes/font_size = 18
+text = "0%"
+
+[node name="ProgressBar" type="ProgressBar" parent="SafeArea/MainLayout/FooterBox" unique_id=1267166452]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_2hmxs")
+theme_override_styles/fill = SubResource("StyleBoxFlat_jwu8f")
+show_percentage = false
+
+[node name="HintLabel" type="Label" parent="SafeArea/MainLayout/FooterBox" unique_id=1334286242]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.56, 0.66, 0.85)
+theme_override_fonts/font = ExtResource("4_g5iak")
+theme_override_font_sizes/font_size = 13
+text = "TACTICAL ADVICE: Flare dispensers decoy hostile radar-guided SAM missiles."

@@ -198,6 +198,73 @@ Running test 22 (environment districts & boundary)...
   -> 3-tier boundary, fuel tank, crate destruction, HUD border alert, and 4-district city battlefield verified.
 === ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===
 ```
+
+---
+
+# Walkthrough: Ground Enemy Replacement with Textured 3D Tanks & Dynamic Animations
+
+## Overview
+
+All placeholder primitive box/cylinder meshes across the entire ground enemy vehicle fleet have been replaced with the high-fidelity textured 3D models from `assets/Enemies/Ground tanks/`:
+- **Tank A (`Tank A - Textured.glb`)**: A heavily armored battle tank with rotating turret, center barrel, heavy treads, and riveted plating.
+- **Tank B (`Tank B - Textured.glb`)**: A dual-cannon heavy assault destroyer with twin sponson/turret cannons and wide tread assemblies.
+
+In addition to visual model replacement, a full **procedural & keyframed animation suite** was integrated into all 7 ground enemy archetypes:
+- **Looped Suspension & Chassis Rocking (`move`)**: Keyframed suspension bobbing ($Y \pm 0.025\text{m}$) and pitch/roll swaying ($\pm 1.2^\circ$), dynamically scaled by vehicle speed.
+- **Engine Vibration (`idle`)**: Sub-millimeter chassis vibration loop when stationary.
+- **Dynamic Firing Recoil**: Physical kickback along the barrel axis ($-0.15\text{m}$) with spring recovery.
+- **Dual-Muzzle Firing System**: Support for alternating and synchronized dual-cannon volleys on Tank B variants.
+
+---
+
+## Ground Enemy Fleet Mapping
+
+| Enemy Scene | Archetype | Model | Scale ($S$) | Features |
+| :--- | :--- | :--- | :--- | :--- |
+| [`tank.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/tank.tscn) | Main Battle Tank | **Tank A** | $0.035$ | Rotating 360° turret, single heavy high-velocity cannon |
+| [`ground_scout_buggy.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_scout_buggy.tscn) | Scout Buggy | **Tank A** | $0.026$ | High-speed scout, low silhouette, rapid repositioning |
+| [`ground_assault_ifv.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_assault_ifv.tscn) | Assault IFV | **Tank A** | $0.031$ | Balanced armor/firepower, mid-range combat support |
+| [`ground_jammer_vehicle.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_jammer_vehicle.tscn) | EW Jammer Tank | **Tank A** | $0.033$ | Equipped with `JammerBeacon` dish and pulsing cyan omni light |
+| [`ground_rocket_technical.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_rocket_technical.tscn) | Rocket Technical | **Tank B** | $0.030$ | Dual-cannon rapid rocket barrage launcher |
+| [`ground_mortar_carrier.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_mortar_carrier.tscn) | Mortar Carrier | **Tank B** | $0.035$ | Long-range indirect artillery siege platform |
+| [`ground_troop_carrier_apc.tscn`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scenes/enemies/ground_troop_carrier_apc.tscn) | Armored APC | **Tank B** | $0.034$ | Heavy armor, high durability, sustained suppressive fire |
+
+---
+
+## Technical Architecture & Hierarchy Isolation
+
+To ensure that procedural animations (suspension bobbing, chassis sway) do not interfere with physics collision, floor grounding, or turret tracking:
+
+1. **Root `CharacterBody3D`**: Remains strictly at $Y=0$, with `floor_snap_length = 0.6` and `floor_max_angle = 45°`.
+2. **`CollisionShape3D`**: Parented directly to the root, maintaining tight collision boundaries for line-of-sight raycasting.
+3. **`Body` (Node3D Container)**: Houses all visual meshes and the `Turret`. The `AnimationPlayer` animates `Body:position` and `Body:rotation_degrees`.
+4. **`Turret` & `Barrel`**: Inherit the suspension movement from `Body`, but their yaw and pitch rotations are driven directly by GDScript in [`tank.gd`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scripts/enemies/tank.gd) without animation track conflict.
+5. **Orthonormal Basis Transforms**: Realigned from SketchUp $-X$ forward to Godot $-Z$ standard forward using direct `Basis` matrices, preventing gimbal singularity warnings.
+
+---
+
+## Visual Verification
+
+````carousel
+![In-Game Avenue Showcase: Tank A (Single Cannon MBT) & Tank B (Dual Cannon Destroyer)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_gameplay_showcase.png)
+<!-- slide -->
+![Tank A Isolated (Single Cannon Battle Tank Model)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_a_isolated.png)
+<!-- slide -->
+![Tank B Isolated (Dual Cannon Heavy Destroyer Model)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_b_isolated.png)
+<!-- slide -->
+![Live Combat Action & Firing Effects on Battlefield](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_combat_action.png)
+````
+
+---
+
+## Automated Test Verification
+
+All 44 vertical slice tests pass 100% with exit code 0:
+```text
+=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===
+ExitCode: 0
+```
+
 - **Exit Code**: 0 (0 errors, 0 crashes, 0 warnings).
 - **Battlefield Scene Validation**: 3s headless execution passed with 0 crashes, 0 errors, 0 warnings.
 

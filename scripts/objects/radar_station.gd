@@ -67,25 +67,33 @@ func _destroy_radar() -> void:
 
 	# Spawn multiple XP pickups (60 XP total: 4 x 15 XP)
 	for i in range(4):
-		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-		if xp_scene:
-			var gem: Node3D = xp_scene.instantiate() as Node3D
-			if gem:
-				if "xp_value" in gem:
-					gem.xp_value = 15
-				var offset := Vector3(randf_range(-2.0, 2.0), 0.5, randf_range(-2.0, 2.0))
-				gem.transform.origin = global_position + offset
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(gem)
+		var offset := Vector3(randf_range(-2.0, 2.0), 0.5, randf_range(-2.0, 2.0))
+		var spawn_pos := global_position + offset
+		if XpGemPool.instance:
+			XpGemPool.instance.spawn_gem(spawn_pos, 15)
+		else:
+			var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+			if xp_scene:
+				var gem: Node3D = xp_scene.instantiate() as Node3D
+				if gem:
+					if "xp_value" in gem:
+						gem.xp_value = 15
+					gem.transform.origin = spawn_pos
+					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					p.add_child.call_deferred(gem)
 
 	# Destruction explosion
-	var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-	if expl_scene:
-		var expl := expl_scene.instantiate() as Node3D
-		if expl:
-			expl.transform.origin = global_position + Vector3(0, 2.0, 0)
-			expl.scale = Vector3(3.0, 3.0, 3.0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(expl)
+	var expl_pos := global_position + Vector3(0, 2.0, 0)
+	if VfxPool.instance:
+		VfxPool.instance.spawn_explosion(expl_pos, 3.0)
+	else:
+		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
+		if expl_scene:
+			var expl := expl_scene.instantiate() as Node3D
+			if expl:
+				expl.transform.origin = expl_pos
+				expl.scale = Vector3(3.0, 3.0, 3.0)
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(expl)
 
 	queue_free()

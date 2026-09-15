@@ -59,6 +59,10 @@ var _damage_flash_intensity: float = 1.0
 var _reduced_flashing: bool = false
 var _high_contrast_indicators: bool = false
 
+var _last_speed_int: int = -999
+var _last_alt_tenth: int = -9999
+var _last_mission_dist_m: int = -999
+
 func _ready() -> void:
 	_damage_flash_enabled = bool(SaveSystem.get_setting("damage_flash_enabled", true))
 	_damage_flash_intensity = float(SaveSystem.get_setting("damage_flash_intensity", 1.0))
@@ -165,24 +169,31 @@ func _process(delta: float) -> void:
 		if _missile_warning_timer <= 0.0:
 			_update_missile_status_display()
 
-	# Speed and altitude telemetry
-	var speed_kph: float = _player.velocity.length() * 3.6
-	if speed_label:
-		speed_label.text = "%3.0f KPH" % speed_kph
+	# Speed and altitude telemetry (cached to avoid per-frame string allocations)
+	var speed_int: int = int(roundf(_player.velocity.length() * 3.6))
+	if speed_int != _last_speed_int:
+		_last_speed_int = speed_int
+		if speed_label:
+			speed_label.text = "%3.0f KPH" % float(speed_int)
 
-	if altitude_label:
-		altitude_label.text = "ALT: %4.1f m" % _player.global_position.y
+	var alt_tenth: int = int(roundf(_player.global_position.y * 10.0))
+	if alt_tenth != _last_alt_tenth:
+		_last_alt_tenth = alt_tenth
+		if altitude_label:
+			altitude_label.text = "ALT: %4.1f m" % (float(alt_tenth) / 10.0)
 
-	# Live mission objective distance readout
+	# Live mission objective distance readout (cached to whole meters)
 	if _has_active_mission and is_instance_valid(mission_card) and mission_card.visible and is_instance_valid(mission_detail_label) and _mission_banner_timer <= 0.0:
 		if not _current_mission_base_detail.is_empty():
 			mission_detail_label.text = _current_mission_base_detail
 		elif is_instance_valid(_player):
-			var dist_m: float = _player.global_position.distance_to(_active_mission_pos)
-			mission_detail_label.text = "DISTANCE: %.0fm" % dist_m
+			var dist_m: int = int(roundf(_player.global_position.distance_to(_active_mission_pos)))
+			if dist_m != _last_mission_dist_m:
+				_last_mission_dist_m = dist_m
+				mission_detail_label.text = "DISTANCE: %dm" % dist_m
 
-	# Update 3D projected screen reticle
-	_update_target_reticle()
+	# Update 3D projected screen reticle with smooth tracking
+	_update_target_reticle(delta)
 
 	# Wave banner fade
 	if _banner_timer > 0.0:
@@ -208,13 +219,15 @@ func _draw() -> void:
 
 	var threats: Array[Node3D] = []
 	if EnemyRegistry.instance:
-		threats = EnemyRegistry.instance.get_enemies_in_radius(_player.global_position, 85.0)
+		threats = EnemyRegistry.instance.get_enemies_in_radius(_player.global_position, 85.0, 16)
 	else:
 		var raw_threats := get_tree().get_nodes_in_group("enemies")
 		for th in raw_threats:
 			var th3d := th as Node3D
 			if is_instance_valid(th3d) and th3d != _player:
 				threats.append(th3d)
+				if threats.size() >= 16:
+					break
 
 	for th3d in threats:
 		if not is_instance_valid(th3d) or th3d == _player:
@@ -290,7 +303,7 @@ func _draw() -> void:
 			draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), obj_col, 2.0)
 
 
-func _update_target_reticle() -> void:
+func _update_target_reticle(delta: float = 0.0) -> void:
 	if not target_reticle:
 		return
 
@@ -309,8 +322,14 @@ func _update_target_reticle() -> void:
 		return
 
 	var screen_pos: Vector2 = cam.unproject_position(target_3d_pos)
-	target_reticle.visible = true
-	target_reticle.position = screen_pos - (target_reticle.size * 0.5)
+	var target_screen_pos: Vector2 = screen_pos - (target_reticle.size * 0.5)
+
+	if not target_reticle.visible:
+		target_reticle.visible = true
+		target_reticle.position = target_screen_pos
+	else:
+		var smooth_weight: float = clampf(delta * 28.0, 0.0, 1.0) if delta > 0.0 else 1.0
+		target_reticle.position = target_reticle.position.lerp(target_screen_pos, smooth_weight)
 
 func _on_health_changed(current: float, maximum: float) -> void:
 	if health_bar:
@@ -361,25 +380,29 @@ func _update_missile_status_display() -> void:
 	if not missile_status:
 		return
 
+	var pips := ""
+	for i in range(_max_missiles):
+		pips += "▲" if i < _missile_ammo else "△"
+
 	if _missile_warning_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d  NO MISSILES" % [_missile_ammo, _max_missiles]
+		missile_status.text = "MISSILES  %d / %d  [%s]  NO MISSILES" % [_missile_ammo, _max_missiles, pips]
 		missile_status.modulate = Color(1.0, 0.25, 0.25)
 		return
 
 	if _missile_ammo <= 0:
-		missile_status.text = "MISSILES  0 / %d  EMPTY" % _max_missiles
+		missile_status.text = "MISSILES  0 / %d  [%s]  EMPTY" % [_max_missiles, pips]
 		missile_status.modulate = Color(0.85, 0.35, 0.35)
 		return
 
 	var jam_suffix := "  EW JAMMED" if _is_jammed else ""
 	if _is_missile_locked:
-		missile_status.text = "MISSILES  %d / %d  LOCKED" % [_missile_ammo, _max_missiles]
+		missile_status.text = "MISSILES  %d / %d  [%s]  LOCKED" % [_missile_ammo, _max_missiles, pips]
 		missile_status.modulate = Color(0.20, 0.85, 0.45)
 	elif _last_lock_progress > 0.05:
-		missile_status.text = "MISSILES  %d / %d  LOCKING %d%%%s" % [_missile_ammo, _max_missiles, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.text = "MISSILES  %d / %d  [%s]  LOCKING %d%%%s" % [_missile_ammo, _max_missiles, pips, int(_last_lock_progress * 100.0), jam_suffix]
 		missile_status.modulate = Color(1.0, 0.50, 0.15) if _is_jammed else Color(1.0, 0.75, 0.20)
 	else:
-		missile_status.text = "MISSILES  %d / %d  READY%s" % [_missile_ammo, _max_missiles, jam_suffix]
+		missile_status.text = "MISSILES  %d / %d  [%s]  READY%s" % [_missile_ammo, _max_missiles, pips, jam_suffix]
 		missile_status.modulate = Color(1.0, 0.55, 0.15) if _is_jammed else Color(0.85, 0.90, 0.95)
 
 func _on_missile_ammo_changed(current: int, maximum: int) -> void:
@@ -429,7 +452,14 @@ func _on_missile_warning(_source_pos: Vector3, is_active: bool) -> void:
 func _on_xp_updated(current: int, needed: int, level: int) -> void:
 	if xp_bar:
 		xp_bar.max_value = maxf(1.0, float(needed))
-		xp_bar.value = clampf(float(current), 0.0, xp_bar.max_value)
+		var target_val := clampf(float(current), 0.0, xp_bar.max_value)
+		if is_inside_tree() and xp_bar.value != target_val and xp_bar.is_node_ready():
+			var tw := create_tween()
+			tw.tween_property(xp_bar, "value", target_val, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(xp_bar, "modulate", Color(1.3, 1.3, 1.1, 1.0), 0.06)
+			tw.tween_property(xp_bar, "modulate", Color.WHITE, 0.08)
+		else:
+			xp_bar.value = target_val
 	if level_label:
 		level_label.text = "LVL %d" % level
 

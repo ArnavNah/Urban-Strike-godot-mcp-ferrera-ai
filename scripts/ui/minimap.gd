@@ -67,9 +67,16 @@ func _draw() -> void:
 	draw_colored_polygon(player_poly, Color(0.31, 0.88, 0.93, 1.0))
 
 	# 5. Differentiated Enemy Blips
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array[Node3D] = []
+	if EnemyRegistry.instance and is_instance_valid(EnemyRegistry.instance):
+		enemies = EnemyRegistry.instance.get_enemies_in_radius(p_pos, radar_range_m)
+	else:
+		var raw_nodes := get_tree().get_nodes_in_group("enemies")
+		for n in raw_nodes:
+			if n is Node3D:
+				enemies.append(n as Node3D)
 	for e in enemies:
-		var e3d := e as Node3D
+		var e3d: Node3D = e
 		if not is_instance_valid(e3d) or e3d == _player:
 			continue
 
@@ -136,4 +143,3 @@ func _draw() -> void:
 			if high_contrast:
 				draw_arc(blip_pos, 4.0, 0, TAU, 12, Color(0.02, 0.04, 0.06, 0.95), 1.5)
 			draw_circle(blip_pos, 3.2, Color(0.96, 0.60, 0.18, 1.0))
-

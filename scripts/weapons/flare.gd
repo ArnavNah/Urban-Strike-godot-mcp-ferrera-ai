@@ -10,12 +10,25 @@ var _velocity: Vector3 = Vector3.ZERO
 var _age: float = 0.0
 
 @onready var particles: GPUParticles3D = $GPUParticles3D
+@onready var omni_light: OmniLight3D = get_node_or_null("OmniLight3D")
 
 func _ready() -> void:
-	if not is_pooled:
+	if is_pooled:
+		visible = false
+		is_active = false
+		set_process(false)
+		process_mode = Node.PROCESS_MODE_DISABLED
+		set_physics_process(false)
+		if particles:
+			particles.emitting = false
+		if omni_light:
+			omni_light.visible = false
+	else:
 		_divert_incoming_missiles()
 
 func launch(start_pos: Vector3, initial_vel: Vector3) -> void:
+	process_mode = Node.PROCESS_MODE_INHERIT
+	SaveSystem._apply_particle_budget(self, SaveSystem.low_particles)
 	global_position = start_pos
 	_velocity = initial_vel
 	_age = 0.0
@@ -25,6 +38,8 @@ func launch(start_pos: Vector3, initial_vel: Vector3) -> void:
 	if particles:
 		particles.restart()
 		particles.emitting = true
+	if omni_light:
+		omni_light.visible = true
 	_divert_incoming_missiles()
 
 func _divert_incoming_missiles() -> void:
@@ -39,9 +54,13 @@ func _physics_process(delta: float) -> void:
 		if is_pooled:
 			is_active = false
 			visible = false
+			set_process(false)
+			process_mode = Node.PROCESS_MODE_DISABLED
 			set_physics_process(false)
 			if particles:
 				particles.emitting = false
+			if omni_light:
+				omni_light.visible = false
 		else:
 			queue_free()
 		return

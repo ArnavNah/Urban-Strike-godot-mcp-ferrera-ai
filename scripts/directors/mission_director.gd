@@ -13,8 +13,9 @@ enum State {
 	COOLDOWN
 }
 
-@export var initial_delay: float = 20.0
-@export var mission_cooldown: float = 45.0
+@export var initial_delay: float = 12.0
+@export var offer_duration: float = 2.0
+@export var mission_cooldown: float = 35.0
 @export var auto_start_missions: bool = true
 
 const EliminateEliteMissionClass = preload("res://scripts/missions/eliminate_elite_mission.gd")
@@ -23,6 +24,7 @@ var current_state: State = State.IDLE
 var current_mission: StrikeMission = null
 var _state_timer: float = 0.0
 var _hud_update_timer: float = 0.0
+var _pending_mission_id: String = ""
 
 var _mission_queue: Array[String] = [
 	"destroy_radar",
@@ -66,7 +68,9 @@ func _process(delta: float) -> void:
 		State.OFFERED:
 			_state_timer -= delta
 			if _state_timer <= 0.0:
-				current_state = State.ACTIVE
+				var mission_id := _pending_mission_id
+				_pending_mission_id = ""
+				start_mission_by_id(mission_id)
 
 		State.ACTIVE:
 			if not current_mission:
@@ -111,13 +115,20 @@ func offer_next_mission() -> void:
 	var next_id := _mission_queue[_mission_index % _mission_queue.size()]
 	_mission_index += 1
 
+	_pending_mission_id = next_id
+	current_state = State.OFFERED
+	_state_timer = maxf(0.1, offer_duration)
+
 	var eb: Node = _get_event_bus()
 	if eb and eb.has_signal("mission_offered"):
 		eb.emit_signal("mission_offered", next_id, next_id.replace("_", " ").to_upper())
 
-	start_mission_by_id(next_id)
-
 func start_mission_by_id(mission_id: String) -> StrikeMission:
+	if mission_id.is_empty():
+		current_state = State.IDLE
+		_state_timer = mission_cooldown
+		return null
+	_pending_mission_id = ""
 	if current_mission and current_mission.is_active:
 		current_mission.cleanup()
 

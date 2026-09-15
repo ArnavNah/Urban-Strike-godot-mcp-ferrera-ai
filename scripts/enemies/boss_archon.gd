@@ -106,7 +106,7 @@ func _process_phase_1(delta: float) -> void:
 	# Controlled wide orbiting pattern at player's altitude
 	_orbit_angle += 0.4 * delta
 	var target_pos := _player.global_position + Vector3(cos(_orbit_angle), 0, sin(_orbit_angle)) * 42.0
-	target_pos.y = _player.global_position.y
+	target_pos.y = clampf(_player.global_position.y, 14.0, 22.0)
 	_fly_toward_pos(target_pos, speed_phase1, delta)
 
 	# Sustained chin-cannon barrages
@@ -124,7 +124,7 @@ func _process_phase_2(delta: float) -> void:
 	# Faster repositioning sweeps at player's altitude
 	_orbit_angle += 0.7 * delta
 	var target_pos := _player.global_position + Vector3(cos(_orbit_angle), 0, sin(_orbit_angle)) * 34.0
-	target_pos.y = _player.global_position.y
+	target_pos.y = clampf(_player.global_position.y, 14.0, 22.0)
 	_fly_toward_pos(target_pos, speed_phase2, delta)
 
 	# Cannon fire + 4-rocket spread salvos
@@ -142,7 +142,7 @@ func _process_phase_3(delta: float) -> void:
 	# Enraged fast dive runs at player's altitude
 	_orbit_angle += 1.1 * delta
 	var target_pos := _player.global_position + Vector3(cos(_orbit_angle), 0, sin(_orbit_angle)) * 26.0
-	target_pos.y = _player.global_position.y
+	target_pos.y = clampf(_player.global_position.y, 14.0, 22.0)
 	_fly_toward_pos(target_pos, speed_phase3, delta)
 
 	# Rapid bursts + continuous missile pressure
@@ -159,15 +159,23 @@ func _process_phase_3(delta: float) -> void:
 
 func _fly_toward_pos(dest: Vector3, speed: float, delta: float) -> void:
 	var to_dest := dest - global_position
-	var dir := to_dest.normalized()
-	velocity = dir * speed
+	var dir := to_dest.normalized() if to_dest.length_squared() > 0.01 else Vector3.ZERO
+	velocity.x = move_toward(velocity.x, dir.x * speed, 14.0 * delta)
+	velocity.z = move_toward(velocity.z, dir.z * speed, 14.0 * delta)
+	velocity.y = move_toward(velocity.y, dir.y * speed, 10.0 * delta)
 	move_and_slide()
 
-	# Face player
+	# Face player with smooth yaw and banking
 	if is_instance_valid(_player):
 		var face_dir := (_player.global_position - global_position).normalized()
 		var target_yaw := atan2(-face_dir.x, -face_dir.z)
+		var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 3.0 * delta)
+
+		var vis: Node3D = get_node_or_null("Visuals")
+		if vis:
+			var target_bank := clampf(-yaw_diff * 0.8, -deg_to_rad(18.0), deg_to_rad(18.0))
+			vis.rotation.z = lerp_angle(vis.rotation.z, target_bank, clampf(4.0 * delta, 0.0, 1.0))
 
 func _fire_chin_cannon() -> void:
 	if not is_instance_valid(_player):
@@ -308,16 +316,20 @@ func _die() -> void:
 	# Spawn high-value Boss XP Gems (75 XP total: 3 x 25 XP)
 	if not _has_spawned_rewards:
 		_has_spawned_rewards = true
-		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-		if xp_scene:
-			for i in range(3):
-				var gem := xp_scene.instantiate() as Node3D
-				if gem:
-					if "xp_value" in gem:
-						gem.xp_value = 25
-					gem.transform.origin = global_position + Vector3(randf_range(-3, 3), 0.5, randf_range(-3, 3))
-					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-					p.add_child.call_deferred(gem)
+		for i in range(3):
+			var spawn_pos := global_position + Vector3(randf_range(-3, 3), 0.5, randf_range(-3, 3))
+			if XpGemPool.instance:
+				XpGemPool.instance.spawn_gem(spawn_pos, 25)
+			else:
+				var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+				if xp_scene:
+					var gem := xp_scene.instantiate() as Node3D
+					if gem:
+						if "xp_value" in gem:
+							gem.xp_value = 25
+						gem.transform.origin = spawn_pos
+						var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+						p.add_child.call_deferred(gem)
 
 	# Multi-explosion sequence using VfxPool
 	for i in range(8):

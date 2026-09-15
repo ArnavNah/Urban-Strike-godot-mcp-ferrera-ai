@@ -31,7 +31,7 @@ enum WeaponType {
 @export var max_health: float = 75.0
 @export var is_armored: bool = true
 @export var salvage_reward: int = 80
-@export var xp_reward: int = 80
+@export var xp_reward: int = 10
 
 @export_category("Mobility & Standoff")
 @export var move_speed: float = 7.5

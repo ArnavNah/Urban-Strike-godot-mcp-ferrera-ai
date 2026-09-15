@@ -4,6 +4,7 @@ extends RefCounted
 ## Persistent save system for Hangar upgrades, accessibility settings, and run telemetry.
 
 const SAVE_PATH: String = "user://save_data.json"
+static var low_particles: bool = false
 
 static func get_default_data() -> Dictionary:
 	return {
@@ -32,7 +33,8 @@ static func get_default_data() -> Dictionary:
 			"aim_assist_intensity": 1.0,
 			"camera_shake": 1.0,
 			"screen_vignette": true,
-			"camera_mode": "chase"
+			"camera_mode": "chase",
+			"graphics_preset": "medium"
 		},
 		"telemetry": {
 			"total_runs": 0,
@@ -99,6 +101,75 @@ static func set_setting(key: String, val: Variant) -> void:
 	var eb: Node = tree.root.get_node_or_null("EventBus") if tree and tree.root else null
 	if eb and eb.has_signal("setting_changed"):
 		eb.emit_signal("setting_changed", key, val)
+	if key == "graphics_preset" and val is String:
+		apply_graphics_preset(val, tree)
+
+static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -> void:
+	preset_name = preset_name.to_lower()
+	low_particles = preset_name == "low"
+	var shadow_dist: float = 160.0
+	var glow_int: float = 0.12
+	var glow_hdr: float = 1.15
+	var max_explosions: int = 6
+	var detail_rad: int = 1
+
+	match preset_name.to_lower():
+		"low":
+			shadow_dist = 120.0
+			glow_int = 0.08
+			glow_hdr = 1.25
+			max_explosions = 4
+			detail_rad = 1
+		"high":
+			shadow_dist = 180.0
+			glow_int = 0.15
+			glow_hdr = 1.10
+			max_explosions = 8
+			detail_rad = 1
+		_: # "medium" default
+			shadow_dist = 160.0
+			glow_int = 0.12
+			glow_hdr = 1.15
+			max_explosions = 6
+			detail_rad = 1
+
+	if tree:
+		var root := tree.current_scene if tree.current_scene else tree.root
+		if root:
+			var light := root.find_child("DirectionalLight3D", true, false) as DirectionalLight3D
+			if light:
+				light.directional_shadow_max_distance = shadow_dist
+			var env_node := root.find_child("WorldEnvironment", true, false) as WorldEnvironment
+			if env_node and env_node.environment:
+				env_node.environment.glow_intensity = glow_int
+				env_node.environment.glow_hdr_threshold = glow_hdr
+				env_node.environment.glow_bloom = 0.0
+				env_node.environment.fog_enabled = true
+				env_node.environment.fog_mode = Environment.FOG_MODE_DEPTH
+				env_node.environment.fog_depth_begin = 100.0
+				env_node.environment.fog_depth_end = 260.0
+				env_node.environment.volumetric_fog_enabled = false
+			var streamer := root.find_child("CityWorldStreamer", true, false)
+			if streamer and "full_detail_radius" in streamer:
+				streamer.full_detail_radius = detail_rad
+	if VfxPool.instance:
+		VfxPool.instance.max_active_explosions = max_explosions
+		VfxPool.instance.max_active_sparks = 6 if preset_name == "low" else 12
+		VfxPool.instance.max_active_flashes = 8 if preset_name == "low" else 12
+		VfxPool.instance.effect_distance = 110.0 if preset_name == "low" else 140.0
+	if tree:
+		_apply_particle_budget(tree.root, preset_name == "low")
+
+static func _apply_particle_budget(node: Node, low: bool) -> void:
+	# Run only on preset changes/startup, never per frame.
+	if node is GPUParticles3D:
+		var particles: GPUParticles3D = node as GPUParticles3D
+		particles.amount_ratio = 0.5 if low else 1.0
+		particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		particles.visibility_range_end = 110.0 if low else 150.0
+	for child in node.get_children():
+		_apply_particle_budget(child, low)
+
 
 static func record_run_telemetry(run_stats: Dictionary) -> void:
 	var data := load_data()

@@ -21,6 +21,7 @@ buffer = PackedFloat32Array(1, 0, 0, -10.5, 0, 1, 0, 0.155, 0, 0, 1, 0, 1, 0, 0,
 
 [node name="ParkingSurface" type="MeshInstance3D" parent="." unique_id=550689149]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_qmfau")
 
 [node name="ParkingBayLines" type="MultiMeshInstance3D" parent="." unique_id=1266770961]

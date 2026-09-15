@@ -45,8 +45,13 @@ var _player: Node3D = null
 var _has_attack_slot: bool = false
 var _escorts: Array[Tank] = []
 var _lod_frame_counter: int = 0
+var _stagger_offset: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
+var _cached_separation: Vector3 = Vector3.ZERO
+var _separation_timer: float = 0.0
+var _cached_steer_dir: Vector3 = Vector3.ZERO
+var _steer_timer: float = 0.0
 var _last_tank_pos: Vector3 = Vector3.ZERO
 var _is_recovering: bool = false
 var _recovery_timer: float = 0.0
@@ -57,10 +62,14 @@ var _stuck_sample_timer: float = 0.0
 var _visual_meshes: Array[MeshInstance3D] = []
 static var _flash_mat: StandardMaterial3D = null
 
-@onready var turret: Node3D = get_node_or_null("Turret")
-@onready var barrel: Node3D = get_node_or_null("Turret/Barrel")
-@onready var muzzle: Marker3D = get_node_or_null("Turret/Barrel/Muzzle")
-@onready var charge_light: OmniLight3D = get_node_or_null("Turret/Barrel/ChargeLight")
+@onready var turret: Node3D = get_node_or_null("Body/Turret") if has_node("Body/Turret") else get_node_or_null(NodePath("Turret"))
+@onready var barrel: Node3D = (turret.get_node_or_null("Barrel") if turret else null)
+@onready var muzzle: Marker3D = (barrel.get_node_or_null("Muzzle") if barrel else null)
+@onready var muzzle_left: Marker3D = (barrel.get_node_or_null("MuzzleLeft") if barrel else null)
+@onready var muzzle_right: Marker3D = (barrel.get_node_or_null("MuzzleRight") if barrel else null)
+@onready var charge_light: OmniLight3D = (barrel.get_node_or_null("ChargeLight") if barrel else null)
+@onready var anim_player: AnimationPlayer = get_node_or_null("AnimationPlayer")
+@onready var body_node: Node3D = get_node_or_null("Body")
 
 func _ready() -> void:
 	if archetype:
@@ -107,6 +116,7 @@ func _ready() -> void:
 		global_position.y = 0.0
 
 	_last_tank_pos = global_position
+	_stagger_offset = randi() % 60
 
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
@@ -115,6 +125,8 @@ func _ready() -> void:
 	_transition_to(State.REPOSITIONING)
 	if charge_light:
 		charge_light.visible = false
+	if anim_player and anim_player.has_animation("idle"):
+		anim_player.play("idle")
 
 func _exit_tree() -> void:
 	if EnemyRegistry.instance:
@@ -181,29 +193,40 @@ func _physics_process(delta: float) -> void:
 
 	var dist := global_position.distance_to(_player.global_position)
 
-	# Distance-based AI LOD throttling
+	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
 	_lod_frame_counter += 1
 	var step_delta := delta
+	var frame_stagger := _lod_frame_counter + _stagger_offset
 	if dist > 280.0 and not is_scattered:
 		return # LOD 4: Dormant beyond 280m
-	elif dist > 120.0 and not is_scattered:
-		if _lod_frame_counter % 8 != 0:
-			return # LOD 3: 7.5 Hz distant corridor approach
-		step_delta = delta * 8.0
+	elif dist > 140.0 and not is_scattered:
+		if frame_stagger % 6 != 0:
+			return # FAR: 10 Hz corridor approach
+		step_delta = delta * 6.0
 	elif dist > 60.0 and not is_scattered:
-		if _lod_frame_counter % 3 != 0:
-			return # LOD 2: 20 Hz medium approach
-		step_delta = delta * 3.0
+		if frame_stagger % 2 != 0:
+			return # MEDIUM: 30 Hz approach
+		step_delta = delta * 2.0
 
 	# Phase 10B: Arming timer decay
 	if _arming_timer > 0.0:
 		_arming_timer -= step_delta
 
-	# Throttled LoS check based on LOD
+	# Throttled LoS check based on distance tier
 	_los_timer -= step_delta
 	if _los_timer <= 0.0:
-		_los_timer = 0.1 if dist <= 38.0 else 0.25
-		_cached_los = _check_los()
+		if dist > 140.0:
+			_cached_los = false
+			_los_timer = 1.0 # Far tier: no continuous LoS
+		elif dist > 60.0:
+			_los_timer = 0.45 # Medium tier: check every 0.45s
+			_cached_los = _check_los()
+		elif dist > 38.0:
+			_los_timer = 0.25 # Near-medium: check every 0.25s
+			_cached_los = _check_los()
+		else:
+			_los_timer = 0.15 # Near: check every 0.15s
+			_cached_los = _check_los()
 	var has_los := _cached_los
 
 	# If player moves far away, break out of aiming/reloading to pursue across the city
@@ -242,6 +265,22 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < 0.0:
 		global_position.y = 0.0
 		velocity.y = 0.0
+
+	_update_movement_animation(delta)
+
+func _update_movement_animation(_delta: float) -> void:
+	if not anim_player:
+		return
+	var horiz_vel := Vector2(velocity.x, velocity.z).length()
+	if horiz_vel > 0.3:
+		if anim_player.has_animation("move") and anim_player.current_animation != "move":
+			anim_player.play("move")
+		var target_speed_scale: float = clampf(horiz_vel / maxf(move_speed, 1.0), 0.6, 2.2)
+		anim_player.speed_scale = target_speed_scale
+	else:
+		if anim_player.has_animation("idle") and anim_player.current_animation != "idle":
+			anim_player.play("idle")
+		anim_player.speed_scale = 1.0
 
 func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 	_state_timer -= delta
@@ -287,12 +326,12 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 			else:
 				var to_player := (_player.global_position - global_position)
 				to_player.y = 0.0
-				move_dir = to_player.normalized()
+				move_dir = to_player.normalized() if to_player.length_squared() > 0.01 else -global_transform.basis.z
 		else:
 			# Close range tactical direct pursuit
 			var to_player := (_player.global_position - global_position)
 			to_player.y = 0.0
-			move_dir = to_player.normalized()
+			move_dir = to_player.normalized() if to_player.length_squared() > 0.01 else -global_transform.basis.z
 
 		# Steer around buildings and obstacles with whiskers
 		move_dir = _steer_around_obstacles(move_dir)
@@ -465,7 +504,9 @@ func _start_new_reposition() -> void:
 		var to_player := (_player.global_position - global_position)
 		to_player.y = 0.0
 		var dist := to_player.length()
-		if dist > preferred_range:
+		if dist < 0.1:
+			_reposition_dir = Vector3.FORWARD
+		elif dist > preferred_range:
 			# Advance toward player
 			_reposition_dir = to_player.normalized()
 		elif dist < 16.0:
@@ -473,7 +514,8 @@ func _start_new_reposition() -> void:
 			_reposition_dir = -to_player.normalized()
 		else:
 			# Flank laterally
-			var perp := Vector3(-to_player.z, 0, to_player.x).normalized()
+			var norm_tp := to_player.normalized()
+			var perp := Vector3(-norm_tp.z, 0.0, norm_tp.x)
 			_reposition_dir = perp if randf() > 0.5 else -perp
 	else:
 		_reposition_dir = Vector3.FORWARD
@@ -490,40 +532,95 @@ func _pick_tactical_reposition_dir() -> void:
 	to_player.y = 0.0
 	var dist := to_player.length()
 
+	if dist < 0.1:
+		_reposition_dir = Vector3.FORWARD
+		return
+
+	var norm_tp := to_player.normalized()
 	if dist < 18.0:
-		_reposition_dir = -to_player.normalized() # Back up
+		_reposition_dir = -norm_tp # Back up
 	else:
-		var perp := Vector3(-to_player.z, 0.0, to_player.x).normalized()
-		_reposition_dir = (perp if randf() > 0.5 else -perp) + to_player.normalized() * randf_range(-0.2, 0.2)
-		_reposition_dir = _reposition_dir.normalized()
+		var perp := Vector3(-norm_tp.z, 0.0, norm_tp.x)
+		_reposition_dir = (perp if randf() > 0.5 else -perp) + norm_tp * randf_range(-0.2, 0.2)
+		if _reposition_dir.length_squared() > 0.01:
+			_reposition_dir = _reposition_dir.normalized()
+		else:
+			_reposition_dir = norm_tp
 
 func _apply_separation() -> void:
-	var avoidance := Vector3.ZERO
-	var search_radius: float = 6.0
-	var nearby: Array[Node3D] = []
+	var dist := 0.0
+	if is_instance_valid(_player):
+		dist = global_position.distance_to(_player.global_position)
+	if dist > 140.0 and not is_scattered:
+		return # Far tier: minimal or no separation
 
-	if EnemyRegistry.instance:
-		nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius)
-	else:
-		for e in get_tree().get_nodes_in_group("enemies"):
-			if e is Node3D and e != self:
-				nearby.append(e as Node3D)
+	_separation_timer -= 0.016667
+	if _separation_timer <= 0.0:
+		_separation_timer = 0.15 if dist <= 60.0 else 0.25
+		var avoidance := Vector3.ZERO
+		var search_radius: float = 12.0
+		var search_radius_sq := search_radius * search_radius
+		var max_candidates: int = 6 if dist <= 60.0 else 4
+		var nearby: Array[Node3D] = []
 
-	for other in nearby:
-		if other != self and is_instance_valid(other) and not other.is_in_group("air_enemies"):
-			var diff := global_position - other.global_position
-			diff.y = 0.0
-			var d := diff.length()
-			if d < search_radius and d > 0.05:
-				var weight: float = (search_radius - d) / search_radius
-				avoidance += (diff / d) * weight * 7.0
+		if EnemyRegistry.instance:
+			nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius, max_candidates)
+		else:
+			for e in get_tree().get_nodes_in_group("enemies"):
+				if e is Node3D and e != self:
+					nearby.append(e as Node3D)
+					if nearby.size() >= max_candidates:
+						break
 
-	velocity.x += avoidance.x
-	velocity.z += avoidance.z
+		var count: int = 0
+		for other in nearby:
+			if other != self and is_instance_valid(other) and not other.is_in_group("air_enemies"):
+				var diff := global_position - other.global_position
+				diff.y = 0.0
+				var d_sq := diff.length_squared()
+				if d_sq < search_radius_sq and d_sq > 0.0025:
+					var d := sqrt(d_sq)
+					var weight: float = (search_radius - d) / search_radius
+					avoidance += (diff / d) * weight * 7.0
+					count += 1
+					if count >= max_candidates:
+						break
+
+		if avoidance.length_squared() > 25.0: # 5.0 m/s max lateral push
+			avoidance = avoidance.normalized() * 5.0
+
+		_cached_separation = avoidance
+
+	velocity.x += _cached_separation.x
+	velocity.z += _cached_separation.z
+
+	var max_h_speed: float = (move_speed * 1.35) if (current_state == State.REPOSITIONING or current_state == State.RELOADING) else 4.0
+	var h_vel := Vector2(velocity.x, velocity.z)
+	if h_vel.length() > max_h_speed:
+		h_vel = h_vel.normalized() * max_h_speed
+		velocity.x = h_vel.x
+		velocity.z = h_vel.y
 
 func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
+	if desired_dir.length_squared() < 0.01:
+		return desired_dir
+
+	var dist := 0.0
+	if is_instance_valid(_player):
+		dist = global_position.distance_to(_player.global_position)
+
+	# FAR TIER (> 140m): No obstacle raycasts
+	if dist > 140.0 and not is_scattered:
+		return desired_dir
+
+	_steer_timer -= 0.016667
+	if _steer_timer > 0.0 and _cached_steer_dir != Vector3.ZERO:
+		return _cached_steer_dir
+
+	_steer_timer = 0.2 if dist <= 60.0 else 0.35
+
 	var space := get_world_3d().direct_space_state
-	if not space or desired_dir.length_squared() < 0.01:
+	if not space:
 		return desired_dir
 
 	var origin := global_position + Vector3(0.0, 1.0, 0.0)
@@ -541,29 +638,34 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 			var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
 			if tangent.dot(desired_dir) < 0.0:
 				tangent = -tangent
-			return (desired_dir * 0.35 + tangent * 0.65).normalized()
+			_cached_steer_dir = (desired_dir * 0.35 + tangent * 0.65).normalized()
+			return _cached_steer_dir
 
-	# Whiskers for lateral corner avoidance
-	var left_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(30.0))
-	var right_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(-30.0))
+	# Whiskers for lateral corner avoidance - only checked near player
+	if dist <= 60.0:
+		var left_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(30.0))
+		var right_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(-30.0))
 
-	var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 4.2, 1)
-	left_query.collide_with_areas = false
-	left_query.collide_with_bodies = true
-	left_query.exclude = [get_rid()]
-	var left_hit := space.intersect_ray(left_query)
+		var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 4.2, 1)
+		left_query.collide_with_areas = false
+		left_query.collide_with_bodies = true
+		left_query.exclude = [get_rid()]
+		var left_hit := space.intersect_ray(left_query)
 
-	var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 4.2, 1)
-	right_query.collide_with_areas = false
-	right_query.collide_with_bodies = true
-	right_query.exclude = [get_rid()]
-	var right_hit := space.intersect_ray(right_query)
+		var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 4.2, 1)
+		right_query.collide_with_areas = false
+		right_query.collide_with_bodies = true
+		right_query.exclude = [get_rid()]
+		var right_hit := space.intersect_ray(right_query)
 
-	if not left_hit.is_empty() and right_hit.is_empty():
-		return desired_dir.rotated(Vector3.UP, deg_to_rad(-25.0)).normalized()
-	elif not right_hit.is_empty() and left_hit.is_empty():
-		return desired_dir.rotated(Vector3.UP, deg_to_rad(25.0)).normalized()
+		if not left_hit.is_empty() and right_hit.is_empty():
+			_cached_steer_dir = desired_dir.rotated(Vector3.UP, deg_to_rad(-25.0)).normalized()
+			return _cached_steer_dir
+		elif not right_hit.is_empty() and left_hit.is_empty():
+			_cached_steer_dir = desired_dir.rotated(Vector3.UP, deg_to_rad(25.0)).normalized()
+			return _cached_steer_dir
 
+	_cached_steer_dir = desired_dir
 	return desired_dir
 
 func _track_player(delta: float) -> void:
@@ -581,25 +683,51 @@ func _track_player(delta: float) -> void:
 	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, 5.0 * delta)
 
 func _fire_cannon() -> void:
-	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else turret.global_position
-	var fire_dir := -barrel.global_transform.basis.z
+	var fire_dir := -barrel.global_transform.basis.z if barrel else -global_transform.basis.z
+
+	var muzzle_positions: Array[Vector3] = []
+	if muzzle_left and muzzle_right:
+		muzzle_positions.append(muzzle_left.global_position)
+		muzzle_positions.append(muzzle_right.global_position)
+	elif muzzle:
+		muzzle_positions.append(muzzle.global_position)
+	elif turret:
+		muzzle_positions.append(turret.global_position)
+	else:
+		muzzle_positions.append(global_position + Vector3.UP)
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
-	if pool:
-		var proj := pool.spawn_projectile(muzzle_pos, fire_dir, false, cannon_damage)
-		if proj and CombatDirector.instance:
-			CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
 
 	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
-	if flash_scene:
-		var flash := flash_scene.instantiate() as Node3D
-		if flash:
-			flash.transform.origin = muzzle_pos
-			flash.scale = Vector3(2.0, 2.0, 2.0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(flash)
+	var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+
+	var dmg_per_shot: float = cannon_damage / float(muzzle_positions.size()) if muzzle_positions.size() > 1 else cannon_damage
+
+	for m_pos in muzzle_positions:
+		if pool:
+			var proj := pool.spawn_projectile(m_pos, fire_dir, false, dmg_per_shot)
+			if proj and CombatDirector.instance:
+				CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
+
+		if flash_scene and p:
+			var flash := flash_scene.instantiate() as Node3D
+			if flash:
+				flash.transform.origin = m_pos
+				flash.scale = Vector3(2.0, 2.0, 2.0)
+				p.add_child.call_deferred(flash)
+
+	_trigger_recoil()
+
+func _trigger_recoil() -> void:
+	if not barrel:
+		return
+	var orig_z: float = barrel.position.z
+	var tween := create_tween()
+	if tween:
+		tween.tween_property(barrel, "position:z", orig_z + 0.15, 0.05).set_ease(Tween.EASE_OUT)
+		tween.tween_property(barrel, "position:z", orig_z, 0.22).set_ease(Tween.EASE_IN_OUT)
 
 func _fire_rapid_mg() -> void:
 	var count: int = archetype.burst_count if archetype else 4
@@ -613,7 +741,16 @@ func _fire_rapid_mg() -> void:
 			await get_tree().create_timer(interval).timeout
 
 func _spawn_single_bullet(dmg: float) -> void:
-	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else (turret.global_position if turret else global_position + Vector3.UP)
+	var muzzle_pos: Vector3
+	if muzzle_left and muzzle_right:
+		muzzle_pos = muzzle_left.global_position if randf() > 0.5 else muzzle_right.global_position
+	elif muzzle:
+		muzzle_pos = muzzle.global_position
+	elif turret:
+		muzzle_pos = turret.global_position
+	else:
+		muzzle_pos = global_position + Vector3.UP
+
 	var fire_dir := -barrel.global_transform.basis.z if barrel else -global_transform.basis.z
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
@@ -627,6 +764,7 @@ func _spawn_single_bullet(dmg: float) -> void:
 			flash.transform.origin = muzzle_pos
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(flash)
+	_trigger_recoil()
 
 func _fire_rocket_burst() -> void:
 	var rocket_scene := preload("res://scenes/weapons/unguided_rocket.tscn")
@@ -634,7 +772,16 @@ func _fire_rocket_burst() -> void:
 	for i in range(count):
 		if not is_instance_valid(self) or not is_alive or not is_instance_valid(_player):
 			return
-		var muzzle_pos: Vector3 = muzzle.global_position if muzzle else (turret.global_position if turret else global_position + Vector3.UP)
+		var muzzle_pos: Vector3
+		if muzzle_left and muzzle_right:
+			muzzle_pos = muzzle_left.global_position if (i % 2 == 0) else muzzle_right.global_position
+		elif muzzle:
+			muzzle_pos = muzzle.global_position
+		elif turret:
+			muzzle_pos = turret.global_position
+		else:
+			muzzle_pos = global_position + Vector3.UP
+
 		var fire_dir := (_player.global_position - muzzle_pos).normalized()
 		var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
 		fire_dir = (fire_dir + spread).normalized()
@@ -645,6 +792,7 @@ func _fire_rocket_burst() -> void:
 			rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
 			if CombatDirector.instance and i == 0:
 				CombatDirector.instance.transfer_danger_to_projectile(self, rocket, 3.0)
+		_trigger_recoil()
 		if i < count - 1:
 			await get_tree().create_timer(0.18).timeout
 
@@ -887,13 +1035,17 @@ func _spawn_xp() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			var xp_val: int = archetype.xp_reward if archetype else xp_reward
-			if "xp_value" in gem:
-				gem.xp_value = xp_val
-			gem.transform.origin = global_position + Vector3(0, 1.0, 0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var xp_val: int = archetype.xp_reward if archetype else xp_reward
+	var spawn_pos := global_position + Vector3(0, 1.0, 0)
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(spawn_pos, xp_val)
+	else:
+		var xp_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn") as PackedScene
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_val
+				gem.transform.origin = spawn_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)

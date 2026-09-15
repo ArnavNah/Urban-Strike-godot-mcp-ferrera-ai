@@ -27,7 +27,10 @@ signal hit_occurred(pos: Vector3, normal: Vector3)
 
 func _ready() -> void:
 	set_process(false)
+	set_physics_process(false)
 	visible = false
+	if raycast:
+		raycast.enabled = false
 
 func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0) -> void:
 	global_position = start_pos
@@ -58,7 +61,7 @@ func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_dam
 		if _is_player_projectile:
 			# Player bullets hit World (Layer 1) and Enemies (Layer 3)
 			raycast.collision_mask = (1 << 0) | (1 << 2)
-			var player := get_tree().get_first_node_in_group("player") as CollisionObject3D
+			var player: CollisionObject3D = PlayerHelicopter.instance if is_instance_valid(PlayerHelicopter.instance) else (get_tree().get_first_node_in_group("player") as CollisionObject3D)
 			if player:
 				raycast.add_exception(player)
 		else:
@@ -120,7 +123,7 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 	if target_obj and (not siege_round or not already_hit):
 		var source_node: Node = null
 		if _is_player_projectile:
-			source_node = get_tree().get_first_node_in_group("player")
+			source_node = PlayerHelicopter.instance if is_instance_valid(PlayerHelicopter.instance) else get_tree().get_first_node_in_group("player")
 		if siege_round and is_enemy:
 			_hit_target_ids.append(target_obj.get_instance_id())
 		target_obj.take_damage(_damage_for_target(target_obj), source_node, hit_pos)

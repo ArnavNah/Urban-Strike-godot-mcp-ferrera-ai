@@ -36,6 +36,10 @@ var _shots_fired_in_burst: int = 0
 var _burst_timer: float = 0.0
 var _player_node: Node3D = null
 var _has_attack_slot: bool = false
+var _lod_frame_counter: int = 0
+var _stagger_offset: int = 0
+var _cached_los: bool = false
+var _los_timer: float = 0.0
 
 @onready var head: Node3D = $TurretHead
 @onready var barrel: Node3D = $TurretHead/Barrel
@@ -49,6 +53,7 @@ func _ready() -> void:
 		EnemyRegistry.instance.register_enemy(self, false)
 	current_health = max_health
 	_find_player()
+	_stagger_offset = randi() % 60
 	if los_ray:
 		los_ray.collision_mask = 1 # World layer blocks LoS
 
@@ -70,10 +75,30 @@ func _physics_process(delta: float) -> void:
 			return
 
 	var dist_to_player := global_position.distance_to(_player_node.global_position)
-	var has_los := _check_line_of_sight()
+	if dist_to_player > 140.0:
+		return # Dormant beyond 140m
+
+	_lod_frame_counter += 1
+	var step_delta := delta
+	var frame_stagger := _lod_frame_counter + _stagger_offset
+
+	if dist_to_player > 60.0:
+		if frame_stagger % 2 != 0:
+			return # 30 Hz for medium distance
+		step_delta = delta * 2.0
+
+	# Throttled LoS check: only if within threat range
+	if dist_to_player > threat_range:
+		_cached_los = false
+	else:
+		_los_timer -= step_delta
+		if _los_timer <= 0.0:
+			_los_timer = 0.2
+			_cached_los = _check_line_of_sight()
+	var has_los := _cached_los
 
 	if _arming_timer > 0.0:
-		_arming_timer -= delta
+		_arming_timer -= step_delta
 
 	match current_state:
 		State.IDLE:
@@ -85,8 +110,8 @@ func _physics_process(delta: float) -> void:
 				_transition_to(State.IDLE)
 				return
 
-			_track_player(delta)
-			_state_timer -= delta
+			_track_player(step_delta)
+			_state_timer -= step_delta
 			if _state_timer <= 0.0:
 				var can_attack: bool = _request_slot()
 				if can_attack:
@@ -278,22 +303,30 @@ func _die() -> void:
 
 	if not _has_spawned_rewards:
 		_has_spawned_rewards = true
-		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-		if xp_scene:
-			var gem := xp_scene.instantiate() as Node3D
-			if gem:
-				if "xp_value" in gem:
-					gem.xp_value = xp_reward
-				gem.transform.origin = global_position + Vector3(0, 1.0, 0)
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(gem)
+		var spawn_pos := global_position + Vector3(0, 1.0, 0)
+		if XpGemPool.instance:
+			XpGemPool.instance.spawn_gem(spawn_pos, xp_reward)
+		else:
+			var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+			if xp_scene:
+				var gem := xp_scene.instantiate() as Node3D
+				if gem:
+					if "xp_value" in gem:
+						gem.xp_value = xp_reward
+					gem.transform.origin = spawn_pos
+					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					p.add_child.call_deferred(gem)
 
-	var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-	if expl_scene:
-		var expl := expl_scene.instantiate() as Node3D
-		if expl:
-			expl.transform.origin = global_position + Vector3(0, 1.0, 0)
-			var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			target_parent.add_child.call_deferred(expl)
+	var expl_pos := global_position + Vector3(0, 1.0, 0)
+	if VfxPool.instance:
+		VfxPool.instance.spawn_explosion(expl_pos)
+	else:
+		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
+		if expl_scene:
+			var expl := expl_scene.instantiate() as Node3D
+			if expl:
+				expl.transform.origin = expl_pos
+				var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				target_parent.add_child.call_deferred(expl)
 
 	queue_free()

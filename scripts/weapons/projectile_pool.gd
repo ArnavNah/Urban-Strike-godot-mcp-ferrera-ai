@@ -38,5 +38,6 @@ func spawn_projectile(start_pos: Vector3, dir: Vector3, from_player: bool = true
 	# If all are active, steal the oldest one
 	var oldest: Projectile = _pool[_pool_index]
 	_pool_index = (_pool_index + 1) % count
+	oldest.deactivate()
 	oldest.launch(start_pos, dir, from_player, damage, pierce_count, ricochet_count, armor_mult)
 	return oldest

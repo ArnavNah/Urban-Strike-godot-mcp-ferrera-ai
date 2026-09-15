@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Olive"
-albedo_color = Color(0.32, 0.4, 0.24, 1)
-roughness = 0.88
+albedo_color = Color(0.26, 0.34, 0.22, 1)
+roughness = 0.7

@@ -4,43 +4,56 @@ extends Node3D
 ## Manages 2048m x 2048m procedural chunk streaming around the player helicopter.
 ## Uses a 16x16 chunk grid of 128m x 128m chunks (cx in [-8, 7], cz in [-8, 7]).
 ## Streaming radii:
-## - Full Detail: Chebyshev distance <= 2 chunks (5x5 grid = up to 25 chunks)
-## - HLOD Skyline: Chebyshev distance == 3 chunks (7x7 ring = up to 24 chunks)
+## - Full Detail: Chebyshev distance <= 1 chunks (3x3 grid = up to 9 chunks)
+## - HLOD Skyline: Chebyshev distance in [2, 3] chunks (7x7 ring = up to 40 chunks)
 ## - Unloaded/Pooled: Chebyshev distance > 3 chunks
-## Bounded chunk loads per frame to prevent stutter.
+## Bounded chunk loads per frame to eliminate loading hitching and frame spikes.
+
+signal playable_area_ready()
+signal chunk_streamed(coord: Vector2i, detail: CityChunk.DetailLevel)
 
 @export var world_seed: int = 1337
 @export var chunk_size: float = 128.0
 @export var world_chunks_min: Vector2i = Vector2i(-8, -8)
 @export var world_chunks_max: Vector2i = Vector2i(7, 7)
-@export var full_detail_radius: int = 2
+@export var full_detail_radius: int = 1
 @export var hlod_radius: int = 3
-@export var max_loads_per_frame: int = 2
-@export var immediate_startup_load: bool = true
+@export var max_full_detail_loads_per_frame: int = 1
+@export var max_hlod_loads_per_frame: int = 2
+@export var max_unloads_per_frame: int = 1
+@export var immediate_startup_load: bool = false
 
 var target_player: Node3D = null
 var active_chunks: Dictionary = {} # Vector2i -> CityChunk
 var chunk_pool: Array[CityChunk] = []
-var load_queue: Array[Dictionary] = [] # Array of { "coord": Vector2i, "detail": CityChunk.DetailLevel }
+var load_queue: Array[Dictionary] = [] # Array of { "coord": Vector2i, "detail": CityChunk.DetailLevel, "priority": int }
+var unload_queue: Array[Vector2i] = []
 
 var last_player_chunk: Vector2i = Vector2i(9999, 9999)
 var _is_initialized: bool = false
+var is_playable_ready: bool = false
+var _is_startup_phase: bool = true
 var total_chunks_recycled: int = 0
 
 var road_graph: AStar3D = AStar3D.new()
 var _chunk_road_points: Dictionary = {} # Vector2i -> Array[int]
 var _road_point_ref_counts: Dictionary = {} # int -> int
 
+var _markers_dirty: bool = false
+var _marker_sync_timer: float = 0.0
+
 func _ready() -> void:
 	add_to_group("city_streamer")
 	_resolve_player()
 
+	var start_chunk := Vector2i.ZERO
+	if is_instance_valid(target_player):
+		start_chunk = world_to_chunk_coord(target_player.global_position)
+
 	if immediate_startup_load:
-		var start_chunk := Vector2i.ZERO
-		if is_instance_valid(target_player):
-			start_chunk = world_to_chunk_coord(target_player.global_position)
 		force_update(start_chunk)
-		_is_initialized = true
+	else:
+		_start_controlled_startup(start_chunk)
 
 func _resolve_player() -> void:
 	if not is_instance_valid(target_player) and is_inside_tree():
@@ -58,7 +71,44 @@ func is_chunk_in_world_bounds(chunk_coord: Vector2i) -> bool:
 	return (chunk_coord.x >= world_chunks_min.x and chunk_coord.x <= world_chunks_max.x and
 			chunk_coord.y >= world_chunks_min.y and chunk_coord.y <= world_chunks_max.y)
 
-func _process(_delta: float) -> void:
+# ==============================================================================
+# CONTROLLED STARTUP SEQUENCE
+# ==============================================================================
+func _start_controlled_startup(start_chunk: Vector2i) -> void:
+	last_player_chunk = start_chunk
+	load_queue.clear()
+	unload_queue.clear()
+	is_playable_ready = false
+	_is_startup_phase = true
+
+	# 1. Immediately build player's center chunk so ground and helipad exist on frame 0
+	var center_chunk := _get_or_create_chunk(start_chunk, CityChunk.DetailLevel.FULL_DETAIL)
+	active_chunks[start_chunk] = center_chunk
+	_add_chunk_to_road_graph(center_chunk)
+	chunk_streamed.emit(start_chunk, CityChunk.DetailLevel.FULL_DETAIL)
+
+	# 2. Queue the remaining 8 immediate 3x3 neighbors with highest priority (1 per frame)
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if dx == 0 and dz == 0:
+				continue
+			var c := start_chunk + Vector2i(dx, dz)
+			if is_chunk_in_world_bounds(c):
+				load_queue.append({ "coord": c, "detail": CityChunk.DetailLevel.FULL_DETAIL, "priority": 1 })
+
+	# 3. Queue distant HLOD chunks (radius 2 and 3)
+	for dx in range(-hlod_radius, hlod_radius + 1):
+		for dz in range(-hlod_radius, hlod_radius + 1):
+			var chebyshev_dist: int = maxi(absi(dx), absi(dz))
+			if chebyshev_dist > full_detail_radius and chebyshev_dist <= hlod_radius:
+				var c := start_chunk + Vector2i(dx, dz)
+				if is_chunk_in_world_bounds(c):
+					load_queue.append({ "coord": c, "detail": CityChunk.DetailLevel.HLOD, "priority": 0 })
+
+	_sort_load_queue(start_chunk)
+	_is_initialized = true
+
+func _process(delta: float) -> void:
 	if not is_instance_valid(target_player):
 		_resolve_player()
 		if not is_instance_valid(target_player):
@@ -69,15 +119,37 @@ func _process(_delta: float) -> void:
 		last_player_chunk = p_chunk
 		_update_streaming_targets(p_chunk)
 
-	_process_load_queue()
+	_process_streaming_budget()
+
+	# Deferred marker synchronization
+	if _markers_dirty:
+		_marker_sync_timer += delta
+		if (load_queue.is_empty() and unload_queue.is_empty()) or _marker_sync_timer >= 1.0:
+			_marker_sync_timer = 0.0
+			_markers_dirty = false
+			_sync_gameplay_markers()
 
 func force_update(center_chunk: Vector2i) -> void:
 	last_player_chunk = center_chunk
 	load_queue.clear()
+	unload_queue.clear()
 	_update_streaming_targets(center_chunk)
-	# Process all queued loads immediately
-	while not load_queue.is_empty():
-		_process_load_queue(999)
+
+	# Synchronously process all queued loads/unloads for explicit forced update (unit tests / resets)
+	while not load_queue.is_empty() or not unload_queue.is_empty():
+		while not load_queue.is_empty():
+			var item: Dictionary = load_queue.pop_front()
+			_apply_chunk_load(item)
+		while not unload_queue.is_empty():
+			var c: Vector2i = unload_queue.pop_front()
+			_recycle_chunk(c)
+
+	is_playable_ready = true
+	_is_startup_phase = false
+	_markers_dirty = false
+	_sync_gameplay_markers()
+	playable_area_ready.emit()
+	_is_initialized = true
 
 func _update_streaming_targets(center_chunk: Vector2i) -> void:
 	var desired_chunks: Dictionary = {} # Vector2i -> CityChunk.DetailLevel
@@ -95,29 +167,42 @@ func _update_streaming_targets(center_chunk: Vector2i) -> void:
 			elif chebyshev_dist <= hlod_radius:
 				desired_chunks[c] = CityChunk.DetailLevel.HLOD
 
-	# 2. Unload or pool chunks outside desired_chunks
-	var coords_to_remove: Array[Vector2i] = []
+	# 2. Queue chunks outside desired_chunks for gradual unloading
 	for c: Vector2i in active_chunks.keys():
 		if not desired_chunks.has(c):
-			coords_to_remove.append(c)
+			if not unload_queue.has(c):
+				unload_queue.append(c)
 
-	for c: Vector2i in coords_to_remove:
-		_recycle_chunk(c)
+	# Remove chunks from unload_queue if they are now desired again
+	for c: Vector2i in desired_chunks.keys():
+		unload_queue.erase(c)
+
+	# Sort unload_queue: furthest chunks from player first
+	unload_queue.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var da: int = maxi(absi(a.x - center_chunk.x), absi(a.y - center_chunk.y))
+		var db: int = maxi(absi(b.x - center_chunk.x), absi(b.y - center_chunk.y))
+		return da > db
+	)
 
 	# 3. Check transitions and missing chunks
 	for c: Vector2i in desired_chunks.keys():
 		var desired_level: CityChunk.DetailLevel = desired_chunks[c] as CityChunk.DetailLevel
+		var priority: int = 1 if desired_level == CityChunk.DetailLevel.FULL_DETAIL else 0
 		if active_chunks.has(c):
 			var existing_chunk: CityChunk = active_chunks[c] as CityChunk
 			if existing_chunk.detail_level != desired_level:
-				# State transition needed
-				_queue_load(c, desired_level)
+				_queue_load(c, desired_level, priority)
 		else:
-			# New chunk needed
-			_queue_load(c, desired_level)
+			_queue_load(c, desired_level, priority)
 
-	# Sort queue by distance to center_chunk so closest chunks load first
+	_sort_load_queue(center_chunk)
+
+func _sort_load_queue(center_chunk: Vector2i) -> void:
 	load_queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var prio_a: int = a.get("priority", 0) as int
+		var prio_b: int = b.get("priority", 0) as int
+		if prio_a != prio_b:
+			return prio_a > prio_b
 		var ca: Vector2i = a.get("coord", Vector2i.ZERO) as Vector2i
 		var cb: Vector2i = b.get("coord", Vector2i.ZERO) as Vector2i
 		var da: int = maxi(absi(ca.x - center_chunk.x), absi(ca.y - center_chunk.y))
@@ -125,39 +210,86 @@ func _update_streaming_targets(center_chunk: Vector2i) -> void:
 		return da < db
 	)
 
-func _queue_load(c: Vector2i, detail: CityChunk.DetailLevel) -> void:
+func _queue_load(c: Vector2i, detail: CityChunk.DetailLevel, priority: int = 0) -> void:
 	for item in load_queue:
 		if item.get("coord") == c:
 			item["detail"] = detail
+			item["priority"] = priority
 			return
-	load_queue.append({ "coord": c, "detail": detail })
+	load_queue.append({ "coord": c, "detail": detail, "priority": priority })
 
-func _process_load_queue(budget: int = -1) -> void:
-	var processed: int = 0
-	var limit: int = max_loads_per_frame if budget < 0 else budget
+func _process_streaming_budget() -> void:
+	var full_detail_loaded: int = 0
+	var hlod_loaded: int = 0
+	var unloads_done: int = 0
 
-	while not load_queue.is_empty() and processed < limit:
-		var item: Dictionary = load_queue.pop_front()
-		var c: Vector2i = item.get("coord", Vector2i.ZERO) as Vector2i
-		var detail: CityChunk.DetailLevel = item.get("detail", CityChunk.DetailLevel.FULL_DETAIL) as CityChunk.DetailLevel
+	# Process load queue with strict per-frame budget
+	while not load_queue.is_empty():
+		var next_item: Dictionary = load_queue[0]
+		var next_detail: CityChunk.DetailLevel = next_item.get("detail", CityChunk.DetailLevel.FULL_DETAIL) as CityChunk.DetailLevel
 
-		var chunk: CityChunk = null
-		if active_chunks.has(c):
-			chunk = active_chunks[c] as CityChunk
-			chunk.set_detail_level(detail)
+		if next_detail == CityChunk.DetailLevel.FULL_DETAIL:
+			if full_detail_loaded >= max_full_detail_loads_per_frame:
+				break # At most 1 full-detail chunk per frame to prevent frame-time spikes
+			var item: Dictionary = load_queue.pop_front()
+			_apply_chunk_load(item)
+			full_detail_loaded += 1
+			_markers_dirty = true
+			break # Stop after heavy full-detail chunk
 		else:
-			chunk = _get_or_create_chunk(c, detail)
-			active_chunks[c] = chunk
+			# Lightweight HLOD chunk
+			if hlod_loaded >= max_hlod_loads_per_frame:
+				break
+			var item: Dictionary = load_queue.pop_front()
+			_apply_chunk_load(item)
+			hlod_loaded += 1
 
-		if detail == CityChunk.DetailLevel.FULL_DETAIL:
-			_add_chunk_to_road_graph(chunk)
-		else:
-			_remove_chunk_from_road_graph(chunk)
+	# If no heavy full-detail chunk was loaded this frame, process gradual unloads
+	if full_detail_loaded == 0 and not unload_queue.is_empty():
+		while not unload_queue.is_empty() and unloads_done < max_unloads_per_frame:
+			var c: Vector2i = unload_queue.pop_front()
+			_recycle_chunk(c)
+			unloads_done += 1
+			_markers_dirty = true
 
-		processed += 1
+	# Check startup readiness (minimum 3x3 playable region)
+	if _is_startup_phase:
+		var all_neighbors_ready: bool = true
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				var c := last_player_chunk + Vector2i(dx, dz)
+				if is_chunk_in_world_bounds(c):
+					if not active_chunks.has(c) or (active_chunks[c] as CityChunk).detail_level != CityChunk.DetailLevel.FULL_DETAIL:
+						all_neighbors_ready = false
+						break
+			if not all_neighbors_ready:
+				break
 
-	if processed > 0:
-		_sync_gameplay_markers()
+		if all_neighbors_ready:
+			_is_startup_phase = false
+			is_playable_ready = true
+			_sync_gameplay_markers()
+			_markers_dirty = false
+			playable_area_ready.emit()
+
+func _apply_chunk_load(item: Dictionary) -> void:
+	var c: Vector2i = item.get("coord", Vector2i.ZERO) as Vector2i
+	var detail: CityChunk.DetailLevel = item.get("detail", CityChunk.DetailLevel.FULL_DETAIL) as CityChunk.DetailLevel
+
+	var chunk: CityChunk = null
+	if active_chunks.has(c):
+		chunk = active_chunks[c] as CityChunk
+		chunk.set_detail_level(detail)
+	else:
+		chunk = _get_or_create_chunk(c, detail)
+		active_chunks[c] = chunk
+
+	if detail == CityChunk.DetailLevel.FULL_DETAIL:
+		_add_chunk_to_road_graph(chunk)
+	else:
+		_remove_chunk_from_road_graph(chunk)
+
+	chunk_streamed.emit(c, detail)
 
 func _get_or_create_chunk(c: Vector2i, detail: CityChunk.DetailLevel) -> CityChunk:
 	var chunk: CityChunk = null
@@ -445,21 +577,10 @@ func _sync_gameplay_markers() -> void:
 			if roof_pts.size() > 2:
 				_ensure_named_marker(r_sources, "FreightWarehouse", roof_pts[2])
 
-	# 4. Synchronize ObjectiveLocations
-	var o_sources: Node3D = root.get_node_or_null("ObjectiveLocations") as Node3D
-	if is_instance_valid(o_sources):
-		var p_pos: Vector3 = target_player.global_position if is_instance_valid(target_player) else Vector3.ZERO
-		var obj_pts := get_objective_candidates(p_pos, 35.0, 200.0)
-		if not obj_pts.is_empty():
-			_ensure_named_marker(o_sources, "RadarObjective", obj_pts[0])
-			if obj_pts.size() > 1:
-				_ensure_named_marker(o_sources, "IndustrialObjective", obj_pts[1])
-			if obj_pts.size() > 2:
-				_ensure_named_marker(o_sources, "MilitaryObjective", obj_pts[2])
-			if obj_pts.size() > 3:
-				_ensure_named_marker(o_sources, "CityObjective", obj_pts[3])
+	# Authored ObjectiveLocations are stable mission anchors. Do not relocate them
+	# during chunk streaming; moving them can put Radar/LZ targets on rooftops.
 
-	# 5. Synchronize PickupLocations
+	# 4. Synchronize PickupLocations
 	var p_sources: Node3D = root.get_node_or_null("PickupLocations") as Node3D
 	if is_instance_valid(p_sources):
 		var p_pos: Vector3 = target_player.global_position if is_instance_valid(target_player) else Vector3.ZERO

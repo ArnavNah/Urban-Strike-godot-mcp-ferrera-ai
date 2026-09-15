@@ -42,8 +42,13 @@ var _burst_timer: float = 0.0
 var _reposition_dir: Vector3 = Vector3.ZERO
 var _has_attack_slot: bool = false
 var _lod_frame_counter: int = 0
+var _stagger_offset: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
+var _cached_separation: Vector3 = Vector3.ZERO
+var _separation_timer: float = 0.0
+var _cached_steer_dir: Vector3 = Vector3.ZERO
+var _steer_timer: float = 0.0
 var _last_pos: Vector3 = Vector3.ZERO
 var _is_recovering: bool = false
 var _recovery_timer: float = 0.0
@@ -64,6 +69,7 @@ func _ready() -> void:
 		global_position.y = 0.0
 
 	_last_pos = global_position
+	_stagger_offset = randi() % 60
 
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
@@ -97,29 +103,40 @@ func _physics_process(delta: float) -> void:
 
 	var dist := global_position.distance_to(_player.global_position)
 
-	# Distance-based AI LOD throttling
+	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
 	_lod_frame_counter += 1
 	var step_delta := delta
+	var frame_stagger := _lod_frame_counter + _stagger_offset
 	if dist > 280.0:
 		return # LOD 4: Dormant beyond 280m
-	elif dist > 120.0:
-		if _lod_frame_counter % 8 != 0:
-			return # LOD 3: 7.5 Hz distant corridor advance
-		step_delta = delta * 8.0
+	elif dist > 140.0:
+		if frame_stagger % 6 != 0:
+			return # FAR: 10 Hz corridor advance
+		step_delta = delta * 6.0
 	elif dist > 60.0:
-		if _lod_frame_counter % 3 != 0:
-			return # LOD 2: 20 Hz medium approach
-		step_delta = delta * 3.0
+		if frame_stagger % 2 != 0:
+			return # MEDIUM: 30 Hz approach
+		step_delta = delta * 2.0
 
 	# Phase 10B: Arming timer decay
 	if _arming_timer > 0.0:
 		_arming_timer -= step_delta
 
-	# Throttled LoS check based on LOD
+	# Throttled LoS check based on distance tier
 	_los_timer -= step_delta
 	if _los_timer <= 0.0:
-		_los_timer = 0.1 if dist <= 38.0 else 0.25
-		_cached_los = _check_los()
+		if dist > 140.0:
+			_cached_los = false
+			_los_timer = 1.0 # Far tier: no continuous LoS
+		elif dist > 60.0:
+			_los_timer = 0.45 # Medium tier: check every 0.45s
+			_cached_los = _check_los()
+		elif dist > 38.0:
+			_los_timer = 0.25 # Near-medium: check every 0.25s
+			_cached_los = _check_los()
+		else:
+			_los_timer = 0.15 # Near: check every 0.15s
+			_cached_los = _check_los()
 	var has_los := _cached_los
 
 	# If player moves far away, break out to APPROACH to follow across the city
@@ -193,11 +210,13 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 		else:
 			var to_player := (_player.global_position - global_position)
 			to_player.y = 0.0
-			move_dir = to_player.normalized()
+			if to_player.length_squared() > 0.01:
+				move_dir = to_player.normalized()
 	else:
 		var to_player := (_player.global_position - global_position)
 		to_player.y = 0.0
-		move_dir = to_player.normalized()
+		if to_player.length_squared() > 0.01:
+			move_dir = to_player.normalized()
 
 	if _arming_timer <= 0.0 and dist <= preferred_range and has_los:
 		velocity.x = 0.0
@@ -235,9 +254,10 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 	velocity.z = move_dir.z * move_speed
 
 	# Face movement direction
-	if move_dir.length_squared() > 0.01:
+	if move_dir.length_squared() > 0.01 and is_finite(move_dir.x) and is_finite(move_dir.z):
 		var target_yaw := atan2(-move_dir.x, -move_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, 6.0 * delta)
+		if is_finite(target_yaw):
+			rotation.y = lerp_angle(rotation.y, target_yaw, 6.0 * delta)
 
 func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
@@ -246,9 +266,10 @@ func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
 	# Face player smoothly while lining up burst
 	var to_player := (_player.global_position - global_position)
 	to_player.y = 0.0
-	if to_player.length_squared() > 0.01:
+	if to_player.length_squared() > 0.01 and is_finite(to_player.x) and is_finite(to_player.z):
 		var target_yaw := atan2(-to_player.x, -to_player.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, 8.0 * delta)
+		if is_finite(target_yaw):
+			rotation.y = lerp_angle(rotation.y, target_yaw, 8.0 * delta)
 
 	if not has_los or dist > threat_range:
 		_release_slot()
@@ -349,42 +370,97 @@ func _pick_reposition_dir() -> void:
 	to_player.y = 0.0
 	var dist := to_player.length()
 
+	if dist < 0.1:
+		_reposition_dir = Vector3.FORWARD
+		return
+
+	var norm_tp := to_player.normalized()
 	if dist < 12.0:
 		# Too close: backpedal away
-		_reposition_dir = -to_player.normalized()
+		_reposition_dir = -norm_tp
 	else:
 		# Flank laterally left or right
-		var perp := Vector3(-to_player.z, 0.0, to_player.x).normalized()
-		_reposition_dir = (perp if randf() > 0.5 else -perp) + to_player.normalized() * randf_range(-0.3, 0.3)
-		_reposition_dir = _reposition_dir.normalized()
+		var perp := Vector3(-norm_tp.z, 0.0, norm_tp.x)
+		_reposition_dir = (perp if randf() > 0.5 else -perp) + norm_tp * randf_range(-0.3, 0.3)
+		if _reposition_dir.length_squared() > 0.01:
+			_reposition_dir = _reposition_dir.normalized()
+		else:
+			_reposition_dir = norm_tp
 
 func _apply_separation() -> void:
-	var avoidance := Vector3.ZERO
-	var search_radius: float = 4.0
-	var nearby: Array[Node3D] = []
+	var dist := 0.0
+	if is_instance_valid(_player):
+		dist = global_position.distance_to(_player.global_position)
+	if dist > 140.0:
+		return # Far tier: no separation
 
-	if EnemyRegistry.instance:
-		nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius)
-	else:
-		for e in get_tree().get_nodes_in_group("enemies"):
-			if e is Node3D and e != self:
-				nearby.append(e as Node3D)
+	_separation_timer -= 0.016667
+	if _separation_timer <= 0.0:
+		_separation_timer = 0.15 if dist <= 60.0 else 0.25
+		var avoidance := Vector3.ZERO
+		var search_radius: float = 8.0
+		var search_radius_sq := search_radius * search_radius
+		var max_candidates: int = 6 if dist <= 60.0 else 4
+		var nearby: Array[Node3D] = []
 
-	for other in nearby:
-		if other != self and is_instance_valid(other) and not other.is_in_group("air_enemies"):
-			var diff := global_position - other.global_position
-			diff.y = 0.0
-			var d := diff.length()
-			if d < search_radius and d > 0.05:
-				var weight: float = (search_radius - d) / search_radius
-				avoidance += (diff / d) * weight * 6.0
+		if EnemyRegistry.instance:
+			nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius, max_candidates)
+		else:
+			for e in get_tree().get_nodes_in_group("enemies"):
+				if e is Node3D and e != self:
+					nearby.append(e as Node3D)
+					if nearby.size() >= max_candidates:
+						break
 
-	velocity.x += avoidance.x
-	velocity.z += avoidance.z
+		var count: int = 0
+		for other in nearby:
+			if other != self and is_instance_valid(other) and not other.is_in_group("air_enemies"):
+				var diff := global_position - other.global_position
+				diff.y = 0.0
+				var d_sq := diff.length_squared()
+				if d_sq < search_radius_sq and d_sq > 0.0025:
+					var d := sqrt(d_sq)
+					var weight: float = (search_radius - d) / search_radius
+					avoidance += (diff / d) * weight * 6.0
+					count += 1
+					if count >= max_candidates:
+						break
+
+		if avoidance.length_squared() > 16.0: # 4.0 m/s max lateral push
+			avoidance = avoidance.normalized() * 4.0
+
+		_cached_separation = avoidance
+
+	velocity.x += _cached_separation.x
+	velocity.z += _cached_separation.z
+
+	var max_h_speed: float = (move_speed * 1.3) if (current_state == State.APPROACH or current_state == State.REPOSITION) else 3.0
+	var h_vel := Vector2(velocity.x, velocity.z)
+	if h_vel.length() > max_h_speed:
+		h_vel = h_vel.normalized() * max_h_speed
+		velocity.x = h_vel.x
+		velocity.z = h_vel.y
 
 func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
+	if desired_dir.length_squared() < 0.01:
+		return desired_dir
+
+	var dist := 0.0
+	if is_instance_valid(_player):
+		dist = global_position.distance_to(_player.global_position)
+
+	# FAR TIER (> 140m): No obstacle raycasts
+	if dist > 140.0:
+		return desired_dir
+
+	_steer_timer -= 0.016667
+	if _steer_timer > 0.0 and _cached_steer_dir != Vector3.ZERO:
+		return _cached_steer_dir
+
+	_steer_timer = 0.2 if dist <= 60.0 else 0.35
+
 	var space := get_world_3d().direct_space_state
-	if not space or desired_dir.length_squared() < 0.01:
+	if not space:
 		return desired_dir
 
 	var origin := global_position + Vector3(0.0, 0.6, 0.0)
@@ -402,29 +478,34 @@ func _steer_around_obstacles(desired_dir: Vector3) -> Vector3:
 			var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
 			if tangent.dot(desired_dir) < 0.0:
 				tangent = -tangent
-			return (desired_dir * 0.4 + tangent * 0.6).normalized()
+			_cached_steer_dir = (desired_dir * 0.4 + tangent * 0.6).normalized()
+			return _cached_steer_dir
 
-	# Whiskers for lateral corner detection
-	var left_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(30.0))
-	var right_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(-30.0))
+	# Whiskers for lateral corner detection - only checked near player
+	if dist <= 60.0:
+		var left_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(30.0))
+		var right_dir := desired_dir.rotated(Vector3.UP, deg_to_rad(-30.0))
 
-	var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 2.8, 1)
-	left_query.collide_with_areas = false
-	left_query.collide_with_bodies = true
-	left_query.exclude = [get_rid()]
-	var left_hit := space.intersect_ray(left_query)
+		var left_query := PhysicsRayQueryParameters3D.create(origin, origin + left_dir * 2.8, 1)
+		left_query.collide_with_areas = false
+		left_query.collide_with_bodies = true
+		left_query.exclude = [get_rid()]
+		var left_hit := space.intersect_ray(left_query)
 
-	var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 2.8, 1)
-	right_query.collide_with_areas = false
-	right_query.collide_with_bodies = true
-	right_query.exclude = [get_rid()]
-	var right_hit := space.intersect_ray(right_query)
+		var right_query := PhysicsRayQueryParameters3D.create(origin, origin + right_dir * 2.8, 1)
+		right_query.collide_with_areas = false
+		right_query.collide_with_bodies = true
+		right_query.exclude = [get_rid()]
+		var right_hit := space.intersect_ray(right_query)
 
-	if not left_hit.is_empty() and right_hit.is_empty():
-		return desired_dir.rotated(Vector3.UP, deg_to_rad(-25.0)).normalized()
-	elif not right_hit.is_empty() and left_hit.is_empty():
-		return desired_dir.rotated(Vector3.UP, deg_to_rad(25.0)).normalized()
+		if not left_hit.is_empty() and right_hit.is_empty():
+			_cached_steer_dir = desired_dir.rotated(Vector3.UP, deg_to_rad(-25.0)).normalized()
+			return _cached_steer_dir
+		elif not right_hit.is_empty() and left_hit.is_empty():
+			_cached_steer_dir = desired_dir.rotated(Vector3.UP, deg_to_rad(25.0)).normalized()
+			return _cached_steer_dir
 
+	_cached_steer_dir = desired_dir
 	return desired_dir
 
 func _check_los() -> bool:
@@ -472,9 +553,13 @@ func _fire_shot() -> void:
 	var origin := global_position + Vector3(0, 1.15, 0)
 	var aim_dir := _snapshot_aim_dir
 	if aim_dir.length_squared() < 0.01:
-		aim_dir = (_player.global_position - origin).normalized()
+		var to_p := _player.global_position - origin
+		aim_dir = to_p.normalized() if to_p.length_squared() > 0.01 else -global_transform.basis.z
 	aim_dir += Vector3(randf_range(-0.12, 0.12), randf_range(-0.08, 0.08), randf_range(-0.12, 0.12))
-	aim_dir = aim_dir.normalized()
+	if aim_dir.length_squared() > 0.01:
+		aim_dir = aim_dir.normalized()
+	else:
+		aim_dir = -global_transform.basis.z
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
@@ -524,12 +609,16 @@ func _spawn_xp() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			if "xp_value" in gem:
-				gem.xp_value = xp_reward
-			gem.transform.origin = global_position + Vector3(0, 0.5, 0)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var spawn_pos := global_position + Vector3(0, 0.5, 0)
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(spawn_pos, xp_reward)
+	else:
+		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_reward
+				gem.transform.origin = spawn_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)

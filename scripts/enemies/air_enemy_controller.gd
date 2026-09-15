@@ -54,6 +54,11 @@ var _orbit_direction: float = 1.0 # 1.0 or -1.0
 var _player: Node3D = null
 var _has_air_slot: bool = false
 var _lod_frame_counter: int = 0
+var _stagger_offset: int = 0
+var _cached_air_separation: Vector3 = Vector3.ZERO
+var _separation_timer: float = 0.0
+var _cached_air_steer_dir: Vector3 = Vector3.ZERO
+var _air_steer_timer: float = 0.0
 var _is_telegraphing: bool = false
 var _burst_shots_remaining: int = 0
 var _evasion_cooldown: float = 0.0
@@ -66,7 +71,10 @@ var _recovery_vector: Vector3 = Vector3.FORWARD
 var _max_horizontal_accel: float = 24.0 # m/s²
 var _ground_ray_timer: float = 0.0
 var _cached_ground_y: float = 0.0
+var _cached_forward_roof_y: float = 0.0
 var _current_target_y: float = 14.0
+var _avoidance_bias: float = 0.0
+var _avoidance_timer: float = 0.0
 
 @onready var visuals: Node3D = get_node_or_null("Visuals")
 @onready var main_rotor: Node3D = get_node_or_null("Visuals/MainRotor")
@@ -86,6 +94,7 @@ func _ready() -> void:
 
 	_instance_alt_offset = (float(get_instance_id() % 7) - 3.0) * 0.75
 	_last_stuck_pos = global_position
+	_stagger_offset = randi() % 60
 
 	_player = get_tree().get_first_node_in_group("player")
 	if is_instance_valid(_player):
@@ -165,24 +174,27 @@ func _physics_process(delta: float) -> void:
 	if _arming_timer > 0.0:
 		_arming_timer -= delta
 
-	# Distance-based AI LOD
+	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
 	var dist_to_player := global_position.distance_to(_player.global_position)
 	_lod_frame_counter += 1
 	var step_delta := delta
+	var frame_stagger := _lod_frame_counter + _stagger_offset
+
 	if dist_to_player > 280.0:
-		return # LOD 4: Dormant beyond 280m
+		return # Dormant beyond 280m
 	elif dist_to_player > 140.0:
-		if _lod_frame_counter % 8 != 0:
-			return # LOD 3: 7.5 Hz corridor advance
-		step_delta = delta * 8.0
-	elif dist_to_player > 80.0:
-		if _lod_frame_counter % 4 != 0:
-			return # LOD 2: 15 Hz
-		step_delta = delta * 4.0
-	elif dist_to_player > 40.0:
-		if _lod_frame_counter % 2 != 0:
-			return # LOD 1: 30 Hz
+		# FAR TIER: 10 Hz corridor advance
+		if frame_stagger % 6 != 0:
+			return
+		step_delta = delta * 6.0
+	elif dist_to_player > 60.0:
+		# MEDIUM TIER: 30 Hz approach
+		if frame_stagger % 2 != 0:
+			return
 		step_delta = delta * 2.0
+
+	if _avoidance_timer > 0.0:
+		_avoidance_timer -= step_delta
 
 	# Smooth altitude band compliance and rooftop clearance
 	_update_altitude(step_delta)
@@ -235,10 +247,22 @@ func _update_altitude(delta: float) -> void:
 	if not is_instance_valid(_player):
 		return
 
+	var dist_to_player := global_position.distance_to(_player.global_position)
+	if dist_to_player > 140.0:
+		# Far tier: skip ground/roof raycasts, smooth climb/descend toward target cruise altitude
+		var far_target_y: float = _get_preferred_altitude() + _instance_alt_offset
+		_current_target_y = far_target_y
+		var far_y_diff: float = far_target_y - global_position.y
+		velocity.y = move_toward(velocity.y, clampf(far_y_diff * 2.5, -4.5, 6.5), 12.0 * delta)
+		return
+
 	_ground_ray_timer -= delta
 	if _ground_ray_timer <= 0.0:
-		_ground_ray_timer = 0.15
-		_cached_ground_y = _query_ground_or_roof_height()
+		_ground_ray_timer = 0.2 if dist_to_player <= 60.0 else 0.4
+		_cached_ground_y = _query_ground_or_roof_height(Vector3.ZERO)
+		var fwd_probe := (-global_transform.basis.z * 10.0) if velocity.length_squared() > 1.0 else Vector3.ZERO
+		fwd_probe.y = 0.0
+		_cached_forward_roof_y = _query_ground_or_roof_height(fwd_probe)
 
 	var base_alt: float = _get_preferred_altitude()
 	# If Transport is actively landing at LZ, descend toward ground level
@@ -247,24 +271,25 @@ func _update_altitude(delta: float) -> void:
 			base_alt = 3.5
 
 	# Maintain at least 4.5m clearance above rooftops or ground terrain
-	var min_clearance_y: float = _cached_ground_y + 4.5
+	var highest_obstacle: float = maxf(_cached_ground_y, _cached_forward_roof_y)
+	var min_clearance_y: float = highest_obstacle + 4.5
 	var target_y: float = maxf(base_alt + _instance_alt_offset, min_clearance_y)
-	if min_clearance_y <= _get_alt_max():
+	if min_clearance_y <= _get_alt_max() + 4.0:
 		target_y = clampf(target_y, _get_alt_min(), _get_alt_max() + 8.0)
 	_current_target_y = target_y
 
 	# Vertical velocity approach with bounded climb/descent rate
 	var y_diff: float = target_y - global_position.y
-	var max_climb: float = 7.0
-	var max_descent: float = 5.0
-	var target_vy: float = clampf(y_diff * 3.5, -max_descent, max_climb)
-	velocity.y = move_toward(velocity.y, target_vy, 18.0 * delta)
+	var max_climb: float = 6.5
+	var max_descent: float = 4.5
+	var target_vy: float = clampf(y_diff * 2.8, -max_descent, max_climb)
+	velocity.y = move_toward(velocity.y, target_vy, 15.0 * delta)
 
-func _query_ground_or_roof_height() -> float:
+func _query_ground_or_roof_height(offset: Vector3 = Vector3.ZERO) -> float:
 	var space := get_world_3d().direct_space_state
 	if not space:
 		return 0.0
-	var from_pos := global_position + Vector3(0.0, 4.0, 0.0)
+	var from_pos := global_position + offset + Vector3(0.0, 4.0, 0.0)
 	var to_pos := from_pos + Vector3(0.0, -80.0, 0.0)
 	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1) # Layer 1 = World
 	query.collide_with_areas = false
@@ -294,33 +319,69 @@ func _get_preferred_altitude() -> float:
 		_:
 			return (archetype.altitude_min + archetype.altitude_max) * 0.5
 
-func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
+func _raycast_world(from_pos: Vector3, to_pos: Vector3) -> Dictionary:
 	var space := get_world_3d().direct_space_state
-	if not space or desired_dir.length_squared() < 0.01:
-		return desired_dir
-
-	var origin := global_position
-	var lookahead: float = 16.0
-	var target := origin + desired_dir.normalized() * lookahead
-	var query := PhysicsRayQueryParameters3D.create(origin, target, 1) # Layer 1 = World
+	if not space:
+		return {}
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos, 1) # Layer 1 = World
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
 	query.exclude = [get_rid()]
-	var hit := space.intersect_ray(query)
+	return space.intersect_ray(query)
 
-	if hit.is_empty():
+func _steer_around_air_obstacles(desired_dir: Vector3) -> Vector3:
+	if desired_dir.length_squared() < 0.01:
 		return desired_dir
 
-	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
-	normal.y = 0.0
-	if normal.length_squared() > 0.01:
-		normal = normal.normalized()
-		var tangent := Vector3(-normal.z, 0.0, normal.x).normalized()
-		if tangent.dot(desired_dir) < 0.0:
-			tangent = -tangent
-		return (desired_dir.normalized() * 0.35 + tangent * 0.65).normalized()
+	var dist_to_player := 0.0
+	if is_instance_valid(_player):
+		dist_to_player = global_position.distance_to(_player.global_position)
 
-	return desired_dir
+	# FAR TIER (> 140m): no obstacle raycasts
+	if dist_to_player > 140.0:
+		return desired_dir
+
+	_air_steer_timer -= 0.016667
+	if _air_steer_timer > 0.0 and _cached_air_steer_dir != Vector3.ZERO:
+		return _cached_air_steer_dir
+
+	_air_steer_timer = 0.2 if dist_to_player <= 60.0 else 0.35
+
+	var origin := global_position
+	var fwd := desired_dir.normalized()
+	var lookahead: float = 18.0
+
+	var center_hit := _raycast_world(origin, origin + fwd * lookahead)
+
+	if center_hit.is_empty():
+		if _avoidance_timer > 0.0:
+			var perp := Vector3(-fwd.z, 0.0, fwd.x) * _avoidance_bias
+			_cached_air_steer_dir = (fwd * 0.75 + perp * 0.25).normalized()
+			return _cached_air_steer_dir
+		_cached_air_steer_dir = fwd
+		return fwd
+
+	var left_dir := fwd.rotated(Vector3.UP, deg_to_rad(28.0))
+	var right_dir := fwd.rotated(Vector3.UP, deg_to_rad(-28.0))
+	var left_hit := _raycast_world(origin, origin + left_dir * (lookahead * 0.75))
+	var _right_hit := _raycast_world(origin, origin + right_dir * (lookahead * 0.75))
+
+	if _avoidance_timer <= 0.0:
+		_avoidance_timer = 0.45
+		var normal: Vector3 = center_hit.get("normal", Vector3.ZERO)
+		normal.y = 0.0
+		if normal.length_squared() > 0.01:
+			normal = normal.normalized()
+			var tangent := Vector3(-normal.z, 0.0, normal.x)
+			_avoidance_bias = 1.0 if tangent.dot(fwd) >= 0.0 else -1.0
+		elif not left_hit.is_empty():
+			_avoidance_bias = -1.0
+		else:
+			_avoidance_bias = 1.0
+
+	var avoid_perp := Vector3(-fwd.z, 0.0, fwd.x) * _avoidance_bias
+	_cached_air_steer_dir = (fwd * 0.35 + avoid_perp * 0.65).normalized()
+	return _cached_air_steer_dir
 
 func _check_stuck_condition(delta: float) -> void:
 	if current_state == State.ENTER or current_state == State.DISENGAGE or current_state == State.RETREAT or current_state == State.RECOVER or current_state == State.DEATH:
@@ -345,33 +406,58 @@ func _tick_recover(delta: float) -> void:
 		_transition_to(State.REPOSITION)
 
 func _apply_separation() -> void:
-	var avoidance := Vector3.ZERO
-	var search_radius: float = 10.0
-	var nearby: Array[Node3D] = []
+	var dist := 0.0
+	if is_instance_valid(_player):
+		dist = global_position.distance_to(_player.global_position)
+	if dist > 140.0:
+		return # FAR TIER: no separation
 
-	if EnemyRegistry.instance:
-		nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius)
-	else:
-		for e in get_tree().get_nodes_in_group("air_enemies"):
-			if e is Node3D and e != self:
-				nearby.append(e as Node3D)
+	_separation_timer -= 0.016667
+	if _separation_timer <= 0.0:
+		_separation_timer = 0.15 if dist <= 60.0 else 0.3
+		var avoidance := Vector3.ZERO
+		var search_radius: float = 14.0
+		var search_radius_sq := search_radius * search_radius
+		var max_candidates: int = 6 if dist <= 60.0 else 4
+		var nearby: Array[Node3D] = []
 
-	for other in nearby:
-		if other != self and is_instance_valid(other) and other.is_in_group("air_enemies"):
-			var diff := global_position - other.global_position
-			diff.y = 0.0
-			var d := diff.length()
-			if d < search_radius and d > 0.05:
-				var weight: float = (search_radius - d) / search_radius
-				avoidance += (diff / d) * weight * 16.0
+		if EnemyRegistry.instance:
+			nearby = EnemyRegistry.instance.get_enemies_in_radius(global_position, search_radius, max_candidates)
+		else:
+			var all_air := get_tree().get_nodes_in_group("air_enemies")
+			for e in all_air:
+				if e is Node3D and e != self:
+					nearby.append(e as Node3D)
+					if nearby.size() >= max_candidates:
+						break
 
-	avoidance = avoidance.limit_length(16.0)
-	velocity.x += avoidance.x
-	velocity.z += avoidance.z
+		var count: int = 0
+		for other in nearby:
+			if other != self and is_instance_valid(other) and other.is_in_group("air_enemies"):
+				var diff := global_position - other.global_position
+				diff.y = 0.0
+				var d_sq := diff.length_squared()
+				if d_sq < search_radius_sq and d_sq > 0.0025:
+					var d := sqrt(d_sq)
+					var norm_d := d / search_radius
+					var weight: float = clampf((1.0 - norm_d) * (1.0 - norm_d), 0.0, 1.0)
+					avoidance += (diff / d) * weight * 10.0
+					count += 1
+					if count >= max_candidates:
+						break
+
+		avoidance = avoidance.limit_length(8.0)
+		_cached_air_separation = avoidance
+
+	velocity.x += _cached_air_separation.x
+	velocity.z += _cached_air_separation.z
 
 	# Clamp maximum horizontal speed to prevent runaway accumulation from separation
 	if archetype:
-		var max_horiz := maxf(archetype.attack_speed, archetype.cruise_speed) * 1.3
+		var base_speed: float = archetype.cruise_speed
+		if (current_state == State.ATTACK or current_state == State.BREAK_AWAY) and archetype.weapon_type != AirEnemyArchetype.WeaponType.ROCKET_SALVO and archetype.weapon_type != AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
+			base_speed = archetype.attack_speed
+		var max_horiz := base_speed * 1.25
 		var horiz := Vector2(velocity.x, velocity.z)
 		if horiz.length() > max_horiz:
 			horiz = horiz.limit_length(max_horiz)
@@ -380,30 +466,35 @@ func _apply_separation() -> void:
 
 func _update_visual_orientation(delta: float) -> void:
 	var horiz_vel := Vector2(velocity.x, velocity.z)
-	if horiz_vel.length_squared() > 0.5:
-		var target_yaw := atan2(-velocity.x, -velocity.z)
-		var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
-		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(archetype.turn_speed * delta, 0.0, 1.0))
+	var speed := horiz_vel.length()
 
-		if visuals:
-			# Roll into turns (banking)
-			var max_bank := deg_to_rad(30.0)
-			var target_bank := clampf(-yaw_diff * 1.5, -max_bank, max_bank)
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, target_bank, clampf(6.0 * delta, 0.0, 1.0))
+	var target_yaw := rotation.y
+	if current_state == State.ATTACK or current_state == State.ATTACK_SETUP:
+		if is_instance_valid(_player):
+			var to_p := (_player.global_position - global_position)
+			to_p.y = 0.0
+			if to_p.length_squared() > 0.1:
+				target_yaw = atan2(-to_p.x, -to_p.z)
+	elif speed > 1.0:
+		target_yaw = atan2(-velocity.x, -velocity.z)
 
-			# Readable forward pitch based on speed
-			var max_pitch := deg_to_rad(14.0)
-			var speed_ratio := clampf(horiz_vel.length() / maxf(archetype.attack_speed, 1.0), 0.0, 1.0)
-			var target_pitch := speed_ratio * max_pitch
-			visuals.rotation.x = lerp_angle(visuals.rotation.x, target_pitch, clampf(5.0 * delta, 0.0, 1.0))
-	else:
-		if visuals:
-			visuals.rotation.z = lerp_angle(visuals.rotation.z, 0.0, clampf(4.0 * delta, 0.0, 1.0))
-			visuals.rotation.x = lerp_angle(visuals.rotation.x, 0.0, clampf(4.0 * delta, 0.0, 1.0))
+	var yaw_diff := wrapf(target_yaw - rotation.y, -PI, PI)
+	rotation.y = lerp_angle(rotation.y, target_yaw, clampf(archetype.turn_speed * delta, 0.0, 1.0))
+
+	if visuals:
+		# Roll into turns (banking)
+		var max_bank := deg_to_rad(28.0)
+		var target_bank := clampf(-yaw_diff * 1.4, -max_bank, max_bank)
+		visuals.rotation.z = lerp_angle(visuals.rotation.z, target_bank, clampf(5.5 * delta, 0.0, 1.0))
+
+		# Readable forward pitch based on speed
+		var max_pitch := deg_to_rad(12.0)
+		var speed_ratio := clampf(speed / maxf(archetype.attack_speed, 1.0), 0.0, 1.0)
+		var target_pitch := speed_ratio * max_pitch
+		visuals.rotation.x = lerp_angle(visuals.rotation.x, target_pitch, clampf(4.5 * delta, 0.0, 1.0))
 
 func _tick_enter(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
-	# Move toward battlefield center or player
 	var target_pos := _player.global_position if is_instance_valid(_player) else Vector3.ZERO
 	_fly_toward(target_pos, archetype.cruise_speed, delta)
 
@@ -413,11 +504,8 @@ func _tick_enter(delta: float, flat_dist: float) -> void:
 func _tick_approach(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 
-	# Dynamically pursue player with catch-up boost if player travels across city
-	var to_player := (_player.global_position - global_position)
-	to_player.y = 0.0
-	var dir_to_player := to_player.normalized() if to_player.length_squared() > 0.01 else Vector3.FORWARD
-	var approach_dest := _player.global_position - dir_to_player * archetype.preferred_distance
+	# Fly toward player position with catch-up boost if player travels across city
+	var approach_dest := _player.global_position
 
 	var approach_speed := archetype.cruise_speed
 	if flat_dist > 50.0:
@@ -425,7 +513,7 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 
 	_fly_toward(approach_dest, approach_speed, delta)
 
-	if flat_dist <= archetype.preferred_distance + 3.0 or _state_timer <= 0.0:
+	if flat_dist <= archetype.preferred_distance + 2.0 or _state_timer <= 0.0:
 		match archetype.weapon_type:
 			AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
 				_transition_to(State.ATTACK_SETUP)
@@ -437,7 +525,7 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 func _tick_attack_setup(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 
-	if flat_dist > archetype.preferred_distance * 1.6:
+	if flat_dist > archetype.preferred_distance * 1.7:
 		_transition_to(State.APPROACH)
 		return
 
@@ -457,17 +545,14 @@ func _tick_attack_setup(delta: float, flat_dist: float) -> void:
 	velocity.z = move_toward(velocity.z, fwd_vec.z * prep_speed, _max_horizontal_accel * delta)
 
 	if _state_timer <= 0.0:
-		# Lock attack vector
-		_attack_vector = to_player.normalized()
+		_attack_vector = to_player.normalized() if to_player.length_squared() > 0.01 else -global_transform.basis.z
 
 		if not _request_air_slot():
-			# Slot denied: orbit briefly instead of sitting still
 			_transition_to(State.ORBIT)
 			return
 
 		match archetype.weapon_type:
 			AirEnemyArchetype.WeaponType.MACHINE_GUN:
-				# Scout performs high-speed strafe or attack run
 				_transition_to(State.STRAFE if randf() > 0.5 else State.ATTACK)
 			AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
 				_transition_to(State.ORBIT)
@@ -502,7 +587,7 @@ func _tick_strafe(delta: float, flat_dist: float) -> void:
 	# Strafe pass across the player's front
 	var to_player := (_player.global_position - global_position)
 	to_player.y = 0.0
-	var fwd := to_player.normalized()
+	var fwd := to_player.normalized() if to_player.length_squared() > 0.01 else -global_transform.basis.z
 	var perp := Vector3(-fwd.z, 0.0, fwd.x) * _orbit_direction
 
 	var strafe_vec := (perp * 0.85 + fwd * 0.25).normalized()
@@ -523,46 +608,44 @@ func _tick_attack(delta: float, flat_dist: float) -> void:
 	_attack_timer -= delta
 	_shot_cooldown -= delta
 
-	# Committed flight run along attack vector with bounded steering
-	var atk_vec := _steer_around_air_obstacles(_attack_vector)
-	velocity.x = move_toward(velocity.x, atk_vec.x * archetype.attack_speed, _max_horizontal_accel * delta)
-	velocity.z = move_toward(velocity.z, atk_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
-
-	match archetype.weapon_type:
-		AirEnemyArchetype.WeaponType.MACHINE_GUN:
-			_exec_machine_gun_attack(delta)
-		AirEnemyArchetype.WeaponType.ROCKET_SALVO:
-			_exec_rocket_salvo_attack(delta)
-		AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
-			_exec_gunship_attack(delta)
-		AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
-			_exec_jammer_attack(delta)
-		AirEnemyArchetype.WeaponType.ACE_ARSENAL:
-			_exec_ace_attack(delta)
-		AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
-			_exec_transport_drop(delta)
-
-	if _attack_timer <= 0.0 or flat_dist < 14.0:
-		_release_air_slot()
-		_transition_to(State.BREAK_AWAY)
-
-	match archetype.weapon_type:
-		AirEnemyArchetype.WeaponType.MACHINE_GUN:
-			_exec_machine_gun_attack(delta)
-		AirEnemyArchetype.WeaponType.ROCKET_SALVO:
-			_exec_rocket_salvo_attack(delta)
-		AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
-			_exec_gunship_attack(delta)
-		AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
-			_exec_jammer_attack(delta)
-		AirEnemyArchetype.WeaponType.ACE_ARSENAL:
-			_exec_ace_attack(delta)
-		AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
-			_exec_transport_drop(delta)
+	if archetype.weapon_type == AirEnemyArchetype.WeaponType.ROCKET_SALVO:
+		# Standoff hover/lateral drift
+		var to_player := (_player.global_position - global_position)
+		to_player.y = 0.0
+		var fwd := to_player.normalized() if to_player.length_squared() > 0.01 else -global_transform.basis.z
+		var perp := Vector3(-fwd.z, 0.0, fwd.x) * _orbit_direction
+		var drift_vec: Vector3
+		if flat_dist < archetype.preferred_distance - 4.0:
+			drift_vec = (-fwd * 0.6 + perp * 0.4).normalized()
+		elif flat_dist > archetype.preferred_distance + 4.0:
+			drift_vec = (fwd * 0.6 + perp * 0.4).normalized()
+		else:
+			drift_vec = perp
+		drift_vec = _steer_around_air_obstacles(drift_vec)
+		velocity.x = move_toward(velocity.x, drift_vec.x * (archetype.cruise_speed * 0.6), _max_horizontal_accel * delta)
+		velocity.z = move_toward(velocity.z, drift_vec.z * (archetype.cruise_speed * 0.6), _max_horizontal_accel * delta)
+		_exec_rocket_salvo_attack(delta)
+	else:
+		# Committed flight run along attack vector with bounded steering
+		var atk_vec := _steer_around_air_obstacles(_attack_vector)
+		velocity.x = move_toward(velocity.x, atk_vec.x * archetype.attack_speed, _max_horizontal_accel * delta)
+		velocity.z = move_toward(velocity.z, atk_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
+		match archetype.weapon_type:
+			AirEnemyArchetype.WeaponType.MACHINE_GUN:
+				_exec_machine_gun_attack(delta)
+			AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
+				_exec_gunship_attack(delta)
+			AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
+				_exec_jammer_attack(delta)
+			AirEnemyArchetype.WeaponType.ACE_ARSENAL:
+				_exec_ace_attack(delta)
+			AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
+				_exec_transport_drop(delta)
 
 	if _attack_timer <= 0.0 or flat_dist < 14.0:
 		_release_air_slot()
 		_transition_to(State.BREAK_AWAY)
+
 
 func _exec_machine_gun_attack(_delta: float) -> void:
 	if _shot_cooldown <= 0.0:
@@ -921,13 +1004,16 @@ func _spawn_rewards() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			var xp_val: int = archetype.xp_reward if archetype else xp_reward
-			if "xp_value" in gem:
-				gem.xp_value = xp_val
-			gem.transform.origin = global_position
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var xp_val: int = archetype.xp_reward if archetype else xp_reward
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(global_position, xp_val)
+	else:
+		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_val
+				gem.transform.origin = global_position
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)

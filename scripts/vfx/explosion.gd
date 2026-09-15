@@ -1,51 +1,67 @@
 class_name ExplosionEffect
 extends Node3D
-
 var is_pooled: bool = false
 var is_active: bool = false
-
+var _remaining: float = 0.0
+var _visual_tween: Tween
+var _light_tween: Tween
 @onready var particles: GPUParticles3D = get_node_or_null("GPUParticles3D")
 @onready var fireball: MeshInstance3D = get_node_or_null("FireballMesh")
 @onready var flash_light: OmniLight3D = get_node_or_null("FlashLight")
 
 func _ready() -> void:
-	if not is_pooled:
+	if is_pooled:
+		_on_pooled_finish()
+	else:
 		play()
 
 func play(scale_mult: float = 1.0) -> void:
+	if _visual_tween:
+		_visual_tween.kill()
+	if _light_tween:
+		_light_tween.kill()
+	process_mode = Node.PROCESS_MODE_INHERIT
+	set_process(true)
 	visible = true
 	is_active = true
-	var s: float = maxf(0.5, scale_mult)
+	_remaining = 1.2
+	var s: float = clampf(scale_mult, 0.5, 2.0)
 	if particles:
 		particles.restart()
 		particles.emitting = true
+	if fireball:
+		fireball.scale = Vector3.ONE * 0.01
+		fireball.visible = true
+		_visual_tween = create_tween()
+		_visual_tween.tween_property(fireball, "scale", Vector3.ONE * 2.2 * s, 0.08)
+		_visual_tween.tween_property(fireball, "scale", Vector3.ONE * 0.01, 0.14)
+		_visual_tween.tween_callback(func() -> void: fireball.visible = false)
+	if flash_light:
+		flash_light.light_energy = 2.4 * s
+		_light_tween = create_tween()
+		_light_tween.tween_property(flash_light, "light_energy", 0.0, 0.16)
 
-	if is_inside_tree():
-		if fireball:
-			fireball.scale = Vector3.ZERO
-			fireball.visible = true
-			var tw := create_tween()
-			var target_scale := Vector3(2.2 * s, 2.2 * s, 2.2 * s)
-			tw.tween_property(fireball, "scale", target_scale, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw.tween_property(fireball, "scale", Vector3.ZERO, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		if flash_light:
-			flash_light.light_energy = 2.4 * minf(2.0, s)
-			var ltw := create_tween()
-			ltw.tween_property(flash_light, "light_energy", 0.0, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-	if is_pooled:
-		get_tree().create_timer(1.2, false).timeout.connect(_on_pooled_finish)
-	else:
-		if particles:
-			particles.finished.connect(queue_free)
-		get_tree().create_timer(1.2, false).timeout.connect(queue_free)
+func _process(delta: float) -> void:
+	_remaining -= delta
+	if _remaining <= 0.0:
+		if is_pooled:
+			_on_pooled_finish()
+		else:
+			queue_free()
 
 func _on_pooled_finish() -> void:
+	if _visual_tween:
+		_visual_tween.kill()
+	if _light_tween:
+		_light_tween.kill()
 	if particles:
 		particles.emitting = false
 	if fireball:
-		fireball.scale = Vector3.ZERO
+		fireball.visible = false
 	if flash_light:
 		flash_light.light_energy = 0.0
 	visible = false
 	is_active = false
+	set_process(false)
+	set_physics_process(false)
+	process_mode = Node.PROCESS_MODE_DISABLED

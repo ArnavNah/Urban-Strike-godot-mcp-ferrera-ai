@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Asphalt"
-albedo_color = Color(0.18, 0.2, 0.22, 1)
-roughness = 0.85
+albedo_color = Color(0.14, 0.16, 0.19, 1)
+roughness = 0.82

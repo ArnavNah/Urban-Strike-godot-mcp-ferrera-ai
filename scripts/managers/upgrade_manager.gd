@@ -3,6 +3,16 @@ extends Node
 
 ## Manages survivor progression, level-up card drafting, upgrade definitions, and stat modifications.
 
+static var instance: UpgradeManager = null
+
+func _enter_tree() -> void:
+	instance = self
+	add_to_group("upgrade_manager")
+
+func _exit_tree() -> void:
+	if instance == self:
+		instance = null
+
 var current_xp: int = 0
 var current_level: int = 1
 var xp_needed: int = 50
@@ -28,6 +38,7 @@ var mini_heli_damage_mult: float = 1.0
 var mini_heli_fire_rate_mult: float = 1.0
 var mini_heli_range_mult: float = 1.0
 var mini_heli_has_rockets: bool = false
+var has_deployed_wingmen: bool = false
 
 signal requisition_awarded(current_points: int)
 
@@ -218,11 +229,11 @@ var upgrade_database: Dictionary = {
 	},
 	"mini_helicopter_support": {
 		"id": "mini_helicopter_support",
-		"name": "Mini Helicopter Support",
+		"name": "Support Wingmen",
 		"category": "Support",
 		"rarity": "Rare",
-		"benefit": "Deploys 2 automated tactical escort drones in flanking formation",
-		"tradeoff": "Independent target acquisition; shares escort airspace",
+		"benefit": "Deploy two allied aircraft that attack enemies and intercept incoming fire. Each aircraft can be destroyed.",
+		"tradeoff": "Independent health; lost aircraft can be restored in later upgrades",
 		"current_value": "0 Escort Drones",
 		"next_value": "2 Escort Drones",
 		"is_evolution": false,
@@ -377,6 +388,8 @@ func _init_definitions() -> void:
 		upgrade_definitions[def.id] = def
 
 func get_definition(upgrade_id: String) -> UpgradeDefinition:
+	if upgrade_id == "support_wingmen":
+		upgrade_id = "mini_helicopter_support"
 	return upgrade_definitions.get(upgrade_id, null)
 
 func _get_active_player() -> PlayerHelicopter:
@@ -412,6 +425,30 @@ func get_required_xp_for_level(level: int) -> int:
 		_:
 			return int(200.0 * pow(1.28, float(level - 4)))
 
+func get_living_wingmen() -> Array[MiniHelicopter]:
+	var result: Array[MiniHelicopter] = []
+	var tree := get_tree()
+	if not tree:
+		return result
+	var nodes := tree.get_nodes_in_group("mini_helicopters")
+	for node in nodes:
+		if is_instance_valid(node) and not node.is_queued_for_deletion() and node is MiniHelicopter:
+			if (node as MiniHelicopter).is_alive:
+				result.append(node as MiniHelicopter)
+	return result
+
+func get_living_wingmen_count() -> int:
+	return get_living_wingmen().size()
+
+func get_occupied_wingman_slots() -> Dictionary:
+	var slots: Dictionary = {}
+	for drone in get_living_wingmen():
+		slots[drone.slot_id] = drone
+	return slots
+
+func on_wingman_destroyed(_slot: String, _wingman: MiniHelicopter = null) -> void:
+	pass
+
 func reset_run() -> void:
 	current_xp = 0
 	current_level = 1
@@ -430,6 +467,12 @@ func reset_run() -> void:
 	mini_heli_fire_rate_mult = 1.0
 	mini_heli_range_mult = 1.0
 	mini_heli_has_rockets = false
+	has_deployed_wingmen = false
+	var tree := get_tree()
+	if tree:
+		for drone in tree.get_nodes_in_group("mini_helicopters"):
+			if is_instance_valid(drone) and not drone.is_queued_for_deletion():
+				drone.queue_free()
 	var player := _get_active_player()
 	if is_instance_valid(player):
 		if player.missile_pod and player.missile_pod.has_method("reset_ammo"):
@@ -484,15 +527,9 @@ func _present_next_choice() -> void:
 		EventBus.level_up_requested.emit(pending_levels[0])
 
 func _is_eligible(upgrade_id: String) -> bool:
+	if upgrade_id == "support_wingmen":
+		upgrade_id = "mini_helicopter_support"
 	if not upgrade_database.has(upgrade_id):
-		return false
-	if acquired_upgrades.has(upgrade_id):
-		return false
-
-	var up: Dictionary = upgrade_database[upgrade_id]
-
-	# Legendary rule: Max 1 acquired Legendary per run
-	if up.get("rarity") == "Legendary" and has_acquired_legendary:
 		return false
 
 	# If a player node is present in the scene tree, verify live state and subsystems
@@ -508,6 +545,26 @@ func _is_eligible(upgrade_id: String) -> bool:
 		if upgrade_id in ["larger_explosions", "missile_capacity", "rapid_lock", "multi_launch", "swarm_rockets", "multi_lock_hellfire"]:
 			if not is_instance_valid(player.missile_pod):
 				return false
+
+	# Special eligibility for Support Wingmen:
+	# - If not yet acquired, eligible for initial deployment.
+	# - If already acquired and deployed, eligible whenever fewer than 2 wingmen survive (to restore lost aircraft).
+	# - If marked acquired without ever being deployed (catalog exhaustion simulation), ineligible.
+	if upgrade_id == "mini_helicopter_support":
+		if not acquired_upgrades.has("mini_helicopter_support"):
+			return true
+		if has_deployed_wingmen:
+			return get_living_wingmen_count() < 2
+		return false
+
+	if acquired_upgrades.has(upgrade_id):
+		return false
+
+	var up: Dictionary = upgrade_database[upgrade_id]
+
+	# Legendary rule: Max 1 acquired Legendary per run
+	if up.get("rarity") == "Legendary" and has_acquired_legendary:
+		return false
 
 	# Prerequisite synergy checks
 	match upgrade_id:
@@ -655,8 +712,21 @@ func get_random_choices(count: int) -> Array[Dictionary]:
 func enrich_card_data(card: Dictionary) -> Dictionary:
 	var enriched := card.duplicate(true)
 	var uid := str(card.get("id", ""))
+	if uid == "mini_helicopter_support":
+		var living := get_living_wingmen_count()
+		if living == 1:
+			enriched["name"] = "Support Wingmen"
+			enriched["benefit"] = "Restore your missing support aircraft."
+			enriched["tradeoff"] = "Brings companion escort wing back to full operational strength"
+			enriched["next_value"] = "2 Escort Drones (1 Restored)"
+		else:
+			enriched["name"] = "Support Wingmen"
+			enriched["benefit"] = "Deploy two allied aircraft that attack enemies and intercept incoming fire. Each aircraft can be destroyed."
+			enriched["tradeoff"] = "Independent health; lost aircraft can be restored in later upgrades"
+			enriched["next_value"] = "2 Escort Drones"
 	enriched["current_value"] = get_upgrade_current_value(uid)
-	enriched["next_value"] = get_upgrade_next_value(uid)
+	if not enriched.has("next_value") or uid != "mini_helicopter_support":
+		enriched["next_value"] = get_upgrade_next_value(uid)
 	enriched["evolution_synergy"] = get_upgrade_evolution_synergy(uid)
 	enriched["prerequisites_text"] = get_upgrade_prerequisites_text(uid)
 	return enriched
@@ -719,8 +789,8 @@ func get_upgrade_current_value(upgrade_id: String) -> String:
 				return "%.1f HP/s" % player.repair_rate
 			return "Inactive"
 		"mini_helicopter_support":
-			var drones := get_tree().get_nodes_in_group("mini_helicopters")
-			return "%d Escort Drones" % drones.size()
+			var count := get_living_wingmen_count()
+			return "%d Escort Drones" % count
 		"overdrive_core":
 			return "Standard Systems"
 		"ghost_rotor":
@@ -870,6 +940,8 @@ func select_choice(upgrade_id: String) -> bool:
 	return true
 
 func apply_upgrade(upgrade_id: String) -> bool:
+	if upgrade_id == "support_wingmen":
+		upgrade_id = "mini_helicopter_support"
 	if not _is_eligible(upgrade_id):
 		return false
 	var player := _get_active_player()
@@ -889,6 +961,7 @@ func apply_upgrade(upgrade_id: String) -> bool:
 
 	match upgrade_id:
 		"mini_helicopter_support":
+			has_deployed_wingmen = true
 			var mini_scene: PackedScene = load("res://scenes/companions/mini_helicopter.tscn")
 			if not mini_scene:
 				return false
@@ -896,15 +969,22 @@ func apply_upgrade(upgrade_id: String) -> bool:
 			if not spawn_parent:
 				spawn_parent = get_tree().root
 
-			var offsets: Array[Vector3] = [
-				Vector3(-4.5, 0.6, 3.5),
-				Vector3(4.5, 0.6, 3.5)
-			]
-			for offset in offsets:
+			var slot_configs: Dictionary = {
+				"left": Vector3(-4.5, 0.4, 2.5),
+				"right": Vector3(4.5, 0.4, 2.5)
+			}
+			var occupied := get_occupied_wingman_slots()
+
+			for slot_key in ["left", "right"]:
+				if occupied.has(slot_key):
+					# Survivor remains intact: preserve current HP and node!
+					continue
+				var offset: Vector3 = slot_configs[slot_key]
 				var drone: MiniHelicopter = mini_scene.instantiate() as MiniHelicopter
 				if drone:
+					drone.slot_id = slot_key
 					drone.player_target = player
-					drone.formation_offset = offset
+					drone.set_formation_slot(offset, slot_key)
 					drone.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
 					spawn_parent.add_child(drone)
 					var start_pos := player.global_position + (player.global_transform.basis * offset)
@@ -1049,7 +1129,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 		_:
 			return false
 
-	acquired_upgrades.append(upgrade_id)
+	if not acquired_upgrades.has(upgrade_id):
+		acquired_upgrades.append(upgrade_id)
 	if EventBus:
 		EventBus.upgrade_applied.emit(upgrade_id)
 	return true

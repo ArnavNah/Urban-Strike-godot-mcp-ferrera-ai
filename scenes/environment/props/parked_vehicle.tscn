@@ -47,20 +47,25 @@ mesh = SubResource("BoxMesh_n0atv")
 
 [node name="Windshield" type="MeshInstance3D" parent="Intact" unique_id=1393549061]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, -1.39)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_edlwh")
 
 [node name="Wheel_-1_05_-1_5" type="MeshInstance3D" parent="Intact" unique_id=796659844]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 0.5, -1.5)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_i2a5w")
 
 [node name="Wheel_-1_05_1_5" type="MeshInstance3D" parent="Intact" unique_id=646208055]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 0.5, 1.5)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_8ddua")
 
 [node name="Wheel_1_05_-1_5" type="MeshInstance3D" parent="Intact" unique_id=422498210]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.05, 0.5, -1.5)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_6ivo2")
 
 [node name="Wheel_1_05_1_5" type="MeshInstance3D" parent="Intact" unique_id=1172130972]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.05, 0.5, 1.5)
+cast_shadow = 0
 mesh = SubResource("BoxMesh_04coi")
