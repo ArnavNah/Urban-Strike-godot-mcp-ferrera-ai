@@ -40,7 +40,7 @@ func _begin() -> void:
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true)
 	DisplayServer.window_move_to_foreground()
 	if not vsync_enabled:
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSyncMode.DISABLED)
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSyncMode.VSYNC_DISABLED)
 		if not uncapped:
 			Engine.max_fps = 60
 	loading_start = Time.get_ticks_usec()
