@@ -22,13 +22,29 @@ var _free_labels: Array[DamageNumber] = []
 var _active_labels: Array[DamageNumber] = []
 var _cached_camera: Camera3D = null
 
+func _get_event_bus() -> Node:
+	if is_inside_tree():
+		return get_tree().root.get_node_or_null("EventBus")
+	return null
+
+func _init() -> void:
+	_init_pool()
+
 func _enter_tree() -> void:
 	instance = self
+	var preset := str(SaveSystem.get_setting("graphics_preset", "medium")).to_lower()
+	set_preset(preset)
+	_init_pool()
+	var eb := _get_event_bus()
+	if eb and eb.has_signal("damage_number_spawned"):
+		if not eb.damage_number_spawned.is_connected(_on_damage_spawned):
+			eb.damage_number_spawned.connect(_on_damage_spawned)
 
 func _exit_tree() -> void:
-	if EventBus and EventBus.has_signal("damage_number_spawned"):
-		if EventBus.damage_number_spawned.is_connected(_on_damage_spawned):
-			EventBus.damage_number_spawned.disconnect(_on_damage_spawned)
+	var eb := _get_event_bus()
+	if eb and eb.has_signal("damage_number_spawned"):
+		if eb.damage_number_spawned.is_connected(_on_damage_spawned):
+			eb.damage_number_spawned.disconnect(_on_damage_spawned)
 
 	for label in _pool:
 		if is_instance_valid(label):
@@ -42,17 +58,11 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	if not damage_number_scene:
-		damage_number_scene = load("res://scenes/ui/damage_number.tscn") as PackedScene
-
-	var preset := str(SaveSystem.get_setting("graphics_preset", "medium")).to_lower()
-	set_preset(preset)
-
 	_init_pool()
-
-	if EventBus and not EventBus.damage_number_spawned.is_connected(_on_damage_spawned):
-		EventBus.damage_number_spawned.connect(_on_damage_spawned)
+	var eb := _get_event_bus()
+	if eb and eb.has_signal("damage_number_spawned"):
+		if not eb.damage_number_spawned.is_connected(_on_damage_spawned):
+			eb.damage_number_spawned.connect(_on_damage_spawned)
 
 func set_preset(preset_name: String) -> void:
 	match preset_name.to_lower():
@@ -88,18 +98,26 @@ func _init_pool() -> void:
 		_pool.append(label)
 		_free_labels.append(label)
 
+func set_camera(cam: Camera3D) -> void:
+	_cached_camera = cam
+
 func get_active_camera() -> Camera3D:
-	if is_instance_valid(_cached_camera) and _cached_camera.is_inside_tree() and _cached_camera.current:
+	if is_instance_valid(_cached_camera) and (_cached_camera.current or not is_inside_tree()):
 		return _cached_camera
 
 	if is_inside_tree():
-		_cached_camera = get_viewport().get_camera_3d()
+		var vp := get_viewport()
+		if vp:
+			_cached_camera = vp.get_camera_3d()
 
 	return _cached_camera
 
 func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool) -> void:
+	spawn_damage_number(pos, amount, is_critical)
+
+func spawn_damage_number(pos: Vector3, amount: float, is_critical: bool) -> void:
 	var cam := get_active_camera()
-	if not cam:
+	if not cam or not cam.is_inside_tree():
 		return
 
 	# 1. Frustum & Viewport Rejection
@@ -111,10 +129,12 @@ func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool) -> void:
 
 	var screen_pos := cam.unproject_position(pos)
 	var vp := get_viewport()
-	if not vp:
-		return
+	var vp_rect: Rect2
+	if vp:
+		vp_rect = vp.get_visible_rect()
+	else:
+		vp_rect = Rect2(Vector2.ZERO, Vector2(1280, 720))
 
-	var vp_rect := vp.get_visible_rect()
 	if not vp_rect.grow(SCREEN_CULL_MARGIN).has_point(screen_pos):
 		return
 

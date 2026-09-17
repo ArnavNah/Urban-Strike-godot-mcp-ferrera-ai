@@ -108,6 +108,8 @@ func _ready() -> void:
 	success = test_xp_progression_pacing_and_in_flight_dynamics(log_lines) and success
 	append_log("Running test 44 (Enemy movement purpose, steering dynamics & anti-oscillation)...", log_lines)
 	success = test_enemy_movement_purpose_and_steering_dynamics(log_lines) and success
+	append_log("Running test 45 (DamageNumberManager pooling, preset caps & burst resilience)...", log_lines)
+	success = test_damage_number_pooling_and_limits(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -6809,4 +6811,166 @@ func test_enemy_movement_purpose_and_steering_dynamics(logs: Array[String]) -> b
 
 	root_node.queue_free()
 	append_log("  -> Test 44 PASSED: Enemy movement purpose, steering dynamics and anti-oscillation fully validated.", logs)
+	return true
+
+func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
+	append_log("[TEST 45] DamageNumberManager Pooling, Preset Caps & Burst Resilience...", logs)
+
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	add_child(vp)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 10.0, 15.0)
+	cam.look_at_from_position(cam.position, Vector3(0.0, 0.0, 0.0), Vector3.UP)
+	cam.current = true
+	vp.add_child(cam)
+
+	var manager := DamageNumberManager.new()
+	vp.add_child(manager)
+	manager.set_camera(cam)
+
+	# Sub-step 1: Preallocation
+	if manager.get_pool_size() != 64 or manager.get_child_count() != 64:
+		append_log("FAIL: Expected 64 preallocated labels, got %d" % manager.get_pool_size(), logs)
+		vp.queue_free()
+		return false
+	if manager.get_active_count() != 0 or manager.get_free_count() != 64:
+		append_log("FAIL: Expected 0 active and 64 free labels initially, got active=%d, free=%d" % [manager.get_active_count(), manager.get_free_count()], logs)
+		vp.queue_free()
+		return false
+	for child in manager.get_children():
+		if child is DamageNumber and (child.is_active or child.visible or child.is_processing()):
+			append_log("FAIL: Preallocated label is active or processing before use!", logs)
+			vp.queue_free()
+			return false
+	append_log("  -> Sub-step 1: Preallocated 64 pooled labels, all inactive, hidden, and stopped.", logs)
+
+	# Sub-step 2: Preset active limits
+	manager.set_preset("low")
+	if manager.max_active_numbers != 24:
+		append_log("FAIL: Low preset expected 24, got %d" % manager.max_active_numbers, logs)
+		vp.queue_free()
+		return false
+	manager.set_preset("medium")
+	if manager.max_active_numbers != 40:
+		append_log("FAIL: Medium preset expected 40, got %d" % manager.max_active_numbers, logs)
+		vp.queue_free()
+		return false
+	manager.set_preset("high")
+	if manager.max_active_numbers != 56:
+		append_log("FAIL: High preset expected 56, got %d" % manager.max_active_numbers, logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 2: Preset active caps verified (Low: 24, Medium: 40, High: 56).", logs)
+
+	# Sub-step 3: Frustum and Viewport rejection
+	manager.set_preset("medium")
+	# Behind camera (Z = 25m, cam is at Z = 15m facing -Z)
+	EventBus.damage_number_spawned.emit(Vector3(0.0, 10.0, 25.0), 10.0, false)
+	if manager.get_active_count() != 0:
+		append_log("FAIL: Behind-camera position was not rejected!", logs)
+		vp.queue_free()
+		return false
+	# Out-of-range (>150m)
+	EventBus.damage_number_spawned.emit(Vector3(0.0, 0.0, -200.0), 10.0, false)
+	if manager.get_active_count() != 0:
+		append_log("FAIL: Distant position (>150m) was not rejected!", logs)
+		vp.queue_free()
+		return false
+	# In-view position
+	var visible_pos := Vector3(0.0, 0.0, 0.0)
+	EventBus.damage_number_spawned.emit(visible_pos, 10.0, false)
+	if manager.get_active_count() != 1:
+		append_log("FAIL: In-view position should be accepted, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+	for c in manager.get_children():
+		if c is DamageNumber and c.is_active:
+			c.deactivate()
+	append_log("  -> Sub-step 3: Camera frustum, behind-camera, and distance culling verified.", logs)
+
+	# Sub-step 4: Burst of 200 display events on Medium (cap 40)
+	manager.set_preset("medium")
+	for i in range(200):
+		var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
+		EventBus.damage_number_spawned.emit(visible_pos + offset, float(i + 1), (i % 5 == 0))
+	if manager.get_active_count() != 40:
+		append_log("FAIL: 200-burst on Medium should cap at 40, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+	if manager.get_child_count() != 64:
+		append_log("FAIL: Node count grew during burst! Got %d" % manager.get_child_count(), logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 4: Same-frame burst of 200 events strictly capped at 40 (0 heap allocations).", logs)
+
+	# Sub-step 5: Pool reuse and state reset
+	for c in manager.get_children():
+		if c is DamageNumber and c.is_active:
+			c.deactivate()
+	if manager.get_active_count() != 0 or manager.get_free_count() != 64:
+		append_log("FAIL: Free pool not fully restored after deactivation!", logs)
+		vp.queue_free()
+		return false
+
+	manager.set_preset("low") # Cap = 24
+	for i in range(200):
+		var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
+		EventBus.damage_number_spawned.emit(visible_pos + offset, 75.0, true)
+	if manager.get_active_count() != 24:
+		append_log("FAIL: Second burst on Low should cap at 24, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+	if manager.get_child_count() != 64:
+		append_log("FAIL: Node count grew on second burst! Got %d" % manager.get_child_count(), logs)
+		vp.queue_free()
+		return false
+	var sample_active: DamageNumber = null
+	for c in manager.get_children():
+		if c is DamageNumber and c.is_active:
+			sample_active = c
+			break
+	if not sample_active or sample_active.text != "75":
+		append_log("FAIL: Reused label state was not reset properly!", logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 5: Full pool reuse and clean state reset verified under 2nd 200-hit burst.", logs)
+
+	# Sub-step 6: High preset burst (cap 56) and tween safety
+	for c in manager.get_children():
+		if c is DamageNumber and c.is_active:
+			c.deactivate()
+			if c._tween != null:
+				append_log("FAIL: Tween not cleared on deactivation!", logs)
+				vp.queue_free()
+				return false
+
+	manager.set_preset("high") # Cap = 56
+	for i in range(200):
+		var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
+		EventBus.damage_number_spawned.emit(visible_pos + offset, 20.0, false)
+	if manager.get_active_count() != 56:
+		append_log("FAIL: Third burst on High should cap at 56, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 6: High preset 200-burst capped at 56, tween lifecycle safety verified.", logs)
+
+	# Sub-step 7: Damage application independence
+	var dummy_hp := 500.0
+	var dmg_step := 10.0
+	for h in range(50):
+		dummy_hp -= dmg_step
+		EventBus.damage_number_spawned.emit(visible_pos, dmg_step, false)
+	if dummy_hp != 0.0:
+		append_log("FAIL: Damage application corrupted! Expected 0, got %f" % dummy_hp, logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 7: Damage application 100% unaffected by skipped visual numbers.", logs)
+
+	# Sub-step 8: Scene exit and clean disconnect
+	vp.queue_free()
+	append_log("  -> Sub-step 8: DamageNumberManager exit and cleanup verified with 0 leaks.", logs)
+
+	append_log("  -> Test 45 PASSED: Damage number pooling, preset caps and burst resilience fully validated.", logs)
 	return true

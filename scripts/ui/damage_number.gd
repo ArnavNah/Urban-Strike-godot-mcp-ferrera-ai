@@ -9,6 +9,11 @@ var is_active: bool = false
 var manager: DamageNumberManager = null
 var _tween: Tween = null
 
+func _ready() -> void:
+	if not is_active:
+		set_process(false)
+		visible = false
+
 func reset_state() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
