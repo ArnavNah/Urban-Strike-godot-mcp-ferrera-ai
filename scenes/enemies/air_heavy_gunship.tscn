@@ -1,0 +1,56 @@
+[gd_scene format=3 uid="uid://mm4m0fxke08v"]
+
+[ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_5lyyr"]
+[ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_f2tw2"]
+[ext_resource type="PackedScene" uid="uid://d2kb6c54cp7k3" path="res://assets/Enemies/Enemy Random Big Flying helicopter/body_straight.glb" id="3_o6bvm"]
+[ext_resource type="PackedScene" uid="uid://dxkr2ib6hiskm" path="res://assets/Enemies/Enemy Random Big Flying helicopter/propeller_straight.glb" id="4_ejdeh"]
+
+[sub_resource type="Resource" id="Resource_4vahs"]
+script = ExtResource("2_f2tw2")
+archetype_name = "Heavy Gunship"
+threat_cost = 10
+threat_score = 1.1
+max_health = 140.0
+salvage_reward = 100
+xp_reward = 28
+cruise_speed = 20.0
+attack_speed = 24.0
+turn_speed = 2.8
+preferred_distance = 36.0
+orbit_distance = 34.0
+altitude_min = 16.0
+altitude_max = 22.0
+aggression = 0.7
+attack_cooldown = 3.5
+strafe_duration = 2.5
+reposition_delay = 3.0
+weapon_type = 3
+damage_per_shot = 5.0
+fire_rate = 6.0
+burst_count = 5
+missile_cooldown = 5.5
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_i3hlh"]
+size = Vector3(3.8, 2.2, 7.8)
+
+[node name="AirHeavyGunship" type="CharacterBody3D" unique_id=1107369816]
+collision_layer = 4
+script = ExtResource("1_5lyyr")
+archetype = SubResource("Resource_4vahs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=900320996]
+shape = SubResource("BoxShape3D_i3hlh")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=1708120591]
+
+[node name="Model" parent="Visuals" unique_id=1593702595 instance=ExtResource("3_o6bvm")]
+transform = Transform3D(-0.72, 0, -6.29444e-08, 0, 0.72, 0, 6.29444e-08, 0, -0.72, 0, 0, 0)
+
+[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=1178050534]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.66, 0.36)
+
+[node name="Propeller" parent="Visuals/MainRotor" unique_id=1111288219 instance=ExtResource("4_ejdeh")]
+transform = Transform3D(0.72, 0, 0, 0, 0.72, 0, 0, 0, 0.72, 0, 0, 0)
+
+[node name="LOSRayCast" type="RayCast3D" parent="." unique_id=99573663]
+target_position = Vector3(0, 0, -45)

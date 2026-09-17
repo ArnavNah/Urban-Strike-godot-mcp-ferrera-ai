@@ -134,10 +134,10 @@ var upgrade_database: Dictionary = {
 		"name": "Reinforced Airframe",
 		"category": "Airframe",
 		"rarity": "Common",
-		"benefit": "+35 Max Hull Integrity",
+		"benefit": "+35 Max Hull & +10% Armor Reduction (Heals 35 HP on Select)",
 		"tradeoff": "-10% Top Flight Speed",
 		"current_value": "100 Hull",
-		"next_value": "135 Hull (-10% Top Speed)",
+		"next_value": "+35 Hull, Heal 35, +10% Armor (-10% Speed)",
 		"is_evolution": false,
 		"priority": 0
 	},
@@ -522,6 +522,8 @@ func _present_next_choice() -> void:
 	is_choice_active = true
 	if not menu.display_cards(choices, pending_levels[0]):
 		is_choice_active = false
+		if is_inside_tree() and not pending_levels.is_empty():
+			get_tree().create_timer(0.08, true, false, true).timeout.connect(_present_next_choice)
 		return
 	if EventBus:
 		EventBus.level_up_requested.emit(pending_levels[0])
@@ -839,7 +841,7 @@ func get_upgrade_next_value(upgrade_id: String) -> String:
 		"multi_launch":
 			return "3 Missiles / Salvo (+20% Cooldown)"
 		"reinforced_airframe":
-			return "135 Hull (-10% Top Speed)"
+			return "+35 Hull, Heal 35, +10% Armor (-10% Speed)"
 		"afterburner":
 			return "35.0 m/s Strafe (+20% Decel Time)"
 		"xp_magnet_range":
@@ -923,7 +925,7 @@ func select_choice(upgrade_id: String) -> bool:
 	if not is_choice_active or pending_levels.is_empty():
 		return false
 	if upgrade_id.is_empty():
-		if not _offered_ids.is_empty():
+		if not _offered_ids.is_empty() and not _offered_ids.has(""):
 			return false
 	else:
 		if not _offered_ids.has(upgrade_id) or not apply_upgrade(upgrade_id):
@@ -970,8 +972,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 				spawn_parent = get_tree().root
 
 			var slot_configs: Dictionary = {
-				"left": Vector3(-4.5, 0.4, 2.5),
-				"right": Vector3(4.5, 0.4, 2.5)
+				"left": Vector3(-4.8, 0.5, 2.6),
+				"right": Vector3(4.8, 0.5, 2.6)
 			}
 			var occupied := get_occupied_wingman_slots()
 
@@ -987,8 +989,12 @@ func apply_upgrade(upgrade_id: String) -> bool:
 					drone.set_formation_slot(offset, slot_key)
 					drone.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
 					spawn_parent.add_child(drone)
-					var start_pos := player.global_position + (player.global_transform.basis * offset)
+					var yaw_basis: Basis = MiniHelicopter.get_player_yaw_basis(player)
+					var start_pos: Vector3 = player.global_position + (yaw_basis * Vector3(offset.x, 0.0, offset.z)) + Vector3(0.0, offset.y, 0.0)
 					drone.global_position = start_pos
+
+			for living in get_living_wingmen():
+				living.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
 		"multi_shot":
 			if not gun:
 				return false
@@ -1054,7 +1060,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 			pod.fire_cooldown *= 1.2
 		"reinforced_airframe":
 			player.max_health += 35.0
-			player.current_health += 35.0
+			player.current_health = minf(player.max_health, player.current_health + 35.0)
+			player.armor_reduction = minf(player.armor_reduction + 0.10, 0.60)
 			player.max_forward_speed *= 0.9
 			player.health_changed.emit(player.current_health, player.max_health)
 			if EventBus:

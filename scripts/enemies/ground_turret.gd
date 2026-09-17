@@ -40,6 +40,12 @@ var _lod_frame_counter: int = 0
 var _stagger_offset: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
+var reserved_socket_id: String = ""
+var chunk_coord: Vector2i = Vector2i.ZERO
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
+
+var _telegraph_mesh: MeshInstance3D = null
 
 @onready var head: Node3D = $TurretHead
 @onready var barrel: Node3D = $TurretHead/Barrel
@@ -49,18 +55,40 @@ var _los_timer: float = 0.0
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group("armored_enemies")
+	add_to_group("turrets")
+	add_to_group("stationary_enemies")
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, false)
 	current_health = max_health
 	_find_player()
+	_setup_telegraph_mesh()
 	_stagger_offset = randi() % 60
 	if los_ray:
 		los_ray.collision_mask = 1 # World layer blocks LoS
+		los_ray.add_exception(self)
+
+func _setup_telegraph_mesh() -> void:
+	_telegraph_mesh = MeshInstance3D.new()
+	_telegraph_mesh.name = "TelegraphMesh"
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.08
+	sphere.height = 0.16
+	_telegraph_mesh.mesh = sphere
+	var t_mat := StandardMaterial3D.new()
+	t_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	t_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.9)
+	_telegraph_mesh.material_override = t_mat
+	_telegraph_mesh.visible = false
+	if muzzle:
+		muzzle.add_child(_telegraph_mesh)
+	elif barrel:
+		barrel.add_child(_telegraph_mesh)
 
 func _exit_tree() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 	_release_slot()
+	_release_socket()
 
 func _find_player() -> void:
 	_player_node = get_tree().get_first_node_in_group("player")
@@ -107,14 +135,21 @@ func _physics_process(delta: float) -> void:
 
 		State.AIMING:
 			if dist_to_player > threat_range or not has_los:
+				_set_telegraph(false)
 				_transition_to(State.IDLE)
 				return
 
 			_track_player(step_delta)
 			_state_timer -= step_delta
+			if is_instance_valid(_telegraph_mesh):
+				_telegraph_mesh.visible = true
+				var progress: float = 1.0 - clampf(_state_timer / maxf(aim_prep_time, 0.01), 0.0, 1.0)
+				_telegraph_mesh.scale = Vector3.ONE * progress
+
 			if _state_timer <= 0.0:
 				var can_attack: bool = _request_slot()
 				if can_attack:
+					_set_telegraph(false)
 					_shots_fired_in_burst = 0
 					_burst_timer = 0.0
 					_transition_to(State.FIRING)
@@ -154,10 +189,7 @@ func _physics_process(delta: float) -> void:
 
 func _request_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming_delay"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -166,8 +198,10 @@ func _request_slot() -> bool:
 	if dir:
 		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_TURRET, false, false, false, CombatDirector.DANGER_COST_BULLET, "turret")
 		_has_attack_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
 		return granted
 	_has_attack_slot = true
+	debug_last_blocked_reason = "active_no_director"
 	return true
 
 func _release_slot() -> void:
@@ -181,6 +215,8 @@ func _release_slot() -> void:
 
 func _transition_to(new_state: State) -> void:
 	current_state = new_state
+	if new_state != State.AIMING:
+		_set_telegraph(false)
 	match new_state:
 		State.IDLE:
 			_state_timer = 0.0
@@ -192,6 +228,12 @@ func _transition_to(new_state: State) -> void:
 			_state_timer = reload_time
 		State.WAITING:
 			_state_timer = wait_time
+
+func _set_telegraph(active: bool) -> void:
+	if is_instance_valid(_telegraph_mesh):
+		_telegraph_mesh.visible = active
+		if not active:
+			_telegraph_mesh.scale = Vector3.ZERO
 
 func _track_player(delta: float) -> void:
 	if not is_instance_valid(_player_node) or not head or not barrel:
@@ -212,36 +254,55 @@ func _track_player(delta: float) -> void:
 
 func _fire_shot() -> void:
 	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else head.global_position
-	var fire_dir: Vector3 = -barrel.global_transform.basis.z
+	var fire_dir: Vector3
+	if is_instance_valid(_player_node):
+		var to_player := (_player_node.global_position - muzzle_pos).normalized()
+		var spread := Vector3(randf_range(-0.02, 0.02), randf_range(-0.015, 0.015), randf_range(-0.02, 0.02))
+		fire_dir = (to_player + spread).normalized()
+	else:
+		fire_dir = (-barrel.global_transform.basis.z if barrel else -head.global_transform.basis.z).normalized()
+
+	var spawn_pos: Vector3 = muzzle_pos + fire_dir * 0.45
+	var scaled_damage: float = bullet_damage * CombatDirector.get_damage_multiplier()
 
 	# Spawn projectile from pool
+	var proj: Projectile = null
 	var pool_node := get_tree().get_first_node_in_group("projectile_pool")
 	if pool_node and pool_node.has_method("spawn_projectile"):
-		pool_node.spawn_projectile(muzzle_pos, fire_dir, false, bullet_damage)
+		proj = pool_node.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage)
 	elif ProjectilePool.instance:
-		ProjectilePool.instance.spawn_projectile(muzzle_pos, fire_dir, false, bullet_damage)
+		proj = ProjectilePool.instance.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage)
 
-	# Muzzle flash
-	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
-	if flash_scene:
-		var flash := flash_scene.instantiate() as Node3D
-		if flash:
-			flash.transform.origin = muzzle_pos
-			var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			target_parent.add_child.call_deferred(flash)
+	if proj != null:
+		debug_shots_fired += 1
+		# Directional enemy muzzle flash
+		if VfxPool.instance:
+			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
+		else:
+			var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
+			if flash_scene:
+				var flash := flash_scene.instantiate() as Node3D
+				if flash:
+					flash.transform.origin = muzzle_pos
+					var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					target_parent.add_child.call_deferred(flash)
+
+		if EventBus:
+			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
 
 func _check_line_of_sight() -> bool:
 	if not is_instance_valid(_player_node) or not los_ray:
 		return false
 
 	var player_pos: Vector3 = _player_node.global_position
-	los_ray.global_position = global_position + Vector3(0, 1.5, 0)
+	var eye_pos: Vector3 = barrel.global_position if barrel else (global_position + Vector3(0, 1.4, 0))
+	los_ray.global_position = eye_pos
 	los_ray.target_position = los_ray.to_local(player_pos)
 	los_ray.force_raycast_update()
 
 	if los_ray.is_colliding():
 		var col := los_ray.get_collider()
-		if col != _player_node:
+		if col != _player_node and not (col is Node and (col as Node).is_in_group("player")):
 			return false
 
 	return true
@@ -294,9 +355,13 @@ func _die() -> void:
 		return
 	_is_dead = true
 	is_alive = false
+	collision_layer = 0
+	collision_mask = 0
+	_set_telegraph(false)
 	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
+	_release_socket()
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("enemy_destroyed"):
 		eb.emit_signal("enemy_destroyed", self, 100)
@@ -319,14 +384,33 @@ func _die() -> void:
 
 	var expl_pos := global_position + Vector3(0, 1.0, 0)
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(expl_pos)
+		VfxPool.instance.spawn_explosion(expl_pos, 1.25)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:
 			var expl := expl_scene.instantiate() as Node3D
 			if expl:
 				expl.transform.origin = expl_pos
+				expl.scale = Vector3(1.5, 1.5, 1.5)
 				var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				target_parent.add_child.call_deferred(expl)
 
+	queue_free()
+
+func _release_socket() -> void:
+	if not reserved_socket_id.is_empty():
+		var streamer := get_tree().get_first_node_in_group("city_streamer")
+		if streamer and streamer.has_method("release_rooftop_socket"):
+			streamer.release_rooftop_socket(reserved_socket_id)
+		reserved_socket_id = ""
+
+func despawn_unloaded() -> void:
+	if _is_dead or not is_alive:
+		return
+	_is_dead = true
+	is_alive = false
+	_release_slot()
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.unregister_enemy(self)
+	_release_socket()
 	queue_free()

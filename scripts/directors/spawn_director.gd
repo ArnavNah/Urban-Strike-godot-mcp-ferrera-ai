@@ -19,6 +19,7 @@ extends Node3D
 @export var max_active_rooftop_threats: int = 3
 
 @export_group("Ground Enemy Tactical Caps")
+@export var cap_turret: int = 3
 @export var cap_sam: int = 3
 @export var cap_mortar: int = 2
 @export var cap_support: int = 1
@@ -183,6 +184,8 @@ var _scene_air_transport: PackedScene = preload("res://scenes/enemies/air_transp
 var _scene_air_gunship: PackedScene = preload("res://scenes/enemies/air_attack_gunship.tscn")
 var _scene_air_jammer: PackedScene = preload("res://scenes/enemies/air_jammer_helicopter.tscn")
 var _scene_air_ace: PackedScene = preload("res://scenes/enemies/air_ace_gunship.tscn")
+var _scene_mig_striker: PackedScene = preload("res://scenes/enemies/mig_17_striker.tscn")
+var _scene_air_heavy: PackedScene = preload("res://scenes/enemies/air_heavy_gunship.tscn")
 
 # Modular Ground Vehicle scenes
 var _scene_buggy: PackedScene = preload("res://scenes/enemies/ground_scout_buggy.tscn")
@@ -858,6 +861,17 @@ func _deploy_staggered_enemy(scene: PackedScene, pos: Vector3, heading: Vector3,
 	record_spawn_event(source_key, pos)
 	_log_spawn_event(enemy, source_key, sector, pos, req_radius)
 
+	if enemy is GroundTurret:
+		var sid: String = ""
+		if source_key.begins_with("Rooftop_"):
+			sid = source_key.trim_prefix("Rooftop_")
+		if not sid.is_empty():
+			enemy.reserved_socket_id = sid
+			var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+			if is_instance_valid(streamer):
+				streamer.occupy_rooftop_socket(sid)
+				streamer.set_socket_occupant(sid, enemy)
+
 	var parent := _get_spawn_parent()
 	parent.add_child.call_deferred(enemy)
 	_register_spawned_node(enemy)
@@ -949,6 +963,65 @@ func _plan_initial_encounter_positions(player_pos: Vector3) -> Array[Dictionary]
 	for unit_info in units_to_plan:
 		var req_rad: float = float(unit_info["radius"])
 		var chosen_cand: Dictionary = {}
+
+		if unit_info.get("type", "") == "turret":
+			var r_cand: Dictionary = {}
+			var streamer_node := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer if is_inside_tree() else null
+			if is_instance_valid(streamer_node):
+				var r_sockets := streamer_node.get_rooftop_sockets_in_radius(player_pos, 28.0, 85.0, true)
+				for sock in r_sockets:
+					var spos: Vector3 = sock.get("world_position", Vector3.ZERO)
+					var conflict := false
+					for prev in results:
+						var prev_pos: Vector3 = prev["position"]
+						if Vector2(spos.x - prev_pos.x, spos.z - prev_pos.z).length() < 18.0:
+							conflict = true
+							break
+					if conflict:
+						continue
+					if is_position_in_camera_view(spos, 80.0):
+						continue
+					var sid: String = sock.get("socket_id", "")
+					var s_heading := (player_pos - spos)
+					s_heading.y = 0.0
+					r_cand = {
+						"position": spos,
+						"heading": s_heading.normalized() if s_heading.length_squared() > 0.01 else Vector3.FORWARD,
+						"source_name": "Rooftop_" + sid,
+						"source_key": "Rooftop_" + sid,
+						"sector": primary_entry_sector,
+						"socket_id": sid,
+						"chunk_coord": sock.get("chunk_coord", Vector2i.ZERO),
+						"is_rooftop": true
+					}
+					break
+			if not r_cand.is_empty():
+				var res_id := reserve_spawn_position(
+					r_cand["position"],
+					req_rad,
+					"rooftop",
+					r_cand["source_name"],
+					r_cand["sector"],
+					6.0,
+					"initial_encounter",
+					r_cand["source_key"]
+				)
+				results.append({
+					"scene": unit_info["scene"],
+					"position": r_cand["position"],
+					"heading": r_cand["heading"],
+					"source_name": r_cand["source_name"],
+					"source_key": r_cand["source_key"],
+					"sector": r_cand["sector"],
+					"res_id": res_id,
+					"socket_id": r_cand.get("socket_id", ""),
+					"chunk_coord": r_cand.get("chunk_coord", Vector2i.ZERO),
+					"is_rooftop": true
+				})
+				continue
+			else:
+				# If no valid roof exists, defer/drop the turret request without substituting
+				continue
 
 		for cand in raw_candidates:
 			var c_pos: Vector3 = cand["position"]
@@ -1102,7 +1175,7 @@ func get_ground_population_cap() -> int:
 	if is_wave_active:
 		var n_cap := get_active_population_cap()
 		var a_max := get_air_population_cap()
-		if current_wave < 6:
+		if elapsed_survival_time < 20.0:
 			return n_cap
 		return maxi(4, n_cap - a_max)
 	if not encounter_config:
@@ -1114,16 +1187,21 @@ func get_ground_population_cap() -> int:
 
 func get_air_population_cap() -> int:
 	if is_wave_active:
-		if current_wave < 6:
-			return 0 # Air enemies strictly forbidden before Wave 6!
+		if elapsed_survival_time < 20.0:
+			return 0 # Pure ground during initial warmup (first 20-30s)
 		var wt: Resource = get_current_wave_target()
 		if wt and wt.get("max_air") != null:
-			return int(wt.get("max_air"))
-		return 3
+			var target_max: int = int(wt.get("max_air"))
+			if elapsed_survival_time < 180.0:
+				return mini(2, target_max) if target_max > 0 else 2
+			return target_max
+		return 2 if elapsed_survival_time < 180.0 else 3
 	if not encounter_config:
 		return 6
+	if elapsed_survival_time < 20.0:
+		return 0
 	if elapsed_survival_time < encounter_config.warmup_duration:
-		return encounter_config.warmup_air_cap
+		return mini(2, encounter_config.warmup_air_cap)
 	var progress := clampf(elapsed_survival_time / encounter_config.escalation_duration, 0.0, 1.0)
 	return int(lerpf(float(encounter_config.warmup_air_cap), float(encounter_config.max_air_cap), progress))
 
@@ -1900,6 +1978,9 @@ func _despawn_enemy_quietly(enemy: Node3D) -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(enemy)
 
+	if CombatDirector.instance:
+		CombatDirector.instance.release_attack_permission(enemy)
+
 	_wave_enemies.erase(enemy)
 
 	var is_air := _is_air_enemy(enemy)
@@ -1922,6 +2003,17 @@ func _check_scheduled_events() -> void:
 		spawn_reinforcement_drop(entry["position"], entry["heading"], true)
 		if EventBus:
 			EventBus.wave_started.emit(current_wave, "⚠ INCOMING AIRBORNE REINFORCEMENT CONVOY ⚠")
+
+	# 1b. Fast Jet / Heavy Air Strike Pass at ~180s (3.0m)
+	if elapsed_survival_time >= 180.0 and not _scheduled_events_triggered.get("jet_heavy_strike", false):
+		_scheduled_events_triggered["jet_heavy_strike"] = true
+		var player := _get_player()
+		var p_pos := player.global_position if player else Vector3.ZERO
+		var entry := get_air_corridor_entry(p_pos, 70.0, 100.0)
+		if _scene_mig_striker:
+			_spawn_continuous_enemy(_scene_mig_striker, p_pos, clampf(p_pos.y + 6.0, 18.0, 26.0), entry["position"])
+		if EventBus:
+			EventBus.wave_started.emit(current_wave, "⚠ FAST JET AIR STRIKE INBOUND // MIG-17 CONTACT ⚠")
 
 	# 2. Radar Station at ~270s (4.5m)
 	if elapsed_survival_time >= 270.0 and not _scheduled_events_triggered.get("radar_station", false):
@@ -2138,13 +2230,13 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		var max_mortar: int = int(target.get("max_mortar")) if target else cap_mortar
 		var max_heavy: int = int(target.get("max_heavy")) if target else 99
 		var max_med: int = int(target.get("max_medium_armored")) if target else 99
-		var max_air: int = int(target.get("max_air")) if target else (0 if current_wave < 3 else air_cap)
-		# Introduce one scout in wave 3 so the air state machine is part of normal
-		# play, then let authored wave caps take over from wave 6 onward.
-		if current_wave >= 3 and max_air <= 0:
-			max_air = 1
+		var max_air: int = int(target.get("max_air")) if target else air_cap
+		if elapsed_survival_time < 20.0:
+			max_air = 0
+		elif elapsed_survival_time < 180.0:
+			max_air = mini(2, max_air) if max_air > 0 else 2
 
-		var can_spawn_air: bool = (current_wave >= 3) and (cur_air < max_air) and (air_living < air_cap) and (continuous_air_budget >= 4.0)
+		var can_spawn_air: bool = (elapsed_survival_time >= 20.0) and (cur_air < max_air) and (air_living < air_cap) and (continuous_air_budget >= 4.0)
 		var can_spawn_ground: bool = (ground_living < ground_cap) and (continuous_ground_budget >= 15.0)
 
 		var spawn_air_now: bool = false
@@ -2154,23 +2246,30 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			return
 
 		if spawn_air_now:
-			var air_spawn_alt := clampf(_get_player_altitude(), 11.0, 17.0)
+			var air_spawn_alt := clampf(_get_player_altitude(), 11.0, 18.0)
 			var air_scene: PackedScene = _scene_air_scout
 			var air_cost: float = 4.0
 
-			if current_wave >= 9 and continuous_air_budget >= 12.0 and randf() < 0.20:
+			# Around 3 minutes (180s)+, heavy gunship and MiG-17 passes unlock!
+			if elapsed_survival_time >= 180.0 and randf() < 0.30:
+				if randf() < 0.5 and _scene_mig_striker:
+					air_scene = _scene_mig_striker
+					air_cost = 8.0
+					air_spawn_alt = clampf(_get_player_altitude() + 6.0, 18.0, 26.0)
+				elif _scene_air_heavy:
+					air_scene = _scene_air_heavy
+					air_cost = 10.0
+					air_spawn_alt = clampf(_get_player_altitude() + 3.0, 15.0, 22.0)
+			elif current_wave >= 9 and continuous_air_budget >= 12.0 and randf() < 0.20:
 				air_scene = _scene_air_ace
 				air_cost = 12.0
-			elif current_wave >= 8 and continuous_air_budget >= 9.0 and cur_heavy < max_heavy and randf() < 0.30:
+			elif (current_wave >= 4 or elapsed_survival_time >= 150.0) and continuous_air_budget >= 8.0 and randf() < 0.30:
 				air_scene = _scene_air_gunship
-				air_cost = 9.0
-			elif current_wave >= 8 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and randf() < 0.25:
-				air_scene = _scene_air_jammer
 				air_cost = 8.0
-			elif current_wave >= 7 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and randf() < 0.30:
-				air_scene = _scene_air_transport
+			elif (current_wave >= 3 or elapsed_survival_time >= 90.0) and continuous_air_budget >= 7.0 and randf() < 0.25:
+				air_scene = _scene_air_jammer
 				air_cost = 7.0
-			elif current_wave >= 6 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and randf() < 0.40:
+			elif (current_wave >= 2 or elapsed_survival_time >= 45.0) and continuous_air_budget >= 6.0 and randf() < 0.35:
 				air_scene = _scene_air_raider
 				air_cost = 6.0
 			else:
@@ -2216,8 +2315,14 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 				g_scene = _scene_ifv if randf() < 0.5 else _scene_apc
 				g_cost = 26.0 if g_scene == _scene_ifv else 28.0
 			elif chosen_role == "light_shooter" and continuous_ground_budget >= 20.0:
-				g_scene = _scene_turret if randf() < 0.5 else _scene_technical
-				g_cost = 20.0 if g_scene == _scene_turret else 22.0
+				if randf() < 0.5:
+					var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
+					if t_node:
+						continuous_ground_budget -= 20.0
+					g_scene = null
+				else:
+					g_scene = _scene_technical
+					g_cost = 22.0
 			else:
 				if current_visual + 4 <= max_visual and randf() < 0.70:
 					g_scene = _scene_infantry
@@ -2226,8 +2331,9 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 					g_scene = _scene_buggy
 					g_cost = 18.0
 
-			_spawn_continuous_enemy(g_scene, p_pos, 0.0)
-			continuous_ground_budget -= g_cost
+			if g_scene:
+				_spawn_continuous_enemy(g_scene, p_pos, 0.0)
+				continuous_ground_budget -= g_cost
 
 		if is_inside_tree() and Engine.get_process_frames() % 60 == 0:
 			XPGem.aggregate_excess_gems(get_tree(), 50)
@@ -2257,8 +2363,10 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			chosen_scene = _scene_ifv
 			cost = 26.0
 		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 20.0 and randf() > 0.5:
-			chosen_scene = _scene_turret
-			cost = 20.0
+			var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
+			if t_node:
+				continuous_ground_budget -= 20.0
+			chosen_scene = null
 		elif continuous_ground_budget >= 22.0 and randf() > 0.5:
 			chosen_scene = _scene_technical
 			cost = 22.0
@@ -2269,8 +2377,9 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			chosen_scene = _scene_infantry
 			cost = 15.0
 
-		_spawn_continuous_enemy(chosen_scene, p_pos, 0.0)
-		continuous_ground_budget -= cost
+		if chosen_scene:
+			_spawn_continuous_enemy(chosen_scene, p_pos, 0.0)
+			continuous_ground_budget -= cost
 
 	# Air stream with time-based unlocks and tactical caps
 	var p_y := clampf(_get_player_altitude(), 11.0, 17.0)
@@ -2311,7 +2420,7 @@ func _is_air_enemy(enemy: Node) -> bool:
 	if "archetype" in enemy and enemy.archetype is AirEnemyArchetype:
 		return true
 	var n: String = enemy.name
-	if n.begins_with("Air") or n.begins_with("Hunter") or n.begins_with("Boss"):
+	if n.begins_with("Air") or n.begins_with("Hunter") or n.begins_with("Boss") or n.begins_with("Mig") or enemy.is_in_group("air_enemies"):
 		return true
 	return false
 
@@ -2321,7 +2430,7 @@ func _is_air_scene(scene: PackedScene) -> bool:
 	var p := scene.resource_path.to_lower()
 	if "ground_" in p or "tank" in p or "infantry" in p or "turret" in p or "sam_" in p or "dummy" in p:
 		return false
-	return "hunter" in p or "gunship" in p or "raider" in p or "air" in p or "boss_archon" in p
+	return "hunter" in p or "gunship" in p or "raider" in p or "air" in p or "boss_archon" in p or "mig" in p or "striker" in p
 
 func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: float, forced_pos: Vector3 = Vector3.INF) -> Node3D:
 	if not scene:
@@ -2535,8 +2644,8 @@ func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
 	var target: Resource = get_current_wave_target()
 
 	for form in procedural_formations:
-		# 0. Air gating: Waves 1-5 NEVER allow air formations
-		if current_wave < 6:
+		# 0. Air gating: Pure ground during initial warmup (first 20s)
+		if elapsed_survival_time < 20.0:
 			if form.air_budget_cost > 0.0 or form.category == 2 or form.category == 3:
 				continue
 			var has_air_unit := false
@@ -2747,6 +2856,32 @@ func spawn_procedural_formation(form: FormationDefinition, p_pos: Vector3, stagg
 		var dir := base_heading.normalized()
 		var perp := Vector3(-dir.z, 0, dir.x)
 
+		var is_turret_unit: bool = (scene_path.ends_with("ground_turret.tscn") or unit_spec.get("cap_tag", "") == "turret")
+		if is_turret_unit:
+			var streamer_node := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer if is_inside_tree() else null
+			if is_instance_valid(streamer_node):
+				var r_socks := streamer_node.get_rooftop_sockets_in_radius(base_pos, 0.0, 55.0, true)
+				if not r_socks.is_empty():
+					var sock: Dictionary = r_socks[0]
+					var sid: String = sock.get("socket_id", "")
+					var spos: Vector3 = sock.get("world_position", Vector3.ZERO)
+					streamer_node.occupy_rooftop_socket(sid)
+					var t_inst := scene.instantiate() as GroundTurret
+					if t_inst:
+						t_inst.reserved_socket_id = sid
+						t_inst.chunk_coord = sock.get("chunk_coord", Vector2i.ZERO)
+						streamer_node.set_socket_occupant(sid, t_inst)
+						t_inst.transform.origin = spos
+						var to_p := (p_pos - spos)
+						to_p.y = 0.0
+						if to_p.length_squared() > 0.1:
+							t_inst.rotation.y = atan2(-to_p.x, -to_p.z)
+						parent.add_child.call_deferred(t_inst)
+						_register_spawned_node(t_inst)
+						spawned.append(t_inst)
+			# Turrets must only be placed on rooftop sockets; do not force on ground roads
+			continue
+
 		for i in range(count):
 			var enemy := scene.instantiate() as Node3D
 			if not enemy:
@@ -2859,8 +2994,14 @@ func _spend_budget(config: Dictionary) -> void:
 			_spawn_enemy(_scene_sam, p_pos, 0.0)
 			g_budget -= 40
 		elif allowed.has("turret") and g_budget >= 20 and randf() > 0.5:
-			_spawn_enemy(_scene_turret, p_pos, 0.0)
-			g_budget -= 20
+			var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
+			if t_node:
+				g_budget -= 20
+			elif allowed.has("infantry"):
+				_spawn_enemy(_scene_infantry, p_pos, 0.0)
+				g_budget -= 15
+			else:
+				break
 		elif allowed.has("infantry"):
 			_spawn_enemy(_scene_infantry, p_pos, 0.0)
 			g_budget -= 15
@@ -3479,6 +3620,7 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 	var r_nodes := get_rooftop_spawn_nodes()
 	var chosen_pos := Vector3.ZERO
 	var chosen_marker: Marker3D = null
+	var chosen_socket_id: String = ""
 
 	var free_markers: Array[Marker3D] = []
 	for marker in r_nodes:
@@ -3494,12 +3636,13 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 		chosen_pos = chosen_marker.global_position
 	else:
 		# Query natural rooftop candidates from CityWorldStreamer
-		var streamer := get_tree().get_first_node_in_group("world_streamer") if is_inside_tree() else null
+		var streamer := get_tree().get_first_node_in_group("city_streamer") if is_inside_tree() else null
 		if streamer and streamer.has_method("query_natural_spawn_candidates"):
-			var candidates: Array[Dictionary] = streamer.query_natural_spawn_candidates(player_pos, "rooftop", 60.0, 140.0)
+			var candidates: Array[Dictionary] = streamer.query_natural_spawn_candidates(player_pos, "rooftop", 40.0, 140.0)
 			if not candidates.is_empty():
 				var cand: Dictionary = candidates.pick_random()
 				chosen_pos = cand.get("position", Vector3.ZERO)
+				chosen_socket_id = cand.get("socket_id", "")
 
 	if chosen_pos == Vector3.ZERO:
 		return null
@@ -3508,6 +3651,9 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 	var scene_to_spawn: PackedScene = _scene_turret
 	if stage >= 3 and (chosen_marker == null or chosen_marker.name == "CommunicationsTower") and randf() > 0.40:
 		scene_to_spawn = _scene_sam
+
+	if scene_to_spawn == _scene_turret:
+		return spawn_rooftop_turret(player_pos, 22.0, 140.0, false)
 
 	var enemy := scene_to_spawn.instantiate() as Node3D
 	if not enemy:
@@ -3532,10 +3678,104 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 				_occupied_rooftop_markers.erase(chosen_marker)
 		)
 		last_spawn_source = "Rooftop_" + chosen_marker.name
+	elif not chosen_socket_id.is_empty():
+		var streamer := get_tree().get_first_node_in_group("city_streamer")
+		if streamer and streamer.has_method("occupy_rooftop_socket"):
+			streamer.occupy_rooftop_socket(chosen_socket_id)
+		last_spawn_source = "Rooftop_" + chosen_socket_id
 	else:
 		last_spawn_source = "Rooftop_Streamer"
 
 	return enemy
+
+## Spawns a stationary GroundTurret on a valid, unoccupied rooftop socket.
+## Enforces rooftop socket binding, distance limits, camera offscreen rules, and ensures
+## the turret base stays anchored to the roof without drifting, chasing, or falling.
+## Returns null if no valid rooftop socket is available (callers defer without spending budget).
+func spawn_rooftop_turret(player_pos: Vector3, min_dist: float = 30.0, max_dist: float = 95.0, req_offscreen: bool = true) -> Node3D:
+	if not _scene_turret or not _scene_turret.can_instantiate():
+		return null
+	if get_active_unit_count("turret") >= cap_turret or get_active_rooftop_count() >= max_active_rooftop_threats:
+		return null
+
+	var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer if is_inside_tree() else null
+	var chosen_pos := Vector3.ZERO
+	var chosen_socket_id := ""
+	var chosen_chunk_coord := Vector2i.ZERO
+	var chosen_marker: Marker3D = null
+
+	if is_instance_valid(streamer):
+		var candidates: Array[Dictionary] = streamer.get_rooftop_sockets_in_radius(player_pos, min_dist, max_dist, true)
+		var valid_cands: Array[Dictionary] = []
+		for cand in candidates:
+			var c_pos: Vector3 = cand.get("world_position", Vector3.ZERO)
+			if absf(c_pos.x) > (arena_half_extents - 15.0) or absf(c_pos.z) > (arena_half_extents - 15.0):
+				continue
+			var h: float = float(cand.get("height", 0.0))
+			if h < 5.0:
+				continue
+			if req_offscreen and is_position_in_camera_view(c_pos, 80.0):
+				continue
+			valid_cands.append(cand)
+
+		if not valid_cands.is_empty():
+			var chosen_cand: Dictionary = valid_cands.pick_random()
+			chosen_pos = chosen_cand.get("world_position", Vector3.ZERO)
+			chosen_socket_id = chosen_cand.get("socket_id", "")
+			chosen_chunk_coord = chosen_cand.get("chunk_coord", Vector2i.ZERO)
+
+	# Fallback to authored rooftop markers if streamer has no available socket
+	if chosen_pos == Vector3.ZERO:
+		var r_nodes := get_rooftop_spawn_nodes()
+		var free_markers: Array[Marker3D] = []
+		for marker in r_nodes:
+			var occ: Variant = _occupied_rooftop_markers.get(marker)
+			if occ == null or not is_instance_valid(occ) or (occ as Node).is_queued_for_deletion():
+				var dist := player_pos.distance_to(marker.global_position)
+				if dist >= min_dist and dist <= max_dist:
+					if not req_offscreen or not is_position_in_camera_view(marker.global_position, 80.0):
+						free_markers.append(marker)
+		if not free_markers.is_empty():
+			free_markers.shuffle()
+			chosen_marker = free_markers[0]
+			chosen_pos = chosen_marker.global_position
+
+	if chosen_pos == Vector3.ZERO:
+		return null
+
+	var turret := _scene_turret.instantiate() as GroundTurret
+	if not turret:
+		return null
+
+	turret.transform.origin = chosen_pos
+	var to_player := (player_pos - chosen_pos)
+	to_player.y = 0.0
+	if to_player.length_squared() > 0.1:
+		turret.rotation.y = atan2(-to_player.x, -to_player.z)
+
+	turret.set_meta("is_resident_defender", true)
+	turret.reserved_socket_id = chosen_socket_id
+	turret.chunk_coord = chosen_chunk_coord
+
+	if is_instance_valid(streamer) and not chosen_socket_id.is_empty():
+		streamer.occupy_rooftop_socket(chosen_socket_id)
+		streamer.set_socket_occupant(chosen_socket_id, turret)
+
+	var parent := _get_spawn_parent()
+	parent.add_child.call_deferred(turret)
+	_register_spawned_node(turret)
+
+	if chosen_marker:
+		_occupied_rooftop_markers[chosen_marker] = turret
+		turret.tree_exited.connect(func() -> void:
+			if _occupied_rooftop_markers.get(chosen_marker) == turret:
+				_occupied_rooftop_markers.erase(chosen_marker)
+		)
+		last_spawn_source = "Rooftop_" + chosen_marker.name
+	else:
+		last_spawn_source = "Rooftop_" + chosen_socket_id
+
+	return turret
 
 func _process_pickup_spawning(delta: float) -> void:
 	if not is_continuous_mode or not is_wave_active:
@@ -4078,13 +4318,24 @@ func spawn_sam_nest(center_pos: Vector3, with_radar: bool = false) -> Array[Node
 		0.0,
 		clampf(center_pos.z - 14.0, -arena_half_extents, arena_half_extents)
 	)
-	var support_scene := _scene_radar if with_radar else _scene_turret
-	var support := support_scene.instantiate() as Node3D
-	if support:
-		support.transform.origin = support_pos
-		parent.add_child.call_deferred(support)
-		_register_spawned_node(support)
-		spawned.append(support)
+	if with_radar:
+		var support := _scene_radar.instantiate() as Node3D
+		if support:
+			support.transform.origin = support_pos
+			parent.add_child.call_deferred(support)
+			_register_spawned_node(support)
+			spawned.append(support)
+	else:
+		var t_node := spawn_rooftop_turret(center_pos, 10.0, 50.0, false)
+		if t_node:
+			spawned.append(t_node)
+		else:
+			var escort := _scene_technical.instantiate() as Node3D if _scene_technical else null
+			if escort:
+				escort.transform.origin = support_pos
+				parent.add_child.call_deferred(escort)
+				_register_spawned_node(escort)
+				spawned.append(escort)
 
 	return spawned
 
@@ -4168,6 +4419,9 @@ func spawn_interceptor_pair(spawn_pos: Vector3, heading: Vector3) -> Array[Node3
 
 func _spawn_enemy(scene: PackedScene, player_pos: Vector3, altitude: float) -> void:
 	if not scene or not scene.can_instantiate():
+		return
+	if scene == _scene_turret or scene.resource_path.ends_with("ground_turret.tscn"):
+		spawn_rooftop_turret(player_pos, 32.0, 85.0, true)
 		return
 	var spawn_pos := get_frustum_safe_spawn_pos(player_pos, 32.0, 68.0)
 	if not spawn_pos.is_finite() or not is_finite(altitude):

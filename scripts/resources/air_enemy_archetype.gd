@@ -25,7 +25,7 @@ enum WeaponType {
 @export var role_identifier: String = "air_scout" ## "air_scout", "air_raider", "air_transport", "air_gunship", "air_jammer", "air_ace"
 @export var attack_token_cost: int = 1 ## Attack token budget cost placeholder for Phase 10B
 @export var enemy_tier: String = "ordinary" ## "ordinary", "heavy", "elite", "boss", "objective"
-@export var earliest_permitted_wave: int = 6 ## Air enemies strictly begin at Wave 6
+@export var earliest_permitted_wave: int = 1 ## Wave when this archetype begins appearing (data-driven)
 
 @export_category("Survivability")
 @export var max_health: float = 30.0

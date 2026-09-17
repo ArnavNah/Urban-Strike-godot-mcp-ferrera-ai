@@ -1,10 +1,10 @@
 class_name MainMenu
 extends Control
 
-## Clean, vintage arcade main menu for Heli-Strike.
-## Centered UI with generous safe margins, static Camera3D, distant atmospheric skyline,
-## right-side looping helicopter flight with 160-280px visible displacement,
-## four distinct arcade buttons, and full keyboard/controller/mouse navigation.
+## Cinematic military/urban main menu for Heli-Strike.
+## Left-aligned tactical UI with rich typography, chamfered amber glowing buttons,
+## sunset skyline with live helicopter showcase on the right, smooth intro sequence,
+## and complete keyboard, mouse, and gamepad navigation.
 
 @onready var play_button: Button = find_child("PlayButton", true, false) as Button
 @onready var hangar_button: Button = find_child("HangarButton", true, false) as Button
@@ -16,6 +16,7 @@ extends Control
 @onready var bg_cam: Camera3D = find_child("Camera3D", true, false) as Camera3D
 @onready var bg_heli: Node3D = find_child("HeliModel", true, false) as Node3D
 @onready var bg_skyline: Node3D = find_child("Skyline", true, false) as Node3D
+@onready var subviewport: SubViewport = find_child("SubViewport", true, false) as SubViewport
 
 @onready var bg_rotor: Node3D = null
 @onready var bg_tail_rotor: Node3D = null
@@ -24,16 +25,12 @@ extends Control
 @onready var bg_nav_starboard: MeshInstance3D = null
 
 const SettingsMenuClass = preload("res://scripts/ui/settings_menu.gd")
-const SOUND_FOCUS = preload("res://assets/audio/ui/ui_focus.wav")
-const SOUND_CONFIRM = preload("res://assets/audio/ui/ui_confirm.wav")
-const SOUND_BACK = preload("res://assets/audio/ui/ui_back.wav")
+const SOUND_FOCUS: AudioStream = preload("res://assets/audio/ui/ui_focus.wav")
+const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/ui/ui_confirm.wav")
+const SOUND_BACK: AudioStream = preload("res://assets/audio/ui/ui_back.wav")
 
-const FLIGHT_LOOP_DURATION: float = 16.0
-
-# Helicopter flight base parameters (stays entirely in right open airspace)
-const HELI_CENTER: Vector3 = Vector3(6.5, 6.0, 8.0)
-const HELI_RADIUS_X: float = 2.2
-const HELI_RADIUS_Z: float = 2.6
+# Helicopter showcase placement: center-right, framed by buildings, 25-30% larger
+const HELI_CENTER: Vector3 = Vector3(3.6, 5.0, 14.5)
 
 var _settings_overlay: Control = null
 var _settings_menu: Control = null
@@ -52,10 +49,14 @@ func _ready() -> void:
 	_init_static_camera()
 	_connect_buttons()
 	_setup_focus_navigation()
+	_update_input_hints()
 
-	# Initial focus on primary action PLAY
+	# Explicit initial focus on PLAY
 	if play_button:
 		play_button.grab_focus()
+
+	# Start snappy intro animation
+	_play_intro_animation()
 
 func _resolve_scene_nodes() -> void:
 	if not bg_heli:
@@ -88,21 +89,21 @@ func _disable_menu_background_physics() -> void:
 			if mi.material_override and not mi.name.begins_with("NavLight") and mi.name != "GroundPlane":
 				mi.material_override = null
 
-		for child in n.get_children():
+		for child: Node in n.get_children():
 			stack.append(child)
 
 func _init_static_camera() -> void:
-	# Camera is 100% static - no camera tracking or following
 	if bg_cam:
-		bg_cam.position = Vector3(0.0, 7.5, 26.0)
-		bg_cam.rotation_degrees = Vector3(-3.5, 12.0, 0.0)
+		bg_cam.position = Vector3(-0.8, 6.8, 23.5)
+		bg_cam.rotation_degrees = Vector3(-3.0, 10.5, 0.0)
 
 	if bg_heli:
 		bg_heli.position = HELI_CENTER
+		bg_heli.rotation = Vector3(-deg_to_rad(2.0), deg_to_rad(116.0), -deg_to_rad(1.0))
 
 func _connect_buttons() -> void:
 	var buttons: Array[Button] = [play_button, hangar_button, settings_button, quit_button]
-	for btn in buttons:
+	for btn: Button in buttons:
 		if not btn:
 			continue
 		btn.focus_entered.connect(_on_button_focus_entered)
@@ -128,12 +129,58 @@ func _setup_focus_navigation() -> void:
 	if quit_button:
 		buttons.append(quit_button)
 
-	for i in range(buttons.size()):
+	for i: int in range(buttons.size()):
 		var btn: Button = buttons[i]
 		var prev_btn: Button = buttons[(i - 1 + buttons.size()) % buttons.size()]
 		var next_btn: Button = buttons[(i + 1) % buttons.size()]
-		btn.focus_neighbor_top = prev_btn.get_path()
-		btn.focus_neighbor_bottom = next_btn.get_path()
+		btn.focus_neighbor_top = btn.get_path_to(prev_btn)
+		btn.focus_neighbor_bottom = btn.get_path_to(next_btn)
+
+func _play_intro_animation() -> void:
+	if not menu_column:
+		return
+
+	var title_lbl: Label = menu_column.find_child("Title", true, false) as Label
+	var sub_row: Control = menu_column.find_child("SubtitleRow", true, false) as Control
+	var deco_top: Control = menu_column.find_child("DecorativeTop", true, false) as Control
+	var buttons: Array[Button] = [play_button, hangar_button, settings_button, quit_button]
+
+	if title_lbl:
+		title_lbl.modulate.a = 0.0
+		title_lbl.position.y += 12.0
+	if sub_row:
+		sub_row.modulate.a = 0.0
+	if deco_top:
+		deco_top.modulate.a = 0.0
+
+	for btn: Button in buttons:
+		if btn:
+			btn.modulate.a = 0.0
+			btn.position.x -= 20.0
+
+	var tw: Tween = create_tween().set_parallel(true)
+
+	if title_lbl:
+		tw.tween_property(title_lbl, "modulate:a", 1.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(title_lbl, "position:y", title_lbl.position.y - 12.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+	if deco_top:
+		tw.tween_property(deco_top, "modulate:a", 1.0, 0.25).set_delay(0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if sub_row:
+		tw.tween_property(sub_row, "modulate:a", 1.0, 0.25).set_delay(0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	for i: int in range(buttons.size()):
+		var btn: Button = buttons[i]
+		if not btn:
+			continue
+		var delay: float = 0.16 + float(i) * 0.04
+		tw.tween_property(btn, "modulate:a", 1.0, 0.24).set_delay(delay).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(btn, "position:x", btn.position.x + 20.0, 0.24).set_delay(delay).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	tw.chain().tween_callback(func() -> void:
+		if play_button and is_instance_valid(play_button):
+			play_button.grab_focus()
+	)
 
 func _on_button_focus_entered() -> void:
 	_play_focus_sound()
@@ -160,38 +207,32 @@ func _play_ui_audio(stream: AudioStream, vol_db: float = -14.0) -> void:
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
 
-	# Rotors spin continuously
+	# Rotors spin smoothly
 	if bg_rotor:
-		bg_rotor.rotate_y(32.0 * delta)
+		bg_rotor.rotate_y(26.0 * delta)
 	if bg_tail_rotor:
-		bg_tail_rotor.rotate_x(44.0 * delta)
+		bg_tail_rotor.rotate_x(36.0 * delta)
 
-	# Looping helicopter motion in right open airspace
+	# Subtle cinematic idle hover
 	if bg_heli:
-		var loop_u: float = fmod(_anim_time, FLIGHT_LOOP_DURATION) / FLIGHT_LOOP_DURATION
-		var theta: float = loop_u * TAU
+		var bob_y: float = sin(_anim_time * 1.6) * 0.04
+		var sway_x: float = sin(_anim_time * 0.7) * 0.06
+		var sway_z: float = cos(_anim_time * 0.6) * 0.05
+		bg_heli.position = HELI_CENTER + Vector3(sway_x, bob_y, sway_z)
 
-		var pos_x: float = HELI_CENTER.x + HELI_RADIUS_X * sin(theta)
-		var pos_z: float = HELI_CENTER.z + HELI_RADIUS_Z * cos(theta)
-		# Gentle vertical bob (approximately 4-8 pixels)
-		var bob_y: float = sin(_anim_time * 2.2) * 0.08 + sin(theta * 2.0) * 0.12
-		var pos_y: float = HELI_CENTER.y + bob_y
+		var pitch: float = -deg_to_rad(2.0) + sin(_anim_time * 0.9) * deg_to_rad(0.3)
+		var yaw: float = deg_to_rad(116.0) + sin(_anim_time * 0.5) * deg_to_rad(0.4)
+		var roll: float = -deg_to_rad(1.0) + cos(_anim_time * 1.2) * deg_to_rad(0.3)
+		bg_heli.rotation = Vector3(pitch, yaw, roll)
 
-		bg_heli.position = Vector3(pos_x, pos_y, pos_z)
+	# Subtle slow camera drift
+	if bg_cam:
+		var cam_drift_x: float = sin(_anim_time * 0.25) * 0.12
+		var cam_drift_y: float = cos(_anim_time * 0.20) * 0.06
+		bg_cam.position = Vector3(-0.8 + cam_drift_x, 6.8 + cam_drift_y, 23.5)
+		bg_cam.rotation_degrees = Vector3(-3.0 + sin(_anim_time * 0.18) * 0.08, 10.5 + cos(_anim_time * 0.22) * 0.10, 0.0)
 
-		# Velocity tangent for heading
-		var vx: float = HELI_RADIUS_X * cos(theta)
-		var vz: float = -HELI_RADIUS_Z * sin(theta)
-		var yaw: float = atan2(-vx, -vz)
-		var pitch: float = -deg_to_rad(2.0) - sin(theta) * deg_to_rad(0.8)
-
-		# Gentle banking into turn (no more than 3.5 degrees, capped to 3.8 degrees)
-		var roll_bank: float = clampf(-cos(theta) * deg_to_rad(3.0), -deg_to_rad(3.8), deg_to_rad(3.8))
-		var micro_roll: float = cos(_anim_time * 1.6) * deg_to_rad(0.3)
-
-		bg_heli.rotation = Vector3(pitch, yaw, roll_bank + micro_roll)
-
-	# Strobe and navigation lights
+	# Navigation and beacon lights
 	if bg_nav_tail:
 		bg_nav_tail.visible = fmod(_anim_time, 1.2) < 0.12
 	if bg_nav_port:
@@ -211,19 +252,45 @@ func _input(event: InputEvent) -> void:
 			_using_gamepad = false
 			_update_input_hints()
 
+	if _settings_overlay and is_instance_valid(_settings_overlay) and _settings_overlay.visible:
+		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
+			_close_settings_menu()
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("ui_down") or event.is_action_pressed("move_backward"):
+		_navigate_focus(1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_up") or event.is_action_pressed("move_forward"):
+		_navigate_focus(-1)
+		get_viewport().set_input_as_handled()
+
 func _update_input_hints() -> void:
 	if not prompt_label:
 		return
 	if _using_gamepad:
-		prompt_label.text = "A  SELECT    B  BACK"
+		prompt_label.text = "[A] SELECT  |  [B] BACK"
 	else:
-		prompt_label.text = "ENTER  SELECT    ESC  BACK"
+		prompt_label.text = "[ENTER] SELECT  |  [ESC] BACK"
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
-		if _settings_overlay and is_instance_valid(_settings_overlay) and _settings_overlay.visible:
-			_close_settings_menu()
-			get_viewport().set_input_as_handled()
+func _unhandled_input(_event: InputEvent) -> void:
+	pass
+
+func _navigate_focus(dir: int) -> void:
+	var buttons: Array[Button] = [play_button, hangar_button, settings_button, quit_button]
+	var current_idx: int = -1
+	for i: int in range(buttons.size()):
+		if buttons[i] and buttons[i].has_focus():
+			current_idx = i
+			break
+
+	if current_idx == -1:
+		if play_button:
+			play_button.grab_focus()
+	else:
+		var next_idx: int = posmod(current_idx + dir, buttons.size())
+		if buttons[next_idx]:
+			buttons[next_idx].grab_focus()
 
 func _on_play_pressed() -> void:
 	if _is_transitioning:
@@ -283,7 +350,12 @@ func _open_settings_menu() -> void:
 
 		_settings_menu = SettingsMenuClass.new()
 		center.add_child(_settings_menu)
-		add_child(_settings_overlay)
+
+		var canvas_ui: CanvasLayer = find_child("CanvasLayer_UI", true, false) as CanvasLayer
+		if canvas_ui:
+			canvas_ui.add_child(_settings_overlay)
+		else:
+			add_child(_settings_overlay)
 
 		_settings_menu.closed.connect(_on_settings_menu_closed)
 

@@ -7,14 +7,33 @@ extends Node
 @onready var alert_player: AudioStreamPlayer = $AlertPlayer
 @onready var explosion_player: AudioStreamPlayer = $ExplosionPlayer
 
+var _sfx_pool: Array[AudioStreamPlayer] = []
+var _sfx_pool_idx: int = 0
+const SFX_POOL_SIZE: int = 8
+
 var _prev_overheated: bool = false
 var _prev_player_health: float = 100.0
 var _was_missile_locked: bool = false
 var _last_xp_sound_time: float = 0.0
 var _xp_combo_step: int = 0
 
+# Rate-limiting cooldowns for high-cadence combat events
+var _last_player_shot_time: float = 0.0
+var _last_enemy_shot_time: float = 0.0
+var _last_impact_armor_time: float = 0.0
+var _last_impact_terrain_time: float = 0.0
+var _last_player_hit_time: float = 0.0
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+
+	# Initialize round-robin voice pool to prevent rapid sound dropouts
+	for i in range(SFX_POOL_SIZE):
+		var p := AudioStreamPlayer.new()
+		p.name = "SfxVoice_%d" % i
+		add_child(p)
+		_sfx_pool.append(p)
+
 	if EventBus:
 		EventBus.chaingun_heat_changed.connect(_on_heat_changed)
 		EventBus.player_health_changed.connect(_on_health_changed)
@@ -27,6 +46,16 @@ func _ready() -> void:
 		EventBus.boss_spawned.connect(_on_boss_spawned)
 		EventBus.wave_started.connect(_on_wave_started)
 		EventBus.player_died.connect(_on_player_died)
+		if EventBus.has_signal("player_fired_primary"):
+			EventBus.player_fired_primary.connect(_on_player_fired_primary)
+		if EventBus.has_signal("enemy_fired_weapon"):
+			EventBus.enemy_fired_weapon.connect(_on_enemy_fired_weapon)
+		if EventBus.has_signal("combat_impact_occurred"):
+			EventBus.combat_impact_occurred.connect(_on_combat_impact)
+		if EventBus.has_signal("player_damaged_directional"):
+			EventBus.player_damaged_directional.connect(_on_player_damaged_directional)
+		if EventBus.has_signal("upgrade_applied"):
+			EventBus.upgrade_applied.connect(_on_upgrade_applied)
 		if EventBus.has_signal("no_missiles_warning"):
 			EventBus.no_missiles_warning.connect(_on_no_missiles_warning)
 		if EventBus.has_signal("missile_pickup_collected"):
@@ -63,16 +92,77 @@ func apply_volume_settings() -> void:
 	# Also directly scale internal stream players
 	var eff_sfx_db := linear_to_db(maxf(0.0001, master_vol * sfx_vol))
 	var is_muted := (master_vol * sfx_vol) <= 0.001
-	for p in [chaingun_player, alert_player, explosion_player]:
+
+	var all_players := [chaingun_player, alert_player, explosion_player]
+	all_players.append_array(_sfx_pool)
+	for p in all_players:
 		if is_instance_valid(p):
-			p.volume_db = eff_sfx_db
-			if is_muted:
-				p.volume_db = -80.0
+			p.volume_db = -80.0 if is_muted else eff_sfx_db
 
 func _on_setting_changed(key: String, _val: Variant) -> void:
 	if key.begins_with("volume_"):
 		apply_volume_settings()
 
+func _get_pooled_player() -> AudioStreamPlayer:
+	if _sfx_pool.is_empty():
+		return chaingun_player
+	var player: AudioStreamPlayer = _sfx_pool[_sfx_pool_idx]
+	_sfx_pool_idx = (_sfx_pool_idx + 1) % _sfx_pool.size()
+	return player
+
+func play_sfx(sfx_name: String) -> void:
+	match sfx_name:
+		"explosion":
+			_play_sweep(95.0, 45.0, 0.45, 0.45)
+		"shot", "laser":
+			_play_sweep(190.0, 95.0, 0.04, 0.28)
+		"alert":
+			_play_tone(alert_player, 880.0, 0.2)
+
+# --- Event Bus Combat Feedback Handlers ---
+
+func _on_player_fired_primary(_muzzle_pos: Vector3, _dir: Vector3) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_player_shot_time < 0.05:
+		return
+	_last_player_shot_time = now
+	_play_sweep(190.0, 95.0, 0.04, 0.26)
+
+func _on_enemy_fired_weapon(_enemy: Node3D, _muzzle_pos: Vector3, _dir: Vector3, is_heavy: bool) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_enemy_shot_time < 0.07:
+		return
+	_last_enemy_shot_time = now
+	if is_heavy:
+		_play_sweep(95.0, 42.0, 0.09, 0.35)
+	else:
+		_play_sweep(135.0, 62.0, 0.06, 0.30)
+
+func _on_combat_impact(_hit_pos: Vector3, _normal: Vector3, is_armored: bool, _is_lethal: bool) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if is_armored:
+		if now - _last_impact_armor_time < 0.04:
+			return
+		_last_impact_armor_time = now
+		_play_sweep(1500.0, 950.0, 0.035, 0.22)
+	else:
+		if now - _last_impact_terrain_time < 0.05:
+			return
+		_last_impact_terrain_time = now
+		_play_sweep(105.0, 45.0, 0.04, 0.18, true)
+
+func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, _source_pos: Vector3, is_shield_hit: bool) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_player_hit_time < 0.06:
+		return
+	_last_player_hit_time = now
+	if is_shield_hit:
+		_play_sweep(1850.0, 1100.0, 0.12, 0.35)
+	else:
+		_play_sweep(115.0, 45.0, 0.15, 0.42)
+
+func _on_upgrade_applied(_upgrade_id: String) -> void:
+	_play_arpeggio(alert_player, [587.33, 880.0, 1174.66], 0.07)
 
 func _on_heat_changed(_current_heat: float, _max_heat: float, is_overheated: bool) -> void:
 	if is_overheated and not _prev_overheated:
@@ -163,6 +253,37 @@ func _on_no_missiles_warning() -> void:
 
 func _on_missile_pickup_collected(_amount: int) -> void:
 	_play_tone(chaingun_player, 880.0, 0.18) # Crisp ammo pickup chime
+
+func _play_sweep(freq_start: float, freq_end: float, duration: float, volume: float = 0.35, is_noise: bool = false) -> void:
+	var player: AudioStreamPlayer = _get_pooled_player()
+	if not player:
+		return
+	var sample_hz := 22050.0
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = sample_hz
+	gen.buffer_length = duration + 0.05
+	player.stream = gen
+	player.play()
+
+	var playback: AudioStreamGeneratorPlayback = player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if playback:
+		var frames := int(sample_hz * duration)
+		var phase := 0.0
+		var phase_inc_start := freq_start / sample_hz
+		var phase_inc_end := freq_end / sample_hz
+		for i in range(frames):
+			var t := float(i) / float(frames)
+			var env := (1.0 - t) * (1.0 - t)
+			var phase_inc := lerpf(phase_inc_start, phase_inc_end, t)
+			var sample := 0.0
+			if is_noise:
+				sample = (randf() * 2.0 - 1.0) * env * volume
+			else:
+				sample = sin(phase * TAU) * env * volume
+			playback.push_frame(Vector2(sample, sample))
+			phase += phase_inc
+			if phase >= 1.0:
+				phase -= 1.0
 
 func _play_tone(player: AudioStreamPlayer, freq: float, duration: float) -> void:
 	if not player:

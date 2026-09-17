@@ -93,9 +93,10 @@ func explode(impact_pos: Vector3) -> void:
 	for r in results:
 		var col: Object = r.get("collider")
 		if col and col.has_method("take_damage"):
-			var dist := impact_pos.distance_to(r.get("collider").global_position)
+			var col_pos: Vector3 = col.global_position if col is Node3D else impact_pos
+			var dist := impact_pos.distance_to(col_pos)
 			var falloff := clampf(1.0 - (dist / splash_radius), 0.35, 1.0)
-			col.take_damage(damage * falloff)
+			col.take_damage(damage * falloff, self, impact_pos)
 
 	# Spawn explosion VFX (VfxPool with fallback)
 	if VfxPool.instance:

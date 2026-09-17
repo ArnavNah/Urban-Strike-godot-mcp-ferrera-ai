@@ -38,6 +38,10 @@ var _stagger_offset: int = 0
 var _cached_los: bool = false
 var _los_timer: float = 0.0
 
+## Debug telemetry — consistent with other enemy families
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
+
 @onready var radar_dish: Node3D = get_node_or_null("TurretMount/Dish")
 @onready var missile_launcher: Node3D = get_node_or_null("TurretMount/Launcher")
 @onready var muzzle: Marker3D = get_node_or_null("TurretMount/Launcher/Muzzle")
@@ -204,14 +208,16 @@ func _warn_player(active: bool) -> void:
 
 func _fire_missile() -> void:
 	if not is_instance_valid(_player):
+		debug_last_blocked_reason = "no_player"
 		return
+	debug_shots_fired += 1
 	var spawn_pos: Vector3 = muzzle.global_position if muzzle else global_position
 	var fire_dir: Vector3 = (global_position.direction_to(_player.global_position) + Vector3.UP * 0.4).normalized()
 
 	var missile: Node3D = missile_scene.instantiate() as Node3D
 	if missile:
 		missile.transform.origin = spawn_pos
-		missile.damage = missile_damage
+		missile.damage = missile_damage * CombatDirector.get_damage_multiplier()
 		var parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 		parent.add_child.call_deferred(missile)
 		missile.call_deferred("launch", spawn_pos, fire_dir, _player, false)
@@ -230,10 +236,7 @@ func _check_los() -> bool:
 
 func _request_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -250,6 +253,10 @@ func _request_slot() -> bool:
 			"sam"
 		)
 		_has_attack_slot = granted
+		if not granted:
+			debug_last_blocked_reason = "token_denied"
+		else:
+			debug_last_blocked_reason = ""
 		return granted
 	_has_attack_slot = true
 	return true

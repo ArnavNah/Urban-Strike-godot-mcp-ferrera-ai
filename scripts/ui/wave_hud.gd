@@ -18,6 +18,7 @@ extends Control
 
 var _banner_tween: Tween = null
 var _countdown_tween: Tween = null
+var _wave_manager: WaveManager = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -80,6 +81,7 @@ func _connect_to_wave_manager() -> void:
 		wm = get_tree().root.find_child("WaveManager", true, false) as WaveManager
 
 	if wm:
+		_wave_manager = wm
 		wm.deployment_countdown_changed.connect(_on_deployment_countdown_changed)
 		wm.wave_started.connect(_on_wave_started)
 		wm.wave_time_changed.connect(_on_wave_time_changed)
@@ -135,10 +137,11 @@ func _on_wave_time_changed(time_val: float) -> void:
 
 func _on_enemy_count_changed(active_count: int) -> void:
 	if enemy_count_label:
+		var is_clearing: bool = _wave_manager != null and _wave_manager.is_wave_clearing()
 		if active_count == 0:
 			enemy_count_label.text = "HOSTILES: 0 [SECURED]"
 			enemy_count_label.modulate = Color(0.31, 0.88, 0.93, 1.0)
-		elif active_count <= 5:
+		elif is_clearing:
 			enemy_count_label.text = "HOSTILES: %d [CLEARING]" % active_count
 			enemy_count_label.modulate = Color(1.0, 0.45, 0.20, 1.0)
 		else:

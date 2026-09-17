@@ -1,24 +1,11 @@
 [gd_scene format=3 uid="uid://cm3w8k2r5wap1"]
 
 [ext_resource type="Script" uid="uid://bj86yo65rbhtg" path="res://scripts/enemies/hunter_helicopter.gd" id="1_hunter"]
+[ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/Enemies/flying enemies/enemi4.glb" id="2_4rah2"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_Hunter"]
 radius = 1.0
 height = 3.8
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eodse"]
-albedo_color = Color(0.78, 0.22, 0.18, 1)
-metallic = 0.4
-roughness = 0.4
-
-[sub_resource type="StandardMaterial3D" id="Mat_Hunter"]
-albedo_color = Color(0.65, 0.2, 0.15, 1)
-metallic = 0.5
-roughness = 0.4
-
-[sub_resource type="BoxMesh" id="Mesh_Fuselage"]
-material = SubResource("Mat_Hunter")
-size = Vector3(1.1, 0.9, 3.2)
 
 [sub_resource type="StandardMaterial3D" id="Mat_Black"]
 albedo_color = Color(0.12, 0.12, 0.12, 1)
@@ -47,10 +34,6 @@ shape = SubResource("CapsuleShape3D_Hunter")
 [node name="Visuals" type="Node3D" parent="." unique_id=718449696]
 transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
 
-[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1510477306]
-material_override = SubResource("StandardMaterial3D_eodse")
-mesh = SubResource("Mesh_Fuselage")
-
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=334904063]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
 
@@ -64,6 +47,9 @@ mesh = SubResource("Mesh_RotorBlade")
 [node name="CockpitVisor" type="MeshInstance3D" parent="Visuals" unique_id=810912078]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -1.35)
 mesh = SubResource("BoxMesh_ht3ec")
+
+[node name="Model" parent="Visuals" unique_id=693790032 instance=ExtResource("2_4rah2")]
+transform = Transform3D(-1.6610327e-08, 0, 0.38, 0, 0.38, 0, -0.38, 0, -1.6610327e-08, 0, -0.25, 0.25)
 
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1974755436]
 target_position = Vector3(0, 0, -45)

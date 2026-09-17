@@ -62,6 +62,8 @@ var _air_steer_timer: float = 0.0
 var _is_telegraphing: bool = false
 var _burst_shots_remaining: int = 0
 var _evasion_cooldown: float = 0.0
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
 
 # Steering physics & 3D altitude banding
 var _instance_alt_offset: float = 0.0
@@ -802,25 +804,47 @@ func _pick_reposition_waypoint() -> void:
 	_target_waypoint = _player.global_position + offset
 	_target_waypoint.y = _current_target_y
 
-func _fire_bullet(damage_mult: float = 1.0) -> void:
+func _check_los() -> bool:
 	if not is_instance_valid(_player):
+		return false
+	var space := get_world_3d().direct_space_state
+	var origin := global_position + Vector3(0.0, -0.3, 0.0)
+	var target_pos := _player.global_position
+	var query := PhysicsRayQueryParameters3D.create(origin, target_pos, 1) # Layer 1 = World
+	query.exclude = [get_rid()]
+	var hit := space.intersect_ray(query)
+	return hit.is_empty()
+
+func _fire_bullet(damage_mult: float = 1.0) -> void:
+	if not is_instance_valid(_player) or not _check_los():
 		return
 
 	var muzzle_pos := global_position + (-global_transform.basis.z * 1.8) + Vector3(0.0, -0.3, 0.0)
-	var fire_dir := (_player.global_position - muzzle_pos).normalized()
+	var to_player := (_player.global_position - muzzle_pos).normalized()
+	var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
+	var fire_dir := (to_player + spread).normalized()
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
+	var proj: Projectile = null
 	if pool:
-		pool.spawn_projectile(muzzle_pos, fire_dir, false, archetype.damage_per_shot * damage_mult)
+		var scaled_dmg: float = archetype.damage_per_shot * damage_mult * CombatDirector.get_damage_multiplier()
+		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, scaled_dmg)
 
-	if muzzle_flash_scene:
-		var flash := muzzle_flash_scene.instantiate() as Node3D
-		if flash:
-			flash.transform.origin = muzzle_pos
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(flash)
+	if proj != null:
+		debug_shots_fired += 1
+		if VfxPool.instance:
+			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
+		elif muzzle_flash_scene:
+			var flash := muzzle_flash_scene.instantiate() as Node3D
+			if flash:
+				flash.transform.origin = muzzle_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(flash)
+
+		if EventBus:
+			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, damage_mult >= 3.0)
 
 func _fire_rocket() -> void:
 	if not is_instance_valid(_player) or not unguided_rocket_scene:
@@ -833,6 +857,7 @@ func _fire_rocket() -> void:
 
 	var rocket: UnguidedRocket = unguided_rocket_scene.instantiate() as UnguidedRocket
 	if rocket:
+		rocket.damage = 16.0 * CombatDirector.get_damage_multiplier()
 		var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 		p.add_child.call_deferred(rocket)
 		rocket.call_deferred("launch", muzzle_pos, fire_dir, 46.0)
@@ -847,7 +872,7 @@ func _fire_missile_at_player() -> void:
 
 	var missile: GuidedMissile = guided_missile_scene.instantiate() as GuidedMissile
 	if missile:
-		missile.damage = 38.0
+		missile.damage = 38.0 * CombatDirector.get_damage_multiplier()
 		var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 		p.add_child.call_deferred(missile)
 		missile.call_deferred("launch", muzzle_pos, fire_dir, _player, false)
@@ -896,10 +921,7 @@ func _notify_jammer_state_change() -> void:
 
 func _request_air_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming_delay"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -909,12 +931,15 @@ func _request_air_slot() -> bool:
 		var token_cost: int = CombatDirector.TOKEN_COST_AIR_SCOUT
 		var danger_cost: int = 2
 		if archetype and ("is_gunship" in archetype or archetype.role_identifier in ["air_gunship", "air_ace"]):
-			token_cost = 3
+			token_cost = CombatDirector.TOKEN_COST_AIR_GUNSHIP
 			danger_cost = 3
 		var granted: bool = dir.request_attack_permission(self, token_cost, true, false, false, danger_cost, "air_run")
 		_has_air_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
 		return granted
+
 	_has_air_slot = true
+	debug_last_blocked_reason = "active_no_director"
 	return true
 
 func _release_air_slot() -> void:
@@ -976,6 +1001,8 @@ func _die() -> void:
 		return
 	_is_dead = true
 	is_alive = false
+	collision_layer = 0
+	collision_mask = 0
 	_release_air_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
@@ -986,15 +1013,16 @@ func _die() -> void:
 
 	_spawn_rewards()
 
+	var expl_scale: float = 1.6 if (archetype and archetype.is_elite) else 1.1
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position)
+		VfxPool.instance.spawn_explosion(global_position, expl_scale)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:
 			var expl := expl_scene.instantiate() as Node3D
 			if expl:
 				expl.transform.origin = global_position
-				expl.scale = Vector3(1.6, 1.6, 1.6)
+				expl.scale = Vector3(expl_scale, expl_scale, expl_scale)
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(expl)
 

@@ -15,10 +15,11 @@ signal destroyed(wingman: MiniHelicopter, slot: String)
 
 @export_category("Formation Slots")
 @export var slot_id: String = "left" # "left" or "right"
-@export var formation_offset: Vector3 = Vector3(-4.5, 0.4, 2.5)
+@export var formation_offset: Vector3 = Vector3(-4.8, 0.5, 2.6)
 @export var follow_gain: float = 7.5
 @export var max_flight_speed: float = 52.0
 @export var follow_responsiveness: float = 7.5
+@export var follow_accel: float = 85.0
 
 @export_category("Combat & Systems")
 @export var detection_radius: float = 36.0
@@ -28,9 +29,9 @@ signal destroyed(wingman: MiniHelicopter, slot: String)
 
 @export_category("Visual & Procedural Animation")
 @export var visual_scale: float = 0.28
-@export var lateral_spacing: float = 4.5
-@export var rear_offset: float = 2.5
-@export var altitude_offset: float = 0.4
+@export var lateral_spacing: float = 4.8
+@export var rear_offset: float = 2.6
+@export var altitude_offset: float = 0.5
 @export var hover_bob_amplitude: float = 0.08
 @export var hover_bob_frequency: float = 2.4
 @export var max_bank_angle: float = 0.45 # ~26 deg
@@ -54,14 +55,28 @@ var _visual_meshes: Array[MeshInstance3D] = []
 static var _flash_mat: StandardMaterial3D = null
 
 @onready var visual_root: Node3D = get_node_or_null("VisualRoot")
+@onready var plane_model: Node3D = get_node_or_null("VisualRoot/PlaneModel")
 @onready var main_rotor: Node3D = get_node_or_null("VisualRoot/PlaneModel/MainRotor")
 @onready var weapon_mount: Marker3D = get_node_or_null("WeaponMount")
 @onready var target_detection: Area3D = get_node_or_null("TargetDetection")
 @onready var fire_timer: Timer = get_node_or_null("FireTimer")
 @onready var muzzle_flash: Node3D = get_node_or_null("MuzzleFlash")
 @onready var sfx: AudioStreamPlayer3D = get_node_or_null("AudioStreamPlayer3D")
-@onready var health_bar_root: Node3D = get_node_or_null("VisualRoot/HealthBar3D")
-@onready var health_bar_fill: MeshInstance3D = get_node_or_null("VisualRoot/HealthBar3D/Fill")
+@onready var health_bar_root: Node3D = get_node_or_null("HealthBar3D")
+@onready var health_bar_fill: MeshInstance3D = get_node_or_null("HealthBar3D/Fill")
+
+## Pure yaw-only, scale-free basis from player heading, completely decoupled from pitch, roll, and scale
+static func get_player_yaw_basis(player: Node3D) -> Basis:
+	if not is_instance_valid(player):
+		return Basis.IDENTITY
+	var fwd: Vector3 = -player.global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length_squared() < 0.0001:
+		fwd = Vector3.FORWARD
+	else:
+		fwd = fwd.normalized()
+	var right: Vector3 = fwd.cross(Vector3.UP).normalized()
+	return Basis(right, Vector3.UP, -fwd)
 
 func _ready() -> void:
 	add_to_group("companions")
@@ -125,6 +140,17 @@ func _exit_tree() -> void:
 func _on_player_died() -> void:
 	queue_free()
 
+func get_target_formation_position() -> Vector3:
+	if not is_instance_valid(player_target):
+		return global_position
+	var yaw_basis: Basis = get_player_yaw_basis(player_target)
+	var horiz_offset: Vector3 = yaw_basis * Vector3(formation_offset.x, 0.0, formation_offset.z)
+	return Vector3(
+		player_target.global_position.x + horiz_offset.x,
+		player_target.global_position.y + formation_offset.y,
+		player_target.global_position.z + horiz_offset.z
+	)
+
 func _physics_process(delta: float) -> void:
 	if not is_active or not is_alive:
 		return
@@ -144,58 +170,72 @@ func _physics_process(delta: float) -> void:
 	_handle_targeting_and_combat(delta)
 
 func _handle_movement_and_banking(delta: float) -> void:
-	# Calculate target formation position in player reference frame
-	var target_pos: Vector3 = player_target.global_position + (player_target.global_transform.basis * formation_offset)
+	# Calculate target formation position using player's yaw-only, scale-free basis with independent altitude
+	var target_pos: Vector3 = get_target_formation_position()
 	var to_target: Vector3 = target_pos - global_position
 	var dist: float = to_target.length()
 
-	# Anti-lag catch-up: snap if teleported or fell too far behind (> 65m)
+	# Large-distance recovery only after genuine teleport or excessive separation (> 65m)
 	if dist > 65.0:
 		global_position = target_pos
 		velocity = Vector3.ZERO
 		return
 
-	# Smooth spring / velocity damping follow
+	# Smooth follow with bounded acceleration and maximum flight speed
 	var desired_vel: Vector3 = to_target * follow_gain
 
-	# Anti-stacking: separation push away from player if too close (< 2.5m)
+	# Anti-stacking: separation push away from player if too close (< 2.8m)
 	var to_player: Vector3 = global_position - player_target.global_position
 	to_player.y = 0.0
 	var player_dist: float = to_player.length()
-	if player_dist < 2.5 and player_dist > 0.01:
-		var push: Vector3 = (to_player / player_dist) * ((2.5 - player_dist) * 8.0)
+	if player_dist < 2.8 and player_dist > 0.01:
+		var push: Vector3 = (to_player / player_dist) * ((2.8 - player_dist) * 8.0)
 		desired_vel += push
 
-	# Anti-stacking: separation push away from peer wingmen (< 3.0m)
+	# Anti-stacking: separation push away from peer wingmen (< 3.2m)
 	for peer in get_tree().get_nodes_in_group("mini_helicopters"):
 		if peer != self and is_instance_valid(peer) and peer is Node3D:
 			var to_peer: Vector3 = global_position - (peer as Node3D).global_position
 			to_peer.y = 0.0
 			var peer_dist: float = to_peer.length()
-			if peer_dist < 3.0 and peer_dist > 0.01:
-				var push: Vector3 = (to_peer / peer_dist) * ((3.0 - peer_dist) * 10.0)
+			if peer_dist < 3.2 and peer_dist > 0.01:
+				var push: Vector3 = (to_peer / peer_dist) * ((3.2 - peer_dist) * 10.0)
 				desired_vel += push
 
 	if desired_vel.length() > max_flight_speed:
 		desired_vel = desired_vel.normalized() * max_flight_speed
 
-	velocity = velocity.lerp(desired_vel, clampf(follow_responsiveness * delta, 0.0, 1.0))
+	velocity = velocity.move_toward(desired_vel, follow_accel * delta)
 	move_and_slide()
 
-	# Heading orientation: aim towards target if engaging, or match player heading
-	var aim_dir: Vector3
-	if is_instance_valid(current_target) and not current_target.is_queued_for_deletion():
-		aim_dir = (current_target.global_position - global_position).normalized()
+	# Body yaw orientation:
+	# Base heading matches the player's yaw flight heading
+	var player_fwd: Vector3 = -player_target.global_transform.basis.z
+	player_fwd.y = 0.0
+	if player_fwd.length_squared() < 0.001:
+		player_fwd = Vector3.FORWARD
 	else:
-		aim_dir = -player_target.global_transform.basis.z
+		player_fwd = player_fwd.normalized()
 
-	aim_dir.y = 0.0
-	if aim_dir.length_squared() > 0.01:
-		aim_dir = aim_dir.normalized()
-		var target_yaw: float = atan2(-aim_dir.x, -aim_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(8.0 * delta, 0.0, 1.0))
+	var player_yaw: float = atan2(-player_fwd.x, -player_fwd.z)
+	var desired_yaw: float = player_yaw
 
-	# Procedural aerodynamic banking, pitch, and subtle hover bob on VisualRoot
+	# When engaging a target, allow a smooth visual yaw bias constrained to +/- 45 deg
+	# to avoid abrupt sideways or backward flips during formation flight.
+	if is_instance_valid(current_target) and not current_target.is_queued_for_deletion():
+		var to_target_flat: Vector3 = current_target.global_position - global_position
+		to_target_flat.y = 0.0
+		if to_target_flat.length_squared() > 0.01:
+			var target_heading: float = atan2(-to_target_flat.x, -to_target_flat.z)
+			var angle_diff: float = wrapf(target_heading - player_yaw, -PI, PI)
+			var max_bias: float = deg_to_rad(45.0)
+			desired_yaw = player_yaw + clampf(angle_diff, -max_bias, max_bias)
+
+	rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(7.0 * delta, 0.0, 1.0))
+	rotation.x = 0.0
+	rotation.z = 0.0
+
+	# Procedural aerodynamic banking, pitch, and subtle hover bob on VisualRoot ONLY
 	if visual_root:
 		_bob_phase += delta * hover_bob_frequency
 		var bob_y: float = sin(_bob_phase) * hover_bob_amplitude
@@ -206,6 +246,18 @@ func _handle_movement_and_banking(delta: float) -> void:
 		var target_pitch: float = clampf(-local_vel.z * 0.025, -max_pitch_angle, max_pitch_angle)
 		visual_root.rotation.z = lerp(visual_root.rotation.z, target_bank, clampf(8.0 * delta, 0.0, 1.0))
 		visual_root.rotation.x = lerp(visual_root.rotation.x, target_pitch, clampf(8.0 * delta, 0.0, 1.0))
+		visual_root.rotation.y = 0.0
+
+	# Health bar readability: keep horizontal and billboarded toward the camera
+	if health_bar_root:
+		var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
+		if cam:
+			var cam_fwd: Vector3 = cam.global_transform.basis.z
+			cam_fwd.y = 0.0
+			if cam_fwd.length_squared() > 0.001:
+				health_bar_root.global_rotation.y = atan2(cam_fwd.x, cam_fwd.z)
+				health_bar_root.global_rotation.x = 0.0
+				health_bar_root.global_rotation.z = 0.0
 
 func _handle_rotors(delta: float) -> void:
 	if main_rotor:
@@ -286,9 +338,11 @@ func _find_best_target() -> Node3D:
 	return closest_enemy
 
 func _fire_at_target(target: Node3D) -> void:
-	var muzzle_pos: Vector3 = weapon_mount.global_position if weapon_mount else global_position
+	var muzzle_pos: Vector3 = weapon_mount.global_position if weapon_mount else global_position + Vector3(0.0, -0.06, -0.72)
 	var target_center: Vector3 = target.global_position + Vector3(0, 0.4, 0)
 	var fire_dir: Vector3 = (target_center - muzzle_pos).normalized()
+	if fire_dir.length_squared() < 0.001:
+		fire_dir = -global_transform.basis.z
 
 	var pool: ProjectilePool = ProjectilePool.instance
 	if not pool:
@@ -301,7 +355,7 @@ func _fire_at_target(target: Node3D) -> void:
 		muzzle_flash.visible = true
 		_flash_timer = 0.05
 	elif VfxPool.instance:
-		VfxPool.instance.spawn_muzzle_flash(muzzle_pos)
+		VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, false)
 
 	if sfx and not sfx.playing:
 		sfx.play()
@@ -374,7 +428,7 @@ func _die() -> void:
 
 	# Bounded visual destruction VFX
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position)
+		VfxPool.instance.spawn_explosion(global_position, 0.75)
 
 	# Audio feedback
 	var sound_mgr: Node = get_tree().get_first_node_in_group("sound_manager")

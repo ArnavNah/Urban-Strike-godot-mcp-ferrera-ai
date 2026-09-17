@@ -1,20 +1,93 @@
 [gd_scene format=3 uid="uid://be4m8k1v7w2ra"]
 
-[ext_resource type="Script" path="res://scripts/ui/death_screen.gd" id="1_death"]
+[ext_resource type="Script" uid="uid://dbph3sl4dph8b" path="res://scripts/ui/death_screen.gd" id="1_death"]
+[ext_resource type="Theme" uid="uid://dbpewnr4dtmhr" path="res://resources/ui/menu_theme.tres" id="1_sfg43"]
+[ext_resource type="FontFile" uid="uid://oqpdnawjrvdg" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="3_0863s"]
+[ext_resource type="FontFile" uid="uid://c0o5e1d8pafa7" path="res://assets/ui/fonts/Inter-Regular.ttf" id="4_5d08o"]
+[ext_resource type="FontFile" uid="uid://e80nhsmmnttd" path="res://assets/ui/fonts/Inter-SemiBold.ttf" id="5_qj43u"]
+[ext_resource type="Script" uid="uid://bpudroewq14h" path="res://scripts/ui/tactical_menu_button.gd" id="6_cd3fy"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Death"]
-bg_color = Color(0.08, 0.04, 0.04, 0.9)
+[sub_resource type="Gradient" id="Gradient_frjmv"]
+offsets = PackedFloat32Array(0, 0.45, 0.85, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.02, 0.02, 0.25, 0.35, 0.04, 0.04, 0.55)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_u4p5k"]
+gradient = SubResource("Gradient_frjmv")
+width = 512
+height = 512
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yxsj6"]
+content_margin_left = 32.0
+content_margin_top = 22.0
+content_margin_right = 32.0
+content_margin_bottom = 22.0
+bg_color = Color(0.045, 0.065, 0.095, 0.98)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.85, 0.2, 0.2, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
+border_color = Color(0.24, 0.32, 0.42, 0.75)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
-[node name="DeathScreen" type="Control"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o6us7"]
+content_margin_left = 18.0
+content_margin_top = 10.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+bg_color = Color(0.035, 0.05, 0.075, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.28, 0.38, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uo3v1"]
+content_margin_left = 18.0
+content_margin_top = 12.0
+content_margin_right = 18.0
+content_margin_bottom = 12.0
+bg_color = Color(0.035, 0.05, 0.075, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.28, 0.38, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uay28"]
+content_margin_left = 8.0
+content_margin_top = 2.0
+content_margin_right = 8.0
+content_margin_bottom = 2.0
+bg_color = Color(0.12, 0.04, 0.04, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.85, 0.25, 0.25, 0.8)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sfg43"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_0863s"]
+
+[node name="DeathScreen" type="Control" unique_id=1680463886]
 process_mode = 3
 layout_mode = 3
 anchors_preset = 15
@@ -22,64 +95,274 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("1_sfg43")
 script = ExtResource("1_death")
 
-[node name="Panel" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = 15
+[node name="DimBackground" type="ColorRect" parent="." unique_id=966082665]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+color = Color(0.02, 0.03, 0.05, 0.88)
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
+[node name="CombatVignette" type="TextureRect" parent="." unique_id=202980546]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_u4p5k")
+expand_mode = 1
 
-[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(440, 320)
-layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_Death")
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=226678278]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
 
-[node name="VBox" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+[node name="ModalPanel" type="PanelContainer" parent="CenterContainer" unique_id=1363066079]
+custom_minimum_size = Vector2(620, 520)
 layout_mode = 2
-theme_override_constants/separation = 18
+theme_override_styles/panel = SubResource("StyleBoxFlat_yxsj6")
+
+[node name="MainVBox" type="VBoxContainer" parent="CenterContainer/ModalPanel" unique_id=730239817]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HeaderBox" type="VBoxContainer" parent="CenterContainer/ModalPanel/MainVBox" unique_id=715105820]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="TitleRow" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/HeaderBox" unique_id=1845592678]
+layout_mode = 2
+theme_override_constants/separation = 12
 alignment = 1
 
-[node name="Title" type="Label" parent="CenterContainer/PanelContainer/VBox"]
+[node name="@ColorRect@30258" type="ColorRect" parent="CenterContainer/ModalPanel/MainVBox/HeaderBox/TitleRow" unique_id=573936864]
+custom_minimum_size = Vector2(28, 2)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.25, 0.25, 1)
-theme_override_font_sizes/font_size = 28
-text = "AIRCRAFT DESTROYED"
+size_flags_vertical = 4
+color = Color(0.92, 0.24, 0.24, 1)
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/HeaderBox/TitleRow" unique_id=1605945888]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0.4, 0.05, 0.05, 0.8)
+theme_override_constants/shadow_offset_y = 2
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 24
+text = "MISSION FAILED // AIRCRAFT DESTROYED"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="CenterContainer/PanelContainer/VBox"]
+[node name="@ColorRect@30259" type="ColorRect" parent="CenterContainer/ModalPanel/MainVBox/HeaderBox/TitleRow" unique_id=670591347]
+custom_minimum_size = Vector2(28, 2)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 15
-text = "The AH-9 Vulture was shot down in combat."
+size_flags_vertical = 4
+color = Color(0.92, 0.24, 0.24, 1)
+
+[node name="SubtitleLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/HeaderBox" unique_id=1562037014]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.72, 0.82, 0.85)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 11
+text = "AIRFRAME LOST IN COMBAT // AH-64 HAVOC SHOT DOWN"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBox"]
+[node name="@ColorRect@30260" type="ColorRect" parent="CenterContainer/ModalPanel/MainVBox" unique_id=858311603]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(0.22, 0.28, 0.36, 0.6)
+
+[node name="TelemetryTitle" type="Label" parent="CenterContainer/ModalPanel/MainVBox" unique_id=972364256]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 0.9)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 13
+text = "// COMBAT TELEMETRY // AFTER-ACTION REPORT"
+
+[node name="TelemetryCard" type="PanelContainer" parent="CenterContainer/ModalPanel/MainVBox" unique_id=1369954551]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_o6us7")
+
+[node name="TelemetryGrid" type="GridContainer" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard" unique_id=1937936083]
+layout_mode = 2
+theme_override_constants/h_separation = 32
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="Row_StatTimeValue" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid" unique_id=1010412820]
 layout_mode = 2
 
-[node name="SalvageSummaryLabel" type="Label" parent="CenterContainer/PanelContainer/VBox"]
-unique_name_in_owner = true
+[node name="@Label@30261" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatTimeValue" unique_id=958091942]
+custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.8, 0.3, 1)
+theme_override_colors/font_color = Color(0.5, 0.58, 0.68, 0.9)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 10
+text = "SURVIVAL TIME"
+
+[node name="StatTimeValue" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatTimeValue" unique_id=1458552690]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
 theme_override_font_sizes/font_size = 14
-text = "Salvage Lost: 0"
-horizontal_alignment = 1
-autowrap_mode = 2
+text = "00:00"
 
-[node name="ReturnButton" type="Button" parent="CenterContainer/PanelContainer/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 46)
+[node name="Row_StatWaveValue" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid" unique_id=642442089]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 18
-text = "RETURN TO HANGAR"
+
+[node name="@Label@30262" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatWaveValue" unique_id=479201386]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.58, 0.68, 0.9)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 10
+text = "STAGE REACHED"
+
+[node name="StatWaveValue" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatWaveValue" unique_id=1806174359]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 14
+text = "STAGE 1 / 10"
+
+[node name="Row_StatKillsValue" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid" unique_id=1763308298]
+layout_mode = 2
+
+[node name="@Label@30263" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatKillsValue" unique_id=1287429188]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.58, 0.68, 0.9)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 10
+text = "HOSTILES DESTROYED"
+
+[node name="StatKillsValue" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatKillsValue" unique_id=980205884]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 14
+text = "0 KILLS"
+
+[node name="Row_StatDamageValue" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid" unique_id=1674402133]
+layout_mode = 2
+
+[node name="@Label@30264" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatDamageValue" unique_id=1902739361]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.58, 0.68, 0.9)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 10
+text = "TOTAL DAMAGE DEALT"
+
+[node name="StatDamageValue" type="Label" parent="CenterContainer/ModalPanel/MainVBox/TelemetryCard/TelemetryGrid/Row_StatDamageValue" unique_id=884366439]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 14
+text = "0 DMG"
+
+[node name="SalvageTitle" type="Label" parent="CenterContainer/ModalPanel/MainVBox" unique_id=619613357]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 0.9)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 13
+text = "// SALVAGE & EXTRACTION ASSESSMENT"
+
+[node name="SalvageCard" type="PanelContainer" parent="CenterContainer/ModalPanel/MainVBox" unique_id=1506169934]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_uo3v1")
+
+[node name="SalvageVBox" type="VBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard" unique_id=2015173919]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BadgeRow" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox" unique_id=760992989]
+layout_mode = 2
+
+[node name="SalvageBadge" type="PanelContainer" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox/BadgeRow" unique_id=997569939]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_uay28")
+
+[node name="SalvageBadgeLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox/BadgeRow/SalvageBadge" unique_id=507346525]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.24, 0.24, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 11
+text = "CRITICAL COMBAT LOSS"
+
+[node name="SalvageMainLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox" unique_id=1290334247]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.24, 0.24, 1)
+theme_override_fonts/font = ExtResource("5_qj43u")
+theme_override_font_sizes/font_size = 13
+text = "ALL SALVAGE LOST: 0 CR destroyed with airframe"
+
+[node name="SalvageSubLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox" unique_id=583448757]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.68, 0.78, 0.8)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 11
+text = "[TACTICAL NOTE: Extraction Insurance in Hangar protects 50% salvage on loss]"
+
+[node name="@ColorRect@30265" type="ColorRect" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox" unique_id=336890313]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(0.18, 0.24, 0.32, 0.5)
+
+[node name="BankedTotalLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox/SalvageCard/SalvageVBox" unique_id=675440080]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 1)
+theme_override_fonts/font = ExtResource("3_0863s")
+theme_override_font_sizes/font_size = 14
+text = "CURRENT BANKED SALVAGE: 0 CR"
+
+[node name="@ColorRect@30266" type="ColorRect" parent="CenterContainer/ModalPanel/MainVBox" unique_id=1328093959]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(0.22, 0.28, 0.36, 0.6)
+
+[node name="ButtonRow" type="HBoxContainer" parent="CenterContainer/ModalPanel/MainVBox" unique_id=370713065]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="ReturnButton" type="Button" parent="CenterContainer/ModalPanel/MainVBox/ButtonRow" unique_id=56563253]
+custom_minimum_size = Vector2(250, 48)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_sfg43")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_sfg43")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_sfg43")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_sfg43")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_sfg43")
+flat = true
+script = ExtResource("6_cd3fy")
+action_title = "RETURN TO HANGAR"
+button_min_size = Vector2(250, 48)
+title_font_size = 14
+chamfer_size = 10.0
+
+[node name="DeployAgainButton" type="Button" parent="CenterContainer/ModalPanel/MainVBox/ButtonRow" unique_id=1056532070]
+custom_minimum_size = Vector2(250, 48)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_0863s")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_0863s")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_0863s")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_0863s")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_0863s")
+flat = true
+script = ExtResource("6_cd3fy")
+action_title = "DEPLOY AGAIN"
+is_primary = true
+button_min_size = Vector2(250, 48)
+title_font_size = 14
+chamfer_size = 10.0
+
+[node name="PromptLabel" type="Label" parent="CenterContainer/ModalPanel/MainVBox" unique_id=1806665829]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.52, 0.62, 0.8)
+theme_override_fonts/font = ExtResource("4_5d08o")
+theme_override_font_sizes/font_size = 11
+text = "[ENTER / CLICK] SELECT    [ESC] RETURN TO HANGAR"
+horizontal_alignment = 1
+
+[node name="DeathScreenAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1203765812]

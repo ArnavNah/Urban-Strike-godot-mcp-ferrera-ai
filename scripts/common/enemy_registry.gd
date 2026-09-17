@@ -235,7 +235,8 @@ static func get_enemy_metadata(enemy: Node) -> Dictionary:
 		"tier": "ordinary", # "ordinary", "heavy", "elite", "boss", "objective"
 		"earliest_permitted_wave": 1,
 		"is_air": false,
-		"is_special": false
+		"is_special": false,
+		"is_stationary": false
 	}
 	if not is_instance_valid(enemy):
 		return result
@@ -268,10 +269,12 @@ static func get_enemy_metadata(enemy: Node) -> Dictionary:
 		result["earliest_permitted_wave"] = 1
 	elif enemy is GroundTurret or s_name.contains("turret"):
 		result["visual_crowd_weight"] = 1.0
-		result["role"] = "light_shooter"
+		result["role"] = "stationary_turret"
 		result["tier"] = "ordinary"
 		result["threat_cost"] = 3
 		result["earliest_permitted_wave"] = 1
+		result["is_stationary"] = true
+		result["is_air"] = false
 	elif enemy is SAMSite or s_name.contains("sam"):
 		result["visual_crowd_weight"] = 1.0
 		result["role"] = "anti_air"
@@ -313,8 +316,6 @@ static func get_enemy_metadata(enemy: Node) -> Dictionary:
 
 	if enemy.is_in_group("air_enemies"):
 		result["is_air"] = true
-		if result["earliest_permitted_wave"] < 6:
-			result["earliest_permitted_wave"] = 6
 	if enemy.is_in_group("objectives"):
 		result["tier"] = "objective"
 		result["visual_crowd_weight"] = 0.0
@@ -341,7 +342,7 @@ func get_living_node_count() -> int:
 	return count
 
 func get_special_counts() -> Dictionary:
-	var counts := {"sam": 0, "mortar": 0, "heavy": 0, "medium_armored": 0, "air": 0, "boss": 0}
+	var counts := {"sam": 0, "mortar": 0, "heavy": 0, "medium_armored": 0, "air": 0, "boss": 0, "turret": 0}
 	for e in all_enemies:
 		if is_instance_valid(e) and not e.is_queued_for_deletion():
 			if "is_alive" in e and not e.is_alive:
@@ -359,6 +360,8 @@ func get_special_counts() -> Dictionary:
 				counts["medium_armored"] += 1
 			if meta["tier"] == "boss":
 				counts["boss"] += 1
+			if meta["role"] == "stationary_turret" or e is GroundTurret or e.is_in_group("turrets"):
+				counts["turret"] += 1
 	return counts
 
 func get_role_counts() -> Dictionary:

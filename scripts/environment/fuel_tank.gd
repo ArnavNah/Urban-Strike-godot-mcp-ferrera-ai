@@ -87,8 +87,8 @@ func _explode() -> void:
 		var crate := crate_scene.instantiate() as Node3D
 		if crate:
 			crate.transform.origin = global_position + Vector3(0, 0.8, 0)
-			var parent := get_parent() if get_parent() else get_tree().root
-			parent.add_child.call_deferred(crate)
+			var p: Node = get_tree().current_scene if (is_inside_tree() and get_tree().current_scene) else (get_parent() if get_parent() else get_tree().root)
+			p.add_child.call_deferred(crate)
 
 	# Disable collision
 	if collision_shape:

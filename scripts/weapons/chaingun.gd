@@ -97,7 +97,7 @@ func _execute_fire() -> void:
 
 	# Spawn muzzle flash (VfxPool with fallback)
 	if VfxPool.instance:
-		VfxPool.instance.spawn_muzzle_flash(muzzle_pos)
+		VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, false)
 	else:
 		var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
 		if flash_scene:
@@ -108,6 +108,8 @@ func _execute_fire() -> void:
 				target_parent.add_child.call_deferred(flash)
 
 	fired.emit(muzzle_pos, fire_dir)
+	if EventBus:
+		EventBus.player_fired_primary.emit(muzzle_pos, fire_dir)
 
 func _notify_heat() -> void:
 	heat_updated.emit(current_heat, 1.0, is_overheated)

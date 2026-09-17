@@ -44,6 +44,8 @@ var _cached_air_separation: Vector3 = Vector3.ZERO
 var _separation_timer: float = 0.0
 var _cached_air_steer_dir: Vector3 = Vector3.ZERO
 var _air_steer_timer: float = 0.0
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
 
 # Steering physics & 3D altitude banding
 var _max_horizontal_accel: float = 26.0 # m/s²
@@ -508,28 +510,37 @@ func _fire_pass_shot() -> void:
 	if not is_instance_valid(_player):
 		return
 	var muzzle_pos := global_position + Vector3(0, -0.2, -1.0)
-	var fire_dir := (_player.global_position - muzzle_pos).normalized()
+	var to_player := (_player.global_position - muzzle_pos).normalized()
+	var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
+	var fire_dir := (to_player + spread).normalized()
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
+	var proj: Projectile = null
 	if pool:
-		pool.spawn_projectile(muzzle_pos, fire_dir, false, damage_per_shot)
+		var scaled_dmg: float = damage_per_shot * CombatDirector.get_damage_multiplier()
+		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, scaled_dmg)
 
-	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
-	if flash_scene:
-		var flash := flash_scene.instantiate() as Node3D
-		if flash:
-			flash.transform.origin = muzzle_pos
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(flash)
+	if proj != null:
+		debug_shots_fired += 1
+		if VfxPool.instance:
+			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
+		else:
+			var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
+			if flash_scene:
+				var flash := flash_scene.instantiate() as Node3D
+				if flash:
+					flash.transform.origin = muzzle_pos
+					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					p.add_child.call_deferred(flash)
+
+		if EventBus:
+			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
 
 func _request_air_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming_delay"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -538,8 +549,11 @@ func _request_air_slot() -> bool:
 	if dir:
 		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_AIR_SCOUT, true, false, false, 2, "hunter_air_run")
 		_has_air_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
 		return granted
+
 	_has_air_slot = true
+	debug_last_blocked_reason = "active_no_director"
 	return true
 
 func _release_air_slot() -> void:

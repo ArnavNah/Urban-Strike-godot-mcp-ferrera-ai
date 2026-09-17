@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://dpb5j4gv8pkrj" path="res://assets/Models/GLB format/building-f.glb" id="1_bsoif"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_n2ba4"]
-size = Vector3(22.38, 28.88, 16)
+size = Vector3(22.38, 28.88, 20.48)
 
 [node name="BuildingMediumB" type="StaticBody3D" unique_id=1022443424]
 collision_mask = 0
@@ -14,7 +14,7 @@ collision_mask = 0
 transform = Transform3D(12.5, 0, 0, 0, 15, 0, 0, 0, 16, 5.665, 0, -3.175)
 
 [node name="CollisionCommercialModel" type="CollisionShape3D" parent="." unique_id=1520696160]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.44, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.44, 0.89)
 shape = SubResource("BoxShape3D_n2ba4")
 
 [node name="RooftopDefensePoint" type="Marker3D" parent="." unique_id=1998961394]

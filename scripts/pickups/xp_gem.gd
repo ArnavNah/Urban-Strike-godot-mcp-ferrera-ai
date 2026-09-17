@@ -14,6 +14,8 @@ enum State {
 @export var max_magnet_speed: float = 95.0
 @export var magnet_accel: float = 250.0
 @export var collection_radius: float = 2.8
+@export var collection_radius_xz: float = 3.5
+@export var collection_height: float = 4.0
 
 var current_state: State = State.IDLE
 var _target_player: Node3D = null
@@ -79,9 +81,23 @@ func _ready() -> void:
 	_base_y = global_position.y
 	_bob_timer = randf() * TAU
 	_apply_visual_style()
+
+	# Reparent safeguard: ensure pickup does not unload prematurely if placed inside a streaming city chunk
+	if not is_pooled:
+		_ensure_persistent_parent()
+
 	# Godot enables script callbacks on tree entry after pre-tree deactivate().
 	set_physics_process(is_active)
 	set_process(false)
+
+func _ensure_persistent_parent() -> void:
+	var p := get_parent()
+	while p:
+		if p.is_in_group("city_chunks"):
+			var root_scene := get_tree().current_scene if get_tree().current_scene else get_tree().root
+			reparent.call_deferred(root_scene, true)
+			break
+		p = p.get_parent()
 
 func activate(pos: Vector3, val: int) -> void:
 	if _collection_tween:
@@ -127,6 +143,74 @@ func _apply_visual_style() -> void:
 	else:
 		mesh.material_override = _mat_emerald
 
+## Explicit shared collection contract: checks whether player is eligible to collect
+func can_collect(player: Node3D) -> bool:
+	if _is_collected or not is_active:
+		return false
+	if not is_instance_valid(player) or player.is_queued_for_deletion():
+		return false
+	if "is_alive" in player and not player.is_alive:
+		return false
+	var mgr: UpgradeManager = UpgradeManager.instance
+	if not mgr and is_inside_tree():
+		mgr = get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
+	return mgr != null and mgr.has_method("add_xp")
+
+## Atomic collection execution
+func collect(player: Node3D = null) -> bool:
+	if _is_collected or not is_active:
+		return false
+	var target: Node3D = player if is_instance_valid(player) else _target_player
+	if not is_instance_valid(target) and is_inside_tree():
+		target = get_tree().get_first_node_in_group("player") as Node3D
+	if not can_collect(target):
+		return false
+
+	_is_collected = true
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+
+	var mgr: UpgradeManager = UpgradeManager.instance
+	if not mgr and is_inside_tree():
+		mgr = get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
+	if mgr and mgr.has_method("add_xp"):
+		mgr.add_xp(xp_value)
+
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("xp_collected"):
+		eb.emit_signal("xp_collected", xp_value)
+
+	_play_collection_fx()
+	return true
+
+## Backward-compatible collection hook
+func _collect() -> void:
+	collect(_target_player)
+
+## Backward-compatible test and caller hook
+func _try_collect(player: PlayerHelicopter) -> bool:
+	return collect(player)
+
+func _play_collection_fx() -> void:
+	if is_pooled:
+		if mesh and is_inside_tree():
+			var tw := create_tween()
+			_collection_tween = tw
+			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
+			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
+			tw.tween_callback(deactivate)
+		else:
+			deactivate()
+	else:
+		if mesh and is_inside_tree():
+			var tw := create_tween()
+			_collection_tween = tw
+			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
+			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
+			tw.tween_callback(queue_free)
+		else:
+			queue_free()
+
 ## Primary survivor magnet activation
 func magnetize_to(player: Node3D) -> void:
 	if not is_instance_valid(player) or _is_collected or not is_active:
@@ -168,22 +252,33 @@ func _physics_process(delta: float) -> void:
 		rotate_y(3.0 * delta)
 		_bob_timer += delta * 3.5
 		position.y = _base_y + sin(_bob_timer) * 0.15
+
+		# Direct 3D proximity check when idle (e.g. low-flying helicopter or gem placed on rooftop at player altitude)
+		var active_player: Node3D = _target_player
+		if not is_instance_valid(active_player) and is_inside_tree():
+			active_player = get_tree().get_first_node_in_group("player") as Node3D
+		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
+			var to_player := active_player.global_position - global_position
+			if to_player.length() <= collection_radius:
+				collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with full relative velocity feed-forward
 	var target_pos := _get_target_pos()
 	var to_target := target_pos - global_position
 	var dist := to_target.length()
+	var flat_dist := Vector2(to_target.x, to_target.z).length()
 
-	# Direct volume entry check
-	if dist <= collection_radius:
-		_collect()
+	# Cylinder & distance reach entry check
+	if dist <= collection_radius or (flat_dist <= collection_radius_xz and absf(to_target.y) <= collection_height):
+		collect(_target_player)
 		return
 
-	# Rapid smooth acceleration toward max magnet speed
-	_current_speed = move_toward(_current_speed, max_magnet_speed, magnet_accel * delta)
-	var dir := to_target / dist if dist > 0.0001 else Vector3.UP
+	# Rapid smooth acceleration toward max magnet speed (scales up if player speed exceeds normal bounds)
 	var player_vel: Vector3 = _target_player.velocity if ("velocity" in _target_player) else Vector3.ZERO
+	var effective_max_speed := maxf(max_magnet_speed, player_vel.length() + 45.0)
+	_current_speed = move_toward(_current_speed, effective_max_speed, magnet_accel * delta)
+	var dir := to_target / dist if dist > 0.0001 else Vector3.UP
 
 	# Relative continuous sweep: In the moving player's frame of reference,
 	# the relative step is dir * (_current_speed * delta).
@@ -200,8 +295,8 @@ func _physics_process(delta: float) -> void:
 		var closest_rel := rel_p0 + seg * t
 		closest_dist = closest_rel.length()
 
-	if closest_dist <= collection_radius:
-		_collect()
+	if closest_dist <= collection_radius or (Vector2(rel_p1.x, rel_p1.z).length() <= collection_radius_xz and absf(rel_p1.y) <= collection_height):
+		collect(_target_player)
 		return
 
 	# Step world position with relative approach plus player movement feed-forward
@@ -214,41 +309,6 @@ func _physics_process(delta: float) -> void:
 		var to_look := dir.normalized()
 		if absf(to_look.y) < 0.92 and to_look.length_squared() > 0.01:
 			mesh.look_at(mesh.global_position + to_look, Vector3.UP)
-
-func _collect() -> void:
-	if _is_collected:
-		return
-	var mgr: UpgradeManager = UpgradeManager.instance
-	if not mgr:
-		mgr = get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
-	if not mgr or not mgr.has_method("add_xp"):
-		return # Retain XP if progression manager is not yet active
-	_is_collected = true
-	set_deferred("monitoring", false)
-	set_deferred("monitorable", false)
-	mgr.add_xp(xp_value)
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("xp_collected"):
-		eb.emit_signal("xp_collected", xp_value)
-
-	if is_pooled:
-		if mesh and is_inside_tree():
-			var tw := create_tween()
-			_collection_tween = tw
-			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
-			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
-			tw.tween_callback(deactivate)
-		else:
-			deactivate()
-	else:
-		if mesh and is_inside_tree():
-			var tw := create_tween()
-			_collection_tween = tw
-			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
-			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
-			tw.tween_callback(queue_free)
-		else:
-			queue_free()
 
 ## Aggregates excessive idle XP gems within proximity, conserving total value while capping entities.
 static func aggregate_excess_gems(tree: SceneTree, max_count: int = 50) -> int:

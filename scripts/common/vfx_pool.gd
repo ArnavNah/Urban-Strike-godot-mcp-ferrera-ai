@@ -108,7 +108,7 @@ func _init_pools() -> void:
 			add_child(ex)
 			_explosion_pool.append(ex)
 
-func spawn_muzzle_flash(pos: Vector3) -> Node3D:
+func spawn_muzzle_flash(pos: Vector3, dir: Vector3 = Vector3.ZERO, is_enemy: bool = false) -> Node3D:
 	if not _allow_effect(pos, _flash_pool, max_active_flashes):
 		return null
 	var count: int = _flash_pool.size()
@@ -121,17 +121,23 @@ func spawn_muzzle_flash(pos: Vector3) -> Node3D:
 		if not bool(item.get("is_active")):
 			_flash_idx = (idx + 1) % count
 			item.global_position = pos
-			item.call("play")
+			if item.has_method("play_directional"):
+				item.call("play_directional", dir, is_enemy)
+			else:
+				item.call("play")
 			return item
 
 	# Recycle oldest
 	var oldest: Node3D = _flash_pool[_flash_idx]
 	_flash_idx = (_flash_idx + 1) % count
 	oldest.global_position = pos
-	oldest.call("play")
+	if oldest.has_method("play_directional"):
+		oldest.call("play_directional", dir, is_enemy)
+	else:
+		oldest.call("play")
 	return oldest
 
-func spawn_sparks(pos: Vector3) -> Node3D:
+func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = false) -> Node3D:
 	if not _allow_effect(pos, _spark_pool, max_active_sparks):
 		return null
 	var count: int = _spark_pool.size()
@@ -144,13 +150,19 @@ func spawn_sparks(pos: Vector3) -> Node3D:
 		if not bool(item.get("is_active")):
 			_spark_idx = (idx + 1) % count
 			item.global_position = pos
-			item.call("play")
+			if item.has_method("play_impact"):
+				item.call("play_impact", normal, is_armor)
+			else:
+				item.call("play")
 			return item
 
 	var oldest: Node3D = _spark_pool[_spark_idx]
 	_spark_idx = (_spark_idx + 1) % count
 	oldest.global_position = pos
-	oldest.call("play")
+	if oldest.has_method("play_impact"):
+		oldest.call("play_impact", normal, is_armor)
+	else:
+		oldest.call("play")
 	return oldest
 
 func spawn_explosion(pos: Vector3, scale_mult: float = 1.0) -> Node3D:

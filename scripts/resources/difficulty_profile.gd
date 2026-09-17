@@ -73,7 +73,7 @@ static func create_low_pressure_survivors_profile() -> Resource:
 
 	var targets: Array[Resource] = []
 
-	# Wave 1: Visual 8-12, node cap 8, ~90% fodder, 10% light shooters. No heavy/special/air.
+	# Wave 1: Visual 8-12, node cap 8, ~88% fodder, 10% light shooters. Light air scout unlocks after 20s.
 	var w1: Resource = WavePopulationTargetClass.new()
 	w1.wave_number = 1
 	w1.duration = 45.0
@@ -81,13 +81,14 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w1.visual_crowd_min = 8
 	w1.visual_crowd_max = 12
 	w1.node_cap = 8
-	w1.composition_weights = {"fodder": 0.90, "light_shooter": 0.10}
-	w1.allowed_roles = ["fodder", "light_shooter"]
+	w1.composition_weights = {"fodder": 0.88, "light_shooter": 0.10, "air_scout": 0.02}
+	w1.allowed_roles = ["fodder", "light_shooter", "air_scout"]
+	w1.max_air = 2
 	w1.spawn_interval_min = 1.4
 	w1.spawn_interval_max = 2.4
 	targets.append(w1)
 
-	# Wave 2: Visual 12-16, node cap 10, ~85% fodder, 15% light shooters.
+	# Wave 2: Visual 12-16, node cap 10, ~80% fodder, 14% light shooters.
 	var w2: Resource = WavePopulationTargetClass.new()
 	w2.wave_number = 2
 	w2.duration = 45.0
@@ -95,13 +96,14 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w2.visual_crowd_min = 12
 	w2.visual_crowd_max = 16
 	w2.node_cap = 10
-	w2.composition_weights = {"fodder": 0.85, "light_shooter": 0.15}
-	w2.allowed_roles = ["fodder", "light_shooter"]
+	w2.composition_weights = {"fodder": 0.80, "light_shooter": 0.14, "air_scout": 0.04, "air_raider": 0.02}
+	w2.allowed_roles = ["fodder", "light_shooter", "air_scout", "air_raider"]
+	w2.max_air = 2
 	w2.spawn_interval_min = 1.4
 	w2.spawn_interval_max = 2.4
 	targets.append(w2)
 
-	# Wave 3: Visual 16-22, node cap 12, ~75% fodder, 20% light shooters, 5% armored; max 1 medium armored.
+	# Wave 3: Visual 16-22, node cap 12, ~70% fodder, 18% light shooters, 5% armored; max 1 medium armored.
 	var w3: Resource = WavePopulationTargetClass.new()
 	w3.wave_number = 3
 	w3.duration = 45.0
@@ -109,24 +111,26 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w3.visual_crowd_min = 16
 	w3.visual_crowd_max = 22
 	w3.node_cap = 12
-	w3.composition_weights = {"fodder": 0.75, "light_shooter": 0.20, "armored": 0.05}
-	w3.allowed_roles = ["fodder", "light_shooter", "armored"]
+	w3.composition_weights = {"fodder": 0.70, "light_shooter": 0.18, "armored": 0.05, "air_scout": 0.04, "air_raider": 0.03}
+	w3.allowed_roles = ["fodder", "light_shooter", "armored", "air_scout", "air_raider", "air_jammer"]
 	w3.max_medium_armored = 1
+	w3.max_air = 3
 	w3.spawn_interval_min = 1.4
 	w3.spawn_interval_max = 2.4
 	targets.append(w3)
 
-	# Wave 4: Visual 20-26, node cap 14, ~70% fodder, 20% light shooters, 10% armored; max 1 heavy.
+	# Wave 4: Visual 20-26, node cap 14; heavy armor + heavy gunship/MiG passes unlock.
 	var w4: Resource = WavePopulationTargetClass.new()
 	w4.wave_number = 4
 	w4.duration = 45.0
-	w4.announcement = "WAVE 4 // HEAVY ARMOR CONVOY INBOUND"
+	w4.announcement = "WAVE 4 // HEAVY ARMOR & AIR STRIKES INBOUND"
 	w4.visual_crowd_min = 20
 	w4.visual_crowd_max = 26
 	w4.node_cap = 14
-	w4.composition_weights = {"fodder": 0.70, "light_shooter": 0.20, "armored": 0.10}
-	w4.allowed_roles = ["fodder", "light_shooter", "armored", "heavy"]
+	w4.composition_weights = {"fodder": 0.65, "light_shooter": 0.18, "armored": 0.10, "air_scout": 0.04, "air_raider": 0.03}
+	w4.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "air_scout", "air_raider", "air_gunship", "air_heavy", "mig_striker"]
 	w4.max_heavy = 1
+	w4.max_air = 3
 	w4.spawn_interval_min = 1.1
 	w4.spawn_interval_max = 2.0
 	targets.append(w4)
@@ -140,14 +144,15 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w5.visual_crowd_max = 30
 	w5.node_cap = 16
 	w5.composition_weights = {"fodder": 0.65, "light_shooter": 0.20, "armored": 0.10, "anti_air": 0.025, "mortar": 0.025}
-	w5.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar"]
+	w5.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_heavy", "mig_striker"]
 	w5.max_sam = 1
 	w5.max_mortar = 1
+	w5.max_air = 3
 	w5.spawn_interval_min = 1.1
 	w5.spawn_interval_max = 2.0
 	targets.append(w5)
 
-	# Wave 6: Visual 24-32, node cap 17; air enemies introduced gradually (first enters alone/staggered).
+	# Wave 6: Visual 24-32, node cap 17; combined air & ground arms.
 	var w6: Resource = WavePopulationTargetClass.new()
 	w6.wave_number = 6
 	w6.duration = 45.0
@@ -155,9 +160,9 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w6.visual_crowd_min = 24
 	w6.visual_crowd_max = 32
 	w6.node_cap = 17
-	w6.composition_weights = {"fodder": 0.60, "light_shooter": 0.18, "armored": 0.10, "air_scout": 0.12}
-	w6.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider"]
-	w6.max_air = 2
+	w6.composition_weights = {"fodder": 0.58, "light_shooter": 0.18, "armored": 0.10, "air_scout": 0.08, "air_raider": 0.06}
+	w6.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_heavy", "mig_striker"]
+	w6.max_air = 4
 	w6.spawn_interval_min = 1.1
 	w6.spawn_interval_max = 2.0
 	targets.append(w6)
@@ -170,9 +175,9 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w7.visual_crowd_min = 26
 	w7.visual_crowd_max = 34
 	w7.node_cap = 18
-	w7.composition_weights = {"fodder": 0.55, "light_shooter": 0.18, "armored": 0.12, "air_scout": 0.10, "air_raider": 0.05}
-	w7.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_transport"]
-	w7.max_air = 3
+	w7.composition_weights = {"fodder": 0.55, "light_shooter": 0.18, "armored": 0.12, "air_scout": 0.08, "air_raider": 0.05, "air_gunship": 0.02}
+	w7.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_transport", "air_gunship", "air_heavy", "mig_striker"]
+	w7.max_air = 4
 	w7.spawn_interval_min = 0.9
 	w7.spawn_interval_max = 1.7
 	targets.append(w7)
@@ -185,8 +190,8 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w8.visual_crowd_min = 28
 	w8.visual_crowd_max = 36
 	w8.node_cap = 19
-	w8.composition_weights = {"fodder": 0.50, "light_shooter": 0.18, "armored": 0.12, "heavy": 0.05, "air_scout": 0.08, "air_raider": 0.05, "air_gunship": 0.02}
-	w8.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer"]
+	w8.composition_weights = {"fodder": 0.50, "light_shooter": 0.18, "armored": 0.12, "heavy": 0.05, "air_scout": 0.06, "air_raider": 0.05, "air_gunship": 0.04}
+	w8.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer", "air_heavy", "mig_striker"]
 	w8.max_heavy = 2
 	w8.max_air = 4
 	w8.spawn_interval_min = 0.9
@@ -201,8 +206,8 @@ static func create_low_pressure_survivors_profile() -> Resource:
 	w9.visual_crowd_min = 30
 	w9.visual_crowd_max = 40
 	w9.node_cap = 20
-	w9.composition_weights = {"fodder": 0.45, "light_shooter": 0.18, "armored": 0.14, "heavy": 0.06, "air_scout": 0.08, "air_raider": 0.05, "air_gunship": 0.04}
-	w9.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer", "air_ace"]
+	w9.composition_weights = {"fodder": 0.45, "light_shooter": 0.18, "armored": 0.14, "heavy": 0.06, "air_scout": 0.06, "air_raider": 0.05, "air_gunship": 0.06}
+	w9.allowed_roles = ["fodder", "light_shooter", "armored", "heavy", "anti_air", "mortar", "air_scout", "air_raider", "air_gunship", "air_jammer", "air_ace", "air_heavy", "mig_striker"]
 	w9.max_heavy = 2
 	w9.max_air = 5
 	w9.spawn_interval_min = 0.9

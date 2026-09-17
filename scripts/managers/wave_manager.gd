@@ -152,6 +152,11 @@ func _on_countdown_timer_timeout() -> void:
 func is_deployment_active() -> bool:
 	return current_state == State.DEPLOYMENT_COUNTDOWN
 
+func is_wave_clearing() -> bool:
+	if spawn_director and spawn_director.is_continuous_mode:
+		return false
+	return _remaining_budget <= 0 and _active_enemies.size() > 0
+
 func start_wave(index: int) -> void:
 	current_wave_index = index
 	current_state = State.ACTIVE_WAVE
@@ -167,10 +172,9 @@ func start_wave(index: int) -> void:
 		spawn_timer.wait_time = _current_wave_def.spawn_interval
 
 		if CombatDirector.instance:
-			CombatDirector.instance.set_wave_limits(
-				_current_wave_def.ground_attack_slots,
-				_current_wave_def.air_attack_slots
-			)
+			var g_slots: int = maxi(2, _current_wave_def.ground_attack_slots)
+			var a_slots: int = maxi(1, _current_wave_def.air_attack_slots)
+			CombatDirector.instance.set_wave_limits(g_slots, a_slots)
 
 		if EventBus:
 			EventBus.wave_started.emit(current_wave_index, _current_wave_def.announcement)
@@ -286,6 +290,33 @@ func _try_spawn_enemy() -> void:
 	var spawn_pos := spawn_marker.global_position
 	if chosen.category == WaveEnemyEntry.EnemyCategory.AIR or chosen.category == WaveEnemyEntry.EnemyCategory.BOSS:
 		spawn_pos.y = clampf(p_y, 8.0, 22.0)
+	elif enemy is GroundTurret:
+		var streamer := get_tree().get_first_node_in_group("city_streamer")
+		var placed := false
+		if streamer and streamer.has_method("get_rooftop_sockets_in_radius"):
+			var p_pos := player.global_position if player else Vector3.ZERO
+			var r_socks: Array[Dictionary] = streamer.get_rooftop_sockets_in_radius(p_pos, 30.0, 95.0, true)
+			if not r_socks.is_empty():
+				var sock: Dictionary = r_socks.pick_random()
+				var sid: String = sock.get("socket_id", "")
+				var spos: Vector3 = sock.get("world_position", Vector3.ZERO)
+				if streamer.has_method("occupy_rooftop_socket"):
+					streamer.occupy_rooftop_socket(sid)
+				if streamer.has_method("set_socket_occupant"):
+					streamer.set_socket_occupant(sid, enemy)
+				if "reserved_socket_id" in enemy:
+					enemy.reserved_socket_id = sid
+				if "chunk_coord" in enemy:
+					enemy.chunk_coord = sock.get("chunk_coord", Vector2i.ZERO)
+				spawn_pos = spos
+				var to_p := (p_pos - spos)
+				to_p.y = 0.0
+				if to_p.length_squared() > 0.1:
+					enemy.rotation.y = atan2(-to_p.x, -to_p.z)
+				placed = true
+		if not placed:
+			enemy.queue_free()
+			return
 	else:
 		spawn_pos.y = 0.0
 
@@ -295,7 +326,7 @@ func _try_spawn_enemy() -> void:
 
 	# Ground spawn warning telegraph
 	var tele_scene: PackedScene = preload("res://scenes/vfx/spawn_telegraph_fx.tscn")
-	if tele_scene and chosen.category != WaveEnemyEntry.EnemyCategory.AIR and chosen.category != WaveEnemyEntry.EnemyCategory.BOSS:
+	if tele_scene and chosen.category != WaveEnemyEntry.EnemyCategory.AIR and chosen.category != WaveEnemyEntry.EnemyCategory.BOSS and not (enemy is GroundTurret):
 		var tele := tele_scene.instantiate() as Node3D
 		if tele:
 			container.add_child(tele)

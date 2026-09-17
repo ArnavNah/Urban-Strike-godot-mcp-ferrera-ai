@@ -58,6 +58,7 @@ var visual_pitch: float:
 var acceleration_stat: float = 42.0
 
 var current_health: float = 100.0
+var armor_reduction: float = 0.0 # Damage reduction percentage (capped at 60%)
 var repair_drone_enabled: bool = false
 var repair_rate: float = 4.0
 var _time_since_damage: float = 0.0
@@ -153,13 +154,15 @@ func _ready() -> void:
 	if xp_collect_area:
 		var col_shape := xp_collect_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if col_shape and col_shape.shape is CylinderShape3D:
-			(col_shape.shape as CylinderShape3D).height = 4.0
+			(col_shape.shape as CylinderShape3D).height = 40.0
 			(col_shape.shape as CylinderShape3D).radius = 3.5
 		if not xp_collect_area.area_entered.is_connected(_on_xp_collect_area_entered):
 			xp_collect_area.area_entered.connect(_on_xp_collect_area_entered)
 
 func _on_xp_magnet_area_entered(area: Area3D) -> void:
-	if not is_instance_valid(area):
+	if not is_instance_valid(area) or area.is_queued_for_deletion():
+		return
+	if area.has_method("can_collect") and not area.can_collect(self):
 		return
 	if area.has_method("magnetize_to"):
 		area.magnetize_to(self)
@@ -169,27 +172,26 @@ func _on_xp_magnet_area_entered(area: Area3D) -> void:
 func _on_xp_collect_area_entered(area: Area3D) -> void:
 	if not is_instance_valid(area) or area.is_queued_for_deletion():
 		return
-	# State guard: Gems must first be attracted/magnetized and travel to the helicopter cabin.
-	# Idle ground gems must NEVER be collected directly through vertical area overlap.
-	if "current_state" in area:
-		if area.get("current_state") != 1: # State.MAGNETIZED == 1, IDLE == 0
-			return
-
-	# Distance validation: verify true 3D Euclidean distance to tracking point
-	var tracking_pos := global_position + Vector3(0.0, 1.2, 0.0)
-	if has_node("StableTrackingPoint"):
-		var marker: Node3D = get_node("StableTrackingPoint") as Node3D
-		if marker:
-			tracking_pos = marker.global_position
-	var dist_3d := area.global_position.distance_to(tracking_pos)
-	var max_allowed := 3.8
-	if "collection_radius" in area:
-		max_allowed = maxf(max_allowed, float(area.get("collection_radius")) + 0.8)
-
-	if dist_3d > max_allowed:
+	if area.has_method("can_collect") and not area.can_collect(self):
 		return
 
-	if area.has_method("_try_collect"):
+	# State guard: Items with a state machine must first be attracted/magnetized and travel to the helicopter cabin,
+	# unless they are already directly within cabin reach.
+	if "current_state" in area:
+		var state = area.get("current_state")
+		if state == 0: # State.IDLE == 0
+			var tracking_pos := global_position + Vector3(0.0, 1.2, 0.0)
+			if has_node("StableTrackingPoint"):
+				var marker: Node3D = get_node("StableTrackingPoint") as Node3D
+				if marker:
+					tracking_pos = marker.global_position
+			var d := area.global_position.distance_to(tracking_pos)
+			if d > 3.8:
+				return
+
+	if area.has_method("collect"):
+		area.collect(self)
+	elif area.has_method("_try_collect"):
 		area.call("_try_collect", self)
 	elif area.has_method("_collect"):
 		area._collect()
@@ -197,9 +199,11 @@ func _on_xp_collect_area_entered(area: Area3D) -> void:
 func _apply_hangar_upgrades() -> void:
 	var data := SaveSystem.load_data()
 	var upgrades: Dictionary = data.get("upgrades", {})
-	var extra_hp := int(upgrades.get("rotor_armor", 0)) * 20.0
+	var armor_lvl := int(upgrades.get("rotor_armor", 0))
+	var extra_hp := float(armor_lvl) * 20.0
 	max_health += extra_hp
 	current_health = max_health
+	armor_reduction = clampf(float(armor_lvl) * 0.05, 0.0, 0.25)
 
 	var extra_magnet := int(upgrades.get("magnet_radius", 0)) * 6.0
 	magnet_radius += extra_magnet
@@ -207,6 +211,17 @@ func _apply_hangar_upgrades() -> void:
 		var col := xp_magnet_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if col and col.shape is CylinderShape3D:
 			(col.shape as CylinderShape3D).radius = magnet_radius
+
+func heal(amount: float) -> void:
+	if not is_alive or _is_dying or amount <= 0.0:
+		return
+	current_health = clampf(current_health + amount, 0.0, max_health)
+	emit_signal("health_changed", current_health, max_health)
+	if EventBus:
+		EventBus.player_health_changed.emit(current_health, max_health)
+
+func add_armor_reduction(amount: float) -> void:
+	armor_reduction = clampf(armor_reduction + amount, 0.0, 0.60)
 
 func exp_weight(response: float, delta: float) -> float:
 	return 1.0 - exp(-response * delta)
@@ -570,41 +585,35 @@ func _handle_magnet() -> void:
 		for area in areas:
 			if not is_instance_valid(area) or area.is_queued_for_deletion():
 				continue
+			if area.has_method("can_collect") and not area.can_collect(self):
+				continue
 			if area.has_method("magnetize_to"):
 				area.magnetize_to(self)
 			elif area.has_method("set_magnet_target"):
 				area.set_magnet_target(self)
 
-	# Throttled direct fallback (4-5 times per sec instead of 60) prevents missing gems while eliminating 92% of full-tree group scans
+	# Throttled direct fallback (4-5 times per sec instead of 60) prevents missing drops while eliminating 92% of full-tree scans
 	_magnet_fallback_timer -= get_physics_process_delta_time()
 	if _magnet_fallback_timer <= 0.0:
 		_magnet_fallback_timer = 0.22
 		var rad_sq := magnet_radius * magnet_radius
-		var gems := get_tree().get_nodes_in_group("xp_gems")
-		for g in gems:
-			if not is_instance_valid(g) or g.is_queued_for_deletion():
+		var pickups := get_tree().get_nodes_in_group("pickups")
+		for p in pickups:
+			if not is_instance_valid(p) or p.is_queued_for_deletion():
 				continue
-			if "is_active" in g and not g.is_active:
+			if "is_active" in p and not p.is_active:
 				continue
-			var offset: Vector3 = g.global_position - global_position
+			if "_is_collected" in p and p._is_collected:
+				continue
+			var offset: Vector3 = p.global_position - global_position
 			var flat_offset := Vector2(offset.x, offset.z)
 			if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
-				if g.has_method("magnetize_to"):
-					g.magnetize_to(self)
-				elif g.has_method("set_magnet_target"):
-					g.set_magnet_target(self)
-
-		var crates := get_tree().get_nodes_in_group("salvage_crates")
-		for c in crates:
-			if not is_instance_valid(c) or c.is_queued_for_deletion():
-				continue
-			var offset: Vector3 = c.global_position - global_position
-			var flat_offset := Vector2(offset.x, offset.z)
-			if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
-				if c.has_method("magnetize_to"):
-					c.magnetize_to(self)
-				elif c.has_method("set_magnet_target"):
-					c.set_magnet_target(self)
+				if p.has_method("can_collect") and not p.can_collect(self):
+					continue
+				if p.has_method("magnetize_to"):
+					p.magnetize_to(self)
+				elif p.has_method("set_magnet_target"):
+					p.set_magnet_target(self)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
@@ -627,6 +636,10 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	var wm := get_tree().get_first_node_in_group("wave_manager")
 	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
 		return
+
+	# Armor damage reduction (capped strictly at 60%)
+	var effective_reduction := clampf(armor_reduction, 0.0, 0.60)
+	amount *= (1.0 - effective_reduction)
 
 	# Zero damage and invalid/friendly hits do not consume protection or trigger i-frames
 	if amount <= 0.0:
@@ -651,6 +664,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_flash_hit()
 		if EventBus and EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.15)
+		if EventBus and EventBus.has_signal("player_damaged_directional"):
+			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
+			EventBus.player_damaged_directional.emit(0.0, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, true)
 		return
 
 	# Emergency Aegis Countermeasure: Trigger when falling below 35% hull
@@ -676,6 +692,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	emit_signal("health_changed", current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
+		if EventBus.has_signal("player_damaged_directional"):
+			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
+			EventBus.player_damaged_directional.emit(amount, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, false)
 		if EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.25)
 

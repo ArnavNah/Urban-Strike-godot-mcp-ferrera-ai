@@ -32,6 +32,17 @@ extends Control
 @onready var target_reticle: Control = %TargetReticle
 @onready var damage_vignette: ColorRect = %DamageVignette
 
+class DamageCue:
+	var dir_2d: Vector2 = Vector2.UP
+	var timer: float = 0.45
+	var max_time: float = 0.45
+	var is_shield: bool = false
+
+var _damage_cues: Array[DamageCue] = []
+var upgrade_banner: PanelContainer = null
+var upgrade_banner_label: Label = null
+var _upgrade_banner_timer: float = 0.0
+
 var _player: Node3D = null
 var _current_target: Node3D = null
 var _is_manual_aim: bool = false
@@ -64,6 +75,16 @@ var _last_alt_tenth: int = -9999
 var _last_mission_dist_m: int = -999
 
 func _ready() -> void:
+	if not damage_vignette:
+		damage_vignette = ColorRect.new()
+		damage_vignette.name = "DamageVignette"
+		damage_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		damage_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		damage_vignette.color = Color(0.88, 0.12, 0.12, 0.0)
+		add_child(damage_vignette)
+		move_child(damage_vignette, 0)
+
+	_setup_upgrade_banner()
 	_damage_flash_enabled = bool(SaveSystem.get_setting("damage_flash_enabled", true))
 	_damage_flash_intensity = float(SaveSystem.get_setting("damage_flash_intensity", 1.0))
 	_reduced_flashing = bool(SaveSystem.get_setting("reduced_flashing", false))
@@ -141,6 +162,10 @@ func _ready() -> void:
 			eb.mission_completed.connect(_on_mission_completed)
 		if eb.has_signal("mission_failed"):
 			eb.mission_failed.connect(_on_mission_failed)
+		if eb.has_signal("player_damaged_directional"):
+			eb.player_damaged_directional.connect(_on_player_damaged_directional)
+		if eb.has_signal("upgrade_applied"):
+			eb.upgrade_applied.connect(_on_upgrade_applied)
 		if eb.has_signal("setting_changed"):
 			eb.setting_changed.connect(_on_setting_changed)
 
@@ -154,6 +179,21 @@ func _ready() -> void:
 	_update_missile_status_display()
 
 func _process(delta: float) -> void:
+	if _upgrade_banner_timer > 0.0:
+		_upgrade_banner_timer -= delta
+		if _upgrade_banner_timer <= 0.0 and upgrade_banner:
+			upgrade_banner.visible = false
+		elif _upgrade_banner_timer < 0.4 and upgrade_banner:
+			upgrade_banner.modulate.a = _upgrade_banner_timer / 0.4
+
+	if not _damage_cues.is_empty():
+		var active_cues: Array[DamageCue] = []
+		for c in _damage_cues:
+			c.timer -= delta
+			if c.timer > 0.0:
+				active_cues.append(c)
+		_damage_cues = active_cues
+
 	if _mission_banner_timer > 0.0:
 		_mission_banner_timer -= delta
 		if _mission_banner_timer <= 0.0 and mission_card:
@@ -302,6 +342,36 @@ func _draw() -> void:
 				draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), Color(0.02, 0.04, 0.06, 0.95), 3.0)
 			draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), obj_col, 2.0)
 
+	# Directional damage indicator arc wedges pointing toward damage sources
+	var cue_radius := 145.0
+	for cue in _damage_cues:
+		if not _damage_flash_enabled or _damage_flash_intensity <= 0.0:
+			continue
+		var alpha := clampf(cue.timer / maxf(cue.max_time, 0.01), 0.0, 1.0) * _damage_flash_intensity
+		if _reduced_flashing:
+			alpha = minf(alpha, 0.25)
+		var col := Color(0.2, 0.85, 1.0, alpha * 0.9) if cue.is_shield else Color(1.0, 0.22, 0.18, alpha * 0.9)
+		var base_angle := cue.dir_2d.angle()
+		var half_span := deg_to_rad(22.0)
+		var arc_pts: Array[Vector2] = []
+		var inner_pts: Array[Vector2] = []
+		var segments := 8
+		for i in range(segments + 1):
+			var a: float = base_angle - half_span + (float(i) / float(segments)) * (half_span * 2.0)
+			var dir := Vector2(cos(a), sin(a))
+			arc_pts.append(vp_center + dir * (cue_radius + 14.0))
+			inner_pts.append(vp_center + dir * cue_radius)
+		inner_pts.reverse()
+		var poly_pts := PackedVector2Array()
+		for p in arc_pts:
+			poly_pts.append(p)
+		for p in inner_pts:
+			poly_pts.append(p)
+		if _high_contrast_indicators:
+			var outline_pts := poly_pts.duplicate()
+			outline_pts.append(poly_pts[0])
+			draw_polyline(outline_pts, Color(0.02, 0.04, 0.06, alpha * 0.95), 2.5)
+		draw_colored_polygon(poly_pts, col)
 
 func _update_target_reticle(delta: float = 0.0) -> void:
 	if not target_reticle:
@@ -648,3 +718,90 @@ func _on_setting_changed(key: String, val: Variant) -> void:
 		"high_contrast_indicators":
 			_high_contrast_indicators = bool(val)
 			queue_redraw()
+
+func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, source_pos: Vector3, is_shield: bool) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if not cam or not is_instance_valid(_player):
+		return
+	var to_src := (source_pos - _player.global_position)
+	to_src.y = 0.0
+	if to_src.length_squared() < 0.01:
+		to_src = -_player.global_transform.basis.z
+		to_src.y = 0.0
+	to_src = to_src.normalized()
+
+	var cam_fwd := -cam.global_transform.basis.z
+	cam_fwd.y = 0.0
+	cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.01 else Vector3.FORWARD
+
+	var cam_right := cam.global_transform.basis.x
+	cam_right.y = 0.0
+	cam_right = cam_right.normalized() if cam_right.length_squared() > 0.01 else Vector3.RIGHT
+
+	var right_dot := cam_right.dot(to_src)
+	var fwd_dot := cam_fwd.dot(to_src)
+
+	var cue := DamageCue.new()
+	cue.dir_2d = Vector2(right_dot, -fwd_dot).normalized()
+	cue.is_shield = is_shield
+	cue.timer = 0.45
+	cue.max_time = 0.45
+	_damage_cues.append(cue)
+	queue_redraw()
+
+func _setup_upgrade_banner() -> void:
+	if upgrade_banner:
+		return
+	upgrade_banner = PanelContainer.new()
+	upgrade_banner.name = "UpgradeBanner"
+	upgrade_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	upgrade_banner.anchor_left = 0.5
+	upgrade_banner.anchor_right = 0.5
+	upgrade_banner.offset_left = -170.0
+	upgrade_banner.offset_right = 170.0
+	upgrade_banner.offset_top = 58.0
+	upgrade_banner.offset_bottom = 92.0
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.14, 0.16, 0.90)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.2, 0.95, 0.85, 0.8)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_right = 4
+	style.corner_radius_bottom_left = 4
+	style.content_margin_left = 14.0
+	style.content_margin_right = 14.0
+	style.content_margin_top = 4.0
+	style.content_margin_bottom = 4.0
+	upgrade_banner.add_theme_stylebox_override("panel", style)
+
+	upgrade_banner_label = Label.new()
+	upgrade_banner_label.name = "UpgradeBannerLabel"
+	upgrade_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	upgrade_banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	upgrade_banner_label.add_theme_font_size_override("font_size", 13)
+	upgrade_banner_label.modulate = Color(0.3, 1.0, 0.85)
+	upgrade_banner.add_child(upgrade_banner_label)
+
+	add_child(upgrade_banner)
+	upgrade_banner.visible = false
+
+func _on_upgrade_applied(upgrade_id: String) -> void:
+	if not upgrade_banner:
+		_setup_upgrade_banner()
+	var title := upgrade_id.capitalize()
+	var mgr := get_tree().get_first_node_in_group("upgrade_manager")
+	if mgr and "upgrade_database" in mgr:
+		var db: Dictionary = mgr.get("upgrade_database")
+		if db.has(upgrade_id):
+			title = str(db[upgrade_id].get("name", title))
+	if upgrade_banner_label:
+		upgrade_banner_label.text = "▲ UPGRADE INSTALLED: %s" % title.to_upper()
+	if upgrade_banner:
+		upgrade_banner.visible = true
+		upgrade_banner.modulate.a = 1.0
+	_upgrade_banner_timer = 2.2

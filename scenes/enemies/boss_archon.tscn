@@ -1,34 +1,11 @@
 [gd_scene format=3 uid="uid://b7n2v8k4m1rar"]
 
-[ext_resource type="Script" path="res://scripts/enemies/boss_archon.gd" id="1_archon"]
+[ext_resource type="Script" uid="uid://bo52ept1j4g12" path="res://scripts/enemies/boss_archon.gd" id="1_archon"]
+[ext_resource type="PackedScene" uid="uid://ckn2vv40x2gsb" path="res://assets/Enemies/Boss enemy/Propeller.glb" id="2_k0mpc"]
+[ext_resource type="PackedScene" uid="uid://dcv1wotw7mu08" path="res://assets/Enemies/Boss enemy/Body color.glb" id="3_h10ul"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Boss"]
 size = Vector3(4.5, 3.2, 8.8)
-
-[sub_resource type="StandardMaterial3D" id="Mat_BossHull"]
-albedo_color = Color(0.18, 0.2, 0.24, 1)
-metallic = 0.8
-roughness = 0.3
-
-[sub_resource type="BoxMesh" id="Mesh_BossBody"]
-material = SubResource("Mat_BossHull")
-size = Vector3(3.2, 2.0, 8.2)
-
-[sub_resource type="StandardMaterial3D" id="Mat_Rotors"]
-albedo_color = Color(0.1, 0.1, 0.12, 1)
-metallic = 0.9
-
-[sub_resource type="BoxMesh" id="Mesh_HeavyRotor"]
-material = SubResource("Mat_Rotors")
-size = Vector3(7.2, 0.06, 0.35)
-
-[sub_resource type="StandardMaterial3D" id="Mat_Wings"]
-albedo_color = Color(0.25, 0.28, 0.32, 1)
-metallic = 0.7
-
-[sub_resource type="BoxMesh" id="Mesh_Wings"]
-material = SubResource("Mat_Wings")
-size = Vector3(6.0, 0.25, 1.2)
 
 [sub_resource type="StandardMaterial3D" id="Mat_Gun"]
 albedo_color = Color(0.12, 0.12, 0.14, 1)
@@ -43,86 +20,68 @@ direction = Vector3(0, 0.6, 1)
 spread = 25.0
 initial_velocity_min = 3.0
 initial_velocity_max = 6.0
-gravity = Vector3(0, 1.0, 0)
+gravity = Vector3(0, 1, 0)
 scale_min = 0.4
-scale_max = 1.0
 
 [sub_resource type="StandardMaterial3D" id="Mat_Fire"]
 transparency = 1
 shading_mode = 0
-albedo_color = Color(1.0, 0.35, 0.05, 0.8)
+albedo_color = Color(1, 0.35, 0.05, 0.8)
 
 [sub_resource type="SphereMesh" id="Mesh_Fire"]
 material = SubResource("Mat_Fire")
 radius = 0.35
 height = 0.7
 
-[node name="BossArchon" type="CharacterBody3D" groups=["air_enemies", "bosses", "enemies"]]
+[node name="BossArchon" type="CharacterBody3D" unique_id=1480238495 groups=["air_enemies", "bosses", "enemies"]]
 collision_layer = 4
-collision_mask = 1
 script = ExtResource("1_archon")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1709206402]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("BoxShape3D_Boss")
 
-[node name="Visuals" type="Node3D" parent="."]
+[node name="Visuals" type="Node3D" parent="." unique_id=568607140]
 
-[node name="Hull" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-mesh = SubResource("Mesh_BossBody")
+[node name="FrontRotor" type="Node3D" parent="Visuals" unique_id=1106737047]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 1.445)
 
-[node name="Wings" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0.2)
-mesh = SubResource("Mesh_Wings")
+[node name="Propeller" parent="Visuals/FrontRotor" unique_id=1498605797 instance=ExtResource("2_k0mpc")]
+transform = Transform3D(8.5, 0, 0, 0, 8.5, 0, 0, 0, 8.5, 0, 0, 0)
 
-[node name="FrontRotor" type="Node3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, -2.6)
-
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/FrontRotor"]
-mesh = SubResource("Mesh_HeavyRotor")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/FrontRotor"]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
-mesh = SubResource("Mesh_HeavyRotor")
-
-[node name="RearRotor" type="Node3D" parent="Visuals"]
+[node name="RearRotor" type="Node3D" parent="Visuals" unique_id=33321640]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 2.6)
 
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/RearRotor"]
-mesh = SubResource("Mesh_HeavyRotor")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/RearRotor"]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
-mesh = SubResource("Mesh_HeavyRotor")
-
-[node name="ChinCannon" type="Node3D" parent="Visuals"]
+[node name="ChinCannon" type="Node3D" parent="Visuals" unique_id=835689851]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4, -3.8)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Visuals/ChinCannon"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Visuals/ChinCannon" unique_id=1284786378]
 mesh = SubResource("Mesh_ChinGun")
 
-[node name="Muzzle" type="Marker3D" parent="Visuals/ChinCannon"]
+[node name="Muzzle" type="Marker3D" parent="Visuals/ChinCannon" unique_id=1662393671]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.9)
 
-[node name="LeftEngineFire" type="GPUParticles3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 1.0, 1.5)
+[node name="LeftEngineFire" type="GPUParticles3D" parent="Visuals" unique_id=1535434540]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 1, 1.5)
 emitting = false
 amount = 28
 lifetime = 0.5
 process_material = SubResource("ParticleProcessMaterial_Fire")
 draw_pass_1 = SubResource("Mesh_Fire")
 
-[node name="RightEngineFire" type="GPUParticles3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 1.0, 1.5)
+[node name="RightEngineFire" type="GPUParticles3D" parent="Visuals" unique_id=1664318723]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 1, 1.5)
 emitting = false
 amount = 28
 lifetime = 0.5
 process_material = SubResource("ParticleProcessMaterial_Fire")
 draw_pass_1 = SubResource("Mesh_Fire")
 
-[node name="CoreLight" type="OmniLight3D" parent="Visuals"]
+[node name="CoreLight" type="OmniLight3D" parent="Visuals" unique_id=391601510]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -1.2)
 light_color = Color(0.2, 0.8, 1, 1)
 light_energy = 3.0
 omni_range = 8.0
+
+[node name="Model" parent="Visuals" unique_id=779537706 instance=ExtResource("3_h10ul")]
+transform = Transform3D(-3.715468e-07, 0, 8.5, 0, 8.5, 0, -8.5, 0, -3.715468e-07, 0, 0, 0)

@@ -8,6 +8,7 @@ extends CharacterBody3D
 enum State {
 	APPROACH,
 	ENGAGE,
+	TELEGRAPH,
 	ATTACK,
 	REPOSITION,
 	COOLDOWN
@@ -56,6 +57,8 @@ var _road_path: PackedVector3Array = PackedVector3Array()
 var _road_path_index: int = 0
 var _road_path_timer: float = 0.0
 var _stuck_sample_timer: float = 0.0
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
 
 @onready var los_ray: RayCast3D = get_node_or_null("LOSRayCast")
 
@@ -102,6 +105,8 @@ func _physics_process(delta: float) -> void:
 			return
 
 	var dist := global_position.distance_to(_player.global_position)
+	var flat_vec := Vector2(_player.global_position.x - global_position.x, _player.global_position.z - global_position.z)
+	var flat_dist := flat_vec.length()
 
 	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
 	_lod_frame_counter += 1
@@ -139,22 +144,24 @@ func _physics_process(delta: float) -> void:
 			_cached_los = _check_los()
 	var has_los := _cached_los
 
-	# If player moves far away, break out to APPROACH to follow across the city
-	if dist > threat_range * 1.15 and current_state != State.APPROACH and current_state != State.ATTACK:
+	# If player moves far away horizontally or vertically, break out to APPROACH to follow across the city
+	if (flat_dist > preferred_range * 1.6 or dist > 55.0) and current_state != State.APPROACH and current_state != State.ATTACK:
 		_release_slot()
 		_transition_to(State.APPROACH)
 
 	match current_state:
 		State.APPROACH:
-			_tick_approach(step_delta, dist, has_los)
+			_tick_approach(step_delta, flat_dist, dist, has_los)
 		State.ENGAGE:
-			_tick_engage(step_delta, dist, has_los)
+			_tick_engage(step_delta, flat_dist, dist, has_los)
+		State.TELEGRAPH:
+			_tick_telegraph(step_delta, has_los)
 		State.ATTACK:
 			_tick_attack(step_delta, has_los)
 		State.REPOSITION:
-			_tick_reposition(step_delta, dist, has_los)
+			_tick_reposition(step_delta, flat_dist, dist, has_los)
 		State.COOLDOWN:
-			_tick_cooldown(step_delta, dist, has_los)
+			_tick_cooldown(step_delta, flat_dist, dist, has_los)
 
 	# Lightweight ground separation steering to prevent clumping
 	_apply_separation()
@@ -172,7 +179,7 @@ func _physics_process(delta: float) -> void:
 		global_position.y = 0.0
 		velocity.y = 0.0
 
-func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
+func _tick_approach(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	if _is_recovering:
 		_recovery_timer -= delta
 		velocity.x = _reposition_dir.x * move_speed
@@ -218,7 +225,7 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 		if to_player.length_squared() > 0.01:
 			move_dir = to_player.normalized()
 
-	if _arming_timer <= 0.0 and dist <= preferred_range and has_los:
+	if _arming_timer <= 0.0 and flat_dist <= preferred_range and has_los and dist <= 50.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		_transition_to(State.ENGAGE)
@@ -259,7 +266,7 @@ func _tick_approach(delta: float, dist: float, has_los: bool) -> void:
 		if is_finite(target_yaw):
 			rotation.y = lerp_angle(rotation.y, target_yaw, 6.0 * delta)
 
-func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
+func _tick_engage(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 
@@ -271,22 +278,44 @@ func _tick_engage(delta: float, dist: float, has_los: bool) -> void:
 		if is_finite(target_yaw):
 			rotation.y = lerp_angle(rotation.y, target_yaw, 8.0 * delta)
 
-	if not has_los or dist > threat_range:
+	if not has_los or flat_dist > preferred_range * 1.4 or dist > 55.0:
 		_release_slot()
 		_transition_to(State.APPROACH)
 		return
 
-	# If too close, back up or strafe
-	if dist < 10.0:
+	# If too close horizontally, back up or strafe
+	if flat_dist < 6.0:
 		_transition_to(State.REPOSITION)
 		return
 
 	_state_timer -= delta
 	if _state_timer <= 0.0:
 		if _request_slot():
-			_transition_to(State.ATTACK)
+			_transition_to(State.TELEGRAPH)
 		else:
 			_state_timer = 0.25 # Poll slot again soon
+
+func _tick_telegraph(delta: float, has_los: bool) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+	if not has_los:
+		_is_telegraphing = false
+		_release_slot()
+		_transition_to(State.REPOSITION)
+		return
+
+	if is_instance_valid(_player):
+		var to_player := (_player.global_position - global_position)
+		to_player.y = 0.0
+		if to_player.length_squared() > 0.01:
+			var target_yaw := atan2(-to_player.x, -to_player.z)
+			rotation.y = lerp_angle(rotation.y, target_yaw, 10.0 * delta)
+
+	_state_timer -= delta
+	if _state_timer <= 0.0:
+		_is_telegraphing = false
+		_transition_to(State.ATTACK)
 
 func _tick_attack(delta: float, has_los: bool) -> void:
 	velocity.x = 0.0
@@ -306,7 +335,7 @@ func _tick_attack(delta: float, has_los: bool) -> void:
 			_release_slot()
 			_transition_to(State.REPOSITION)
 
-func _tick_reposition(delta: float, dist: float, has_los: bool) -> void:
+func _tick_reposition(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	_state_timer -= delta
 
 	velocity.x = _reposition_dir.x * (move_speed * 0.8)
@@ -319,12 +348,12 @@ func _tick_reposition(delta: float, dist: float, has_los: bool) -> void:
 	if _state_timer <= 0.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		if dist <= preferred_range and has_los:
+		if flat_dist <= preferred_range and has_los and dist <= 50.0:
 			_transition_to(State.COOLDOWN)
 		else:
 			_transition_to(State.APPROACH)
 
-func _tick_cooldown(delta: float, dist: float, has_los: bool) -> void:
+func _tick_cooldown(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 	_state_timer -= delta
@@ -337,7 +366,7 @@ func _tick_cooldown(delta: float, dist: float, has_los: bool) -> void:
 		rotation.y = lerp_angle(rotation.y, target_yaw, 5.0 * delta)
 
 	if _state_timer <= 0.0:
-		if dist <= threat_range and has_los:
+		if flat_dist <= preferred_range * 1.2 and has_los and dist <= 50.0:
 			_transition_to(State.ENGAGE)
 		else:
 			_transition_to(State.APPROACH)
@@ -347,18 +376,29 @@ func _transition_to(new_state: State) -> void:
 	match new_state:
 		State.APPROACH:
 			_state_timer = 0.0
+			_is_telegraphing = false
 		State.ENGAGE:
-			_state_timer = 0.25 # Short prep before requesting slot
-		State.ATTACK:
-			_shots_left = burst_count
-			_burst_timer = 0.0
+			_state_timer = 0.20 # Short prep before requesting slot
+			_is_telegraphing = false
+		State.TELEGRAPH:
+			_state_timer = 0.40 # Restrained 0.4s pre-burst tell
+			_is_telegraphing = true
 			if is_instance_valid(_player):
 				var origin := global_position + Vector3(0, 1.15, 0)
 				_snapshot_aim_dir = (_player.global_position - origin).normalized()
+		State.ATTACK:
+			_shots_left = burst_count
+			_burst_timer = 0.0
+			_is_telegraphing = false
+			if _snapshot_aim_dir.length_squared() < 0.01 and is_instance_valid(_player):
+				var origin := global_position + Vector3(0, 1.15, 0)
+				_snapshot_aim_dir = (_player.global_position - origin).normalized()
 		State.REPOSITION:
+			_is_telegraphing = false
 			_pick_reposition_dir()
 			_state_timer = randf_range(1.0, 1.6)
 		State.COOLDOWN:
+			_is_telegraphing = false
 			_state_timer = reload_time
 
 func _pick_reposition_dir() -> void:
@@ -521,11 +561,7 @@ func _check_los() -> bool:
 
 func _request_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	# Phase 10B: No silent offscreen attacks
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming_delay"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -534,8 +570,10 @@ func _request_slot() -> bool:
 	if dir:
 		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_INFANTRY, false, false, false, CombatDirector.DANGER_COST_BULLET, "infantry")
 		_has_attack_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
 		return granted
 	_has_attack_slot = true
+	debug_last_blocked_reason = "active_no_director"
 	return true
 
 func _release_slot() -> void:
@@ -551,26 +589,56 @@ func _fire_shot() -> void:
 	if not is_instance_valid(_player):
 		return
 	var origin := global_position + Vector3(0, 1.15, 0)
-	var aim_dir := _snapshot_aim_dir
-	if aim_dir.length_squared() < 0.01:
-		var to_p := _player.global_position - origin
-		aim_dir = to_p.normalized() if to_p.length_squared() > 0.01 else -global_transform.basis.z
-	aim_dir += Vector3(randf_range(-0.12, 0.12), randf_range(-0.08, 0.08), randf_range(-0.12, 0.12))
-	if aim_dir.length_squared() > 0.01:
-		aim_dir = aim_dir.normalized()
-	else:
-		aim_dir = -global_transform.basis.z
+	var to_p := (_player.global_position - origin).normalized() if (_player.global_position - origin).length_squared() > 0.01 else -global_transform.basis.z
+	var spread := Vector3(randf_range(-0.04, 0.04), randf_range(-0.03, 0.03), randf_range(-0.04, 0.04))
+	var aim_dir := (to_p + spread).normalized()
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
+	var proj: Projectile = null
 	if pool:
-		pool.spawn_projectile(origin, aim_dir, false, damage_per_shot)
+		var scaled_damage: float = damage_per_shot * CombatDirector.get_damage_multiplier()
+		proj = pool.spawn_projectile(origin, aim_dir, false, scaled_damage)
+
+	if proj != null:
+		debug_shots_fired += 1
+		if VfxPool.instance:
+			VfxPool.instance.spawn_muzzle_flash(origin, aim_dir, true)
+		if EventBus:
+			EventBus.enemy_fired_weapon.emit(self, origin, aim_dir, false)
+
+var _visual_meshes: Array[MeshInstance3D] = []
+static var _flash_mat: StandardMaterial3D = null
+
+func _collect_visual_meshes(node: Node) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			_visual_meshes.append(child as MeshInstance3D)
+		_collect_visual_meshes(child)
+
+func _trigger_damage_flash() -> void:
+	if _visual_meshes.is_empty():
+		_collect_visual_meshes(self)
+	if not _flash_mat:
+		_flash_mat = StandardMaterial3D.new()
+		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
+	for m in _visual_meshes:
+		if is_instance_valid(m):
+			m.material_override = _flash_mat
+	if is_inside_tree():
+		get_tree().create_timer(0.06, false).timeout.connect(func():
+			for m in _visual_meshes:
+				if is_instance_valid(m) and m.material_override == _flash_mat:
+					m.material_override = null
+		)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if not is_alive:
 		return
 	current_health = maxf(0.0, current_health - amount)
+	_trigger_damage_flash()
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
 		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.8, 0), amount, amount >= 30.0)
@@ -582,6 +650,8 @@ func _die() -> void:
 		return
 	_is_dead = true
 	is_alive = false
+	collision_layer = 0
+	collision_mask = 0
 	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
@@ -593,14 +663,14 @@ func _die() -> void:
 	_spawn_xp()
 
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 0.5, 0))
+		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 0.5, 0), 0.45)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:
 			var expl := expl_scene.instantiate() as Node3D
 			if expl:
 				expl.transform.origin = global_position + Vector3(0, 0.5, 0)
-				expl.scale = Vector3(0.8, 0.8, 0.8)
+				expl.scale = Vector3(0.5, 0.5, 0.5)
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(expl)
 	queue_free()

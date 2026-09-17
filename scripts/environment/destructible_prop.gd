@@ -46,15 +46,19 @@ func _destroy_prop() -> void:
 			parent.add_child.call_deferred(spark)
 
 	if drops_xp:
-		var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
-		if gem_scene:
-			var gem := gem_scene.instantiate() as Node3D
-			if gem:
-				if "xp_value" in gem:
-					gem.xp_value = 5
-				gem.transform.origin = global_position + Vector3(0, 0.4, 0)
-				var parent := get_parent() if get_parent() else get_tree().root
-				parent.add_child.call_deferred(gem)
+		var spawn_pos := global_position + Vector3(0, 0.4, 0)
+		if XpGemPool.instance:
+			XpGemPool.instance.spawn_gem(spawn_pos, 5)
+		else:
+			var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
+			if gem_scene:
+				var gem := gem_scene.instantiate() as Node3D
+				if gem:
+					if "xp_value" in gem:
+						gem.xp_value = 5
+					gem.transform.origin = spawn_pos
+					var p: Node = get_tree().current_scene if (is_inside_tree() and get_tree().current_scene) else (get_parent() if get_parent() else get_tree().root)
+					p.add_child.call_deferred(gem)
 
 	var gm := get_tree().get_first_node_in_group("game_manager")
 	if gm and gm.has_method("add_salvage") and salvage_reward > 0:

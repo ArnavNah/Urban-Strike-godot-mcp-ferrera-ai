@@ -12,4 +12,4 @@ extends Resource
 @export var final_wave: bool = false
 @export var announcement: String = ""
 @export var ground_attack_slots: int = 2
-@export var air_attack_slots: int = 0
+@export var air_attack_slots: int = 1

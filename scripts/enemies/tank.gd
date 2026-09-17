@@ -59,6 +59,8 @@ var _road_path: PackedVector3Array = PackedVector3Array()
 var _road_path_index: int = 0
 var _road_path_timer: float = 0.0
 var _stuck_sample_timer: float = 0.0
+var debug_last_blocked_reason: String = ""
+var debug_shots_fired: int = 0
 var _visual_meshes: Array[MeshInstance3D] = []
 static var _flash_mat: StandardMaterial3D = null
 
@@ -192,6 +194,8 @@ func _physics_process(delta: float) -> void:
 			return
 
 	var dist := global_position.distance_to(_player.global_position)
+	var flat_vec := Vector2(_player.global_position.x - global_position.x, _player.global_position.z - global_position.z)
+	var flat_dist := flat_vec.length()
 
 	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
 	_lod_frame_counter += 1
@@ -229,8 +233,8 @@ func _physics_process(delta: float) -> void:
 			_cached_los = _check_los()
 	var has_los := _cached_los
 
-	# If player moves far away, break out of aiming/reloading to pursue across the city
-	if dist > threat_range and current_state != State.REPOSITIONING and not is_scattered:
+	# If player moves far away horizontally or vertically, break out of aiming/reloading to pursue across the city
+	if (flat_dist > preferred_range * 1.5 or dist > 70.0) and current_state != State.REPOSITIONING and not is_scattered:
 		_release_slot()
 		if charge_light:
 			charge_light.visible = false
@@ -238,17 +242,17 @@ func _physics_process(delta: float) -> void:
 
 	match current_state:
 		State.REPOSITIONING:
-			_tick_repositioning(step_delta, dist, has_los)
+			_tick_repositioning(step_delta, flat_dist, dist, has_los)
 		State.ACQUIRE:
-			_tick_acquire(step_delta, dist, has_los)
+			_tick_acquire(step_delta, flat_dist, dist, has_los)
 		State.AIMING:
-			_tick_aiming(step_delta, dist, has_los)
+			_tick_aiming(step_delta, flat_dist, dist, has_los)
 		State.CHARGING:
 			_tick_charging(step_delta, has_los)
 		State.FIRING:
 			_tick_firing()
 		State.RELOADING:
-			_tick_reloading(step_delta, dist, has_los)
+			_tick_reloading(step_delta, flat_dist, dist, has_los)
 
 	# Ground vehicle separation steering so tanks do not stack
 	_apply_separation()
@@ -282,7 +286,7 @@ func _update_movement_animation(_delta: float) -> void:
 			anim_player.play("idle")
 		anim_player.speed_scale = 1.0
 
-func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
+func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	_state_timer -= delta
 	var current_speed: float = move_speed * 1.4 if is_scattered else move_speed
 
@@ -367,8 +371,8 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 		var target_yaw := atan2(-move_dir.x, -move_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 4.0 * delta)
 
-	# Check for transition into combat engagement
-	if not is_scattered and _arming_timer <= 0.0 and dist <= preferred_range and has_los:
+	# Check for transition into combat engagement (healthy standoff distance 14-38m)
+	if not is_scattered and _arming_timer <= 0.0 and flat_dist <= preferred_range and flat_dist >= 14.0 and has_los and dist <= 60.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
@@ -383,17 +387,17 @@ func _tick_repositioning(delta: float, dist: float, has_los: bool) -> void:
 			var angle := randf() * TAU
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
 			_state_timer = 1.0
-		elif not is_scattered and _arming_timer <= 0.0 and dist <= threat_range and has_los:
+		elif not is_scattered and _arming_timer <= 0.0 and flat_dist <= threat_range and flat_dist >= 12.0 and has_los and dist <= 60.0:
 			if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
 				_deploy_troops()
 			_transition_to(State.ACQUIRE)
 		else:
 			_start_new_reposition()
 
-func _tick_acquire(delta: float, dist: float, has_los: bool) -> void:
+func _tick_acquire(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if not has_los or dist > threat_range:
+	if not has_los or flat_dist > threat_range or flat_dist < 12.0 or dist > 65.0:
 		_start_new_reposition()
 		return
 
@@ -405,10 +409,10 @@ func _tick_acquire(delta: float, dist: float, has_los: bool) -> void:
 		else:
 			_state_timer = 0.25 # Wait for attack slot
 
-func _tick_aiming(delta: float, dist: float, has_los: bool) -> void:
+func _tick_aiming(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if not has_los or dist > threat_range:
+	if not has_los or flat_dist > threat_range or dist > 65.0:
 		_release_slot()
 		_start_new_reposition()
 		return
@@ -447,22 +451,26 @@ func _tick_firing() -> void:
 		match archetype.weapon_type:
 			GroundEnemyArchetype.WeaponType.CANNON:
 				_fire_cannon()
+				_finish_firing()
 			GroundEnemyArchetype.WeaponType.RAPID_MG, GroundEnemyArchetype.WeaponType.JAMMER_ECM:
 				_fire_rapid_mg()
 			GroundEnemyArchetype.WeaponType.ROCKET_BURST:
 				_fire_rocket_burst()
 			GroundEnemyArchetype.WeaponType.MORTAR_SHELL:
 				_fire_mortar_shell()
+				_finish_firing()
 			GroundEnemyArchetype.WeaponType.TROOP_DEPLOY:
 				_deploy_troops()
 				_fire_rapid_mg()
 	else:
 		_fire_cannon()
+		_finish_firing()
 
+func _finish_firing() -> void:
 	_release_slot()
 	_transition_to(State.RELOADING)
 
-func _tick_reloading(delta: float, dist: float, has_los: bool) -> void:
+func _tick_reloading(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	# Tactical slow creep/strafe while reloading
 	if _state_timer > reload_time * 0.4:
 		velocity.x = _reposition_dir.x * (move_speed * 0.6)
@@ -477,7 +485,7 @@ func _tick_reloading(delta: float, dist: float, has_los: bool) -> void:
 	if _state_timer <= 0.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		if dist <= preferred_range and has_los:
+		if flat_dist <= preferred_range and flat_dist >= 14.0 and has_los and dist <= 60.0:
 			_transition_to(State.ACQUIRE)
 		else:
 			_start_new_reposition()
@@ -676,15 +684,14 @@ func _track_player(delta: float) -> void:
 	var target_yaw := atan2(-local_pos.x, -local_pos.z)
 	turret.rotation.y = lerp_angle(turret.rotation.y, target_yaw, 5.0 * delta)
 
-	var local_barrel := turret.to_local(target_pos)
-	var flat_dist := Vector2(local_barrel.x, local_barrel.z).length()
-	var target_pitch := atan2(local_barrel.y, flat_dist)
-	target_pitch = clampf(target_pitch, deg_to_rad(-5.0), deg_to_rad(45.0))
+	var barrel_origin := barrel.global_position
+	var to_target := target_pos - barrel_origin
+	var flat_dist := Vector2(to_target.x, to_target.z).length()
+	var target_pitch := atan2(to_target.y, flat_dist)
+	target_pitch = clampf(target_pitch, deg_to_rad(-5.0), deg_to_rad(55.0))
 	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, 5.0 * delta)
 
 func _fire_cannon() -> void:
-	var fire_dir := -barrel.global_transform.basis.z if barrel else -global_transform.basis.z
-
 	var muzzle_positions: Array[Vector3] = []
 	if muzzle_left and muzzle_right:
 		muzzle_positions.append(muzzle_left.global_position)
@@ -696,6 +703,15 @@ func _fire_cannon() -> void:
 	else:
 		muzzle_positions.append(global_position + Vector3.UP)
 
+	var ref_pos: Vector3 = muzzle_positions[0] if not muzzle_positions.is_empty() else global_position
+	var fire_dir: Vector3
+	if is_instance_valid(_player):
+		var to_player := (_player.global_position - ref_pos).normalized()
+		var spread := Vector3(randf_range(-0.02, 0.02), randf_range(-0.015, 0.015), randf_range(-0.02, 0.02))
+		fire_dir = (to_player + spread).normalized()
+	else:
+		fire_dir = (-barrel.global_transform.basis.z if barrel else -global_transform.basis.z).normalized()
+
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
@@ -703,20 +719,34 @@ func _fire_cannon() -> void:
 	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
 	var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 
-	var dmg_per_shot: float = cannon_damage / float(muzzle_positions.size()) if muzzle_positions.size() > 1 else cannon_damage
+	var dmg_mult: float = CombatDirector.get_damage_multiplier()
+	var base_dmg: float = cannon_damage / float(muzzle_positions.size()) if muzzle_positions.size() > 1 else cannon_damage
+	var dmg_per_shot: float = base_dmg * dmg_mult
 
+	var any_spawned := false
 	for m_pos in muzzle_positions:
+		var proj: Projectile = null
 		if pool:
-			var proj := pool.spawn_projectile(m_pos, fire_dir, false, dmg_per_shot)
-			if proj and CombatDirector.instance:
-				CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
+			proj = pool.spawn_projectile(m_pos, fire_dir, false, dmg_per_shot)
+			if proj:
+				any_spawned = true
+				debug_shots_fired += 1
+				if CombatDirector.instance:
+					CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
 
-		if flash_scene and p:
-			var flash := flash_scene.instantiate() as Node3D
-			if flash:
-				flash.transform.origin = m_pos
-				flash.scale = Vector3(2.0, 2.0, 2.0)
-				p.add_child.call_deferred(flash)
+		if proj != null:
+			if VfxPool.instance:
+				VfxPool.instance.spawn_muzzle_flash(m_pos, fire_dir, true)
+			elif flash_scene and p:
+				var flash := flash_scene.instantiate() as Node3D
+				if flash:
+					flash.transform.origin = m_pos
+					flash.scale = Vector3(2.0, 2.0, 2.0)
+					p.add_child.call_deferred(flash)
+
+	if any_spawned and EventBus:
+		var first_pos := muzzle_positions[0] if not muzzle_positions.is_empty() else global_position
+		EventBus.enemy_fired_weapon.emit(self, first_pos, fire_dir, true)
 
 	_trigger_recoil()
 
@@ -739,6 +769,7 @@ func _fire_rapid_mg() -> void:
 		_spawn_single_bullet(dmg)
 		if i < count - 1:
 			await get_tree().create_timer(interval).timeout
+	_finish_firing()
 
 func _spawn_single_bullet(dmg: float) -> void:
 	var muzzle_pos: Vector3
@@ -751,19 +782,37 @@ func _spawn_single_bullet(dmg: float) -> void:
 	else:
 		muzzle_pos = global_position + Vector3.UP
 
-	var fire_dir := -barrel.global_transform.basis.z if barrel else -global_transform.basis.z
+	var fire_dir: Vector3
+	if is_instance_valid(_player):
+		var to_player := (_player.global_position - muzzle_pos).normalized()
+		var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
+		fire_dir = (to_player + spread).normalized()
+	else:
+		fire_dir = (-barrel.global_transform.basis.z if barrel else -global_transform.basis.z).normalized()
+
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if not pool and ProjectilePool.instance:
 		pool = ProjectilePool.instance
+	var proj: Projectile = null
 	if pool:
-		pool.spawn_projectile(muzzle_pos, fire_dir, false, dmg)
-	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
-	if flash_scene:
-		var flash := flash_scene.instantiate() as Node3D
-		if flash:
-			flash.transform.origin = muzzle_pos
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(flash)
+		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, dmg * CombatDirector.get_damage_multiplier())
+
+	if proj != null:
+		debug_shots_fired += 1
+		if VfxPool.instance:
+			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
+		else:
+			var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
+			if flash_scene:
+				var flash := flash_scene.instantiate() as Node3D
+				if flash:
+					flash.transform.origin = muzzle_pos
+					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+					p.add_child.call_deferred(flash)
+
+		if EventBus:
+			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
+
 	_trigger_recoil()
 
 func _fire_rocket_burst() -> void:
@@ -787,6 +836,7 @@ func _fire_rocket_burst() -> void:
 		fire_dir = (fire_dir + spread).normalized()
 		var rocket: UnguidedRocket = rocket_scene.instantiate() as UnguidedRocket
 		if rocket:
+			rocket.damage = 16.0 * CombatDirector.get_damage_multiplier()
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(rocket)
 			rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
@@ -795,6 +845,7 @@ func _fire_rocket_burst() -> void:
 		_trigger_recoil()
 		if i < count - 1:
 			await get_tree().create_timer(0.18).timeout
+	_finish_firing()
 
 func _fire_mortar_shell() -> void:
 	if not is_instance_valid(_player):
@@ -853,7 +904,7 @@ func _fire_mortar_shell() -> void:
 			var flat_dist := Vector2(pl.global_position.x - target_pos.x, pl.global_position.z - target_pos.z).length()
 			if flat_dist <= 6.5:
 				if pl.has_method("take_damage"):
-					pl.take_damage(20.0, self)
+					pl.take_damage(20.0 * CombatDirector.get_damage_multiplier(), self)
 	)
 
 func _deploy_troops() -> void:
@@ -887,10 +938,7 @@ func _check_los() -> bool:
 
 func _request_slot() -> bool:
 	if _arming_timer > 0.0:
-		return false
-
-	var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-	if cam and not cam.is_position_in_frustum(global_position):
+		debug_last_blocked_reason = "arming_delay"
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -927,9 +975,11 @@ func _request_slot() -> bool:
 
 		var granted: bool = dir.request_attack_permission(self, token_cost, false, is_heavy, false, danger_cost, attack_name)
 		_has_attack_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
 		return granted
 
 	_has_attack_slot = true
+	debug_last_blocked_reason = "active_no_director"
 	return true
 
 func _release_slot() -> void:
@@ -980,6 +1030,10 @@ func _die() -> void:
 		return
 	_is_dead = true
 	is_alive = false
+	collision_layer = 0
+	collision_mask = 0
+	if charge_light:
+		charge_light.visible = false
 	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)

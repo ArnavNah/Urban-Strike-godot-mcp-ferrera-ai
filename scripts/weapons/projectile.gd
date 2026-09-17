@@ -19,6 +19,10 @@ var _hit_target_ids: Array[int] = []
 var pierce_remaining: int = 0
 var ricochet_remaining: int = 0
 var armor_damage_multiplier: float = 1.0
+var has_danger_reservation: bool = false
+
+static var _player_mat: StandardMaterial3D = null
+static var _enemy_mat: StandardMaterial3D = null
 
 @onready var raycast: RayCast3D = $RayCast3D
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
@@ -46,10 +50,31 @@ func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_dam
 	pierce_remaining = pierce_count
 	ricochet_remaining = ricochet_count
 	armor_damage_multiplier = armor_mult
+	has_danger_reservation = false
 	_lifetime = 0.0
 	_is_active = true
 	visible = true
 	set_process(true)
+
+	if not _player_mat:
+		_player_mat = StandardMaterial3D.new()
+		_player_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_player_mat.albedo_color = Color(1.0, 0.88, 0.25, 1.0)
+	if not _enemy_mat:
+		_enemy_mat = StandardMaterial3D.new()
+		_enemy_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_enemy_mat.albedo_color = Color(1.0, 0.32, 0.1, 1.0)
+
+	if _is_player_projectile:
+		speed = 150.0
+		if mesh_instance:
+			mesh_instance.material_override = _player_mat
+			mesh_instance.scale = Vector3.ONE
+	else:
+		speed = 68.0 # High-readability dodgeable bullet speed
+		if mesh_instance:
+			mesh_instance.material_override = _enemy_mat
+			mesh_instance.scale = Vector3(1.3, 1.3, 1.3)
 
 	# Safe look_at without gimbal lock crashes on steep vertical shots
 	if _direction.length_squared() > 0.001:
@@ -114,6 +139,13 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 			target_obj = collider.get_parent()
 
 	var is_enemy := is_instance_valid(target_obj) and target_obj.is_in_group("enemies")
+	var is_player_unit := is_instance_valid(target_obj) and (target_obj.is_in_group("player") or target_obj.is_in_group("mini_helicopters"))
+	var is_armored_surface := is_enemy or is_player_unit
+	var is_lethal := false
+	if target_obj and target_obj.get("current_health") != null:
+		if float(target_obj.get("current_health")) <= _damage_for_target(target_obj):
+			is_lethal = true
+
 	var siege_round := _is_player_projectile and enemy_hit_limit > 1
 	var can_pierce := siege_round and is_enemy and not target_obj.is_in_group("objectives") \
 		and collider is CollisionObject3D
@@ -128,7 +160,9 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 			_hit_target_ids.append(target_obj.get_instance_id())
 		target_obj.take_damage(_damage_for_target(target_obj), source_node, hit_pos)
 
-	_spawn_spark(hit_pos, hit_norm)
+	_spawn_spark(hit_pos, hit_norm, is_armored_surface)
+	if EventBus:
+		EventBus.combat_impact_occurred.emit(hit_pos, hit_norm, is_armored_surface, is_lethal)
 
 	if siege_round:
 		# Siege hits at most two distinct enemies and always stops at world/objectives.
@@ -167,18 +201,21 @@ func _damage_for_target(target: Node) -> float:
 		return result * air_damage_multiplier
 	result *= ground_damage_multiplier
 	if target.is_in_group("armored_enemies"):
-		result *= armored_damage_multiplier
+		return result * armored_damage_multiplier
 	return result
 
-func _spawn_spark(pos: Vector3, norm: Vector3) -> void:
+func _spawn_spark(pos: Vector3, norm: Vector3, is_armor: bool = false) -> void:
 	if VfxPool.instance:
-		VfxPool.instance.spawn_sparks(pos)
+		VfxPool.instance.spawn_sparks(pos, norm, is_armor)
 		return
 	var spark_scene: PackedScene = preload("res://scenes/vfx/impact_sparks.tscn")
 	if spark_scene:
 		var spark: GPUParticles3D = spark_scene.instantiate() as GPUParticles3D
 		if spark:
-			if norm.length_squared() > 0.01:
+			if spark.has_method("play_impact"):
+				spark.global_position = pos
+				spark.call("play_impact", norm, is_armor)
+			elif norm.length_squared() > 0.01:
 				var up_axis := Vector3.UP if absf(norm.y) < 0.9 else Vector3.FORWARD
 				spark.look_at_from_position(pos, pos + norm, up_axis)
 			else:
@@ -187,10 +224,16 @@ func _spawn_spark(pos: Vector3, norm: Vector3) -> void:
 			target_parent.add_child.call_deferred(spark)
 
 func deactivate() -> void:
-	if not _is_player_projectile and CombatDirector.instance:
+	if has_danger_reservation and CombatDirector.instance:
 		CombatDirector.instance.release_danger_capacity(self, 1)
+		has_danger_reservation = false
 	_is_active = false
 	visible = false
 	set_process(false)
 	if raycast:
 		raycast.enabled = false
+		raycast.clear_exceptions()
+	if mesh_instance:
+		mesh_instance.material_override = null
+		mesh_instance.scale = Vector3.ONE
+	_hit_target_ids.clear()

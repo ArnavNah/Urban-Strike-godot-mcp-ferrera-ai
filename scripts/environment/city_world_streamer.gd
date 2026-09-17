@@ -39,6 +39,12 @@ var road_graph: AStar3D = AStar3D.new()
 var _chunk_road_points: Dictionary = {} # Vector2i -> Array[int]
 var _road_point_ref_counts: Dictionary = {} # int -> int
 
+# Registered world metadata synced with streamed chunk lifecycle
+var registered_rooftop_sockets: Dictionary = {} # socket_id (String) -> Dictionary
+var registered_buildings: Dictionary = {} # building_id (String) -> Dictionary
+var _chunk_rooftop_socket_ids: Dictionary = {} # Vector2i -> Array[String]
+var _chunk_building_ids: Dictionary = {} # Vector2i -> Array[String]
+
 var _markers_dirty: bool = false
 var _marker_sync_timer: float = 0.0
 
@@ -85,6 +91,7 @@ func _start_controlled_startup(start_chunk: Vector2i) -> void:
 	var center_chunk := _get_or_create_chunk(start_chunk, CityChunk.DetailLevel.FULL_DETAIL)
 	active_chunks[start_chunk] = center_chunk
 	_add_chunk_to_road_graph(center_chunk)
+	_register_chunk_metadata(center_chunk)
 	chunk_streamed.emit(start_chunk, CityChunk.DetailLevel.FULL_DETAIL)
 
 	# 2. Queue the remaining 8 immediate 3x3 neighbors with highest priority (1 per frame)
@@ -166,6 +173,18 @@ func _update_streaming_targets(center_chunk: Vector2i) -> void:
 				desired_chunks[c] = CityChunk.DetailLevel.FULL_DETAIL
 			elif chebyshev_dist <= hlod_radius:
 				desired_chunks[c] = CityChunk.DetailLevel.HLOD
+
+	# Pin chunks with active combat turrets to FULL_DETAIL if within combat range of player
+	var player_world_pos: Vector3 = chunk_to_world_center(center_chunk)
+	for sid in registered_rooftop_sockets.keys():
+		var socket: Dictionary = registered_rooftop_sockets[sid]
+		var occupant: Node = socket.get("occupant", null)
+		if is_instance_valid(occupant) and not occupant.is_queued_for_deletion():
+			var spos: Vector3 = socket.get("world_position", Vector3.ZERO)
+			if spos.distance_to(player_world_pos) <= 95.0:
+				var sc: Vector2i = world_to_chunk_coord(spos)
+				if is_chunk_in_world_bounds(sc):
+					desired_chunks[sc] = CityChunk.DetailLevel.FULL_DETAIL
 
 	# 2. Queue chunks outside desired_chunks for gradual unloading
 	for c: Vector2i in active_chunks.keys():
@@ -286,8 +305,10 @@ func _apply_chunk_load(item: Dictionary) -> void:
 
 	if detail == CityChunk.DetailLevel.FULL_DETAIL:
 		_add_chunk_to_road_graph(chunk)
+		_register_chunk_metadata(chunk)
 	else:
 		_remove_chunk_from_road_graph(chunk)
+		_unregister_chunk_metadata(chunk.coord)
 
 	chunk_streamed.emit(c, detail)
 
@@ -308,6 +329,7 @@ func _recycle_chunk(c: Vector2i) -> void:
 		return
 	var chunk: CityChunk = active_chunks[c] as CityChunk
 	_remove_chunk_from_road_graph(chunk)
+	_unregister_chunk_metadata(c)
 	active_chunks.erase(c)
 	chunk.set_detail_level(CityChunk.DetailLevel.UNLOADED)
 	chunk.visible = false
@@ -383,6 +405,120 @@ func _remove_chunk_from_road_graph(chunk: CityChunk) -> void:
 				road_graph.remove_point(pid)
 		else:
 			_road_point_ref_counts[pid] = ref_cnt
+
+# ==============================================================================
+# WORLD METADATA REGISTRATION & LIFECYCLE
+# ==============================================================================
+func _register_chunk_metadata(chunk: CityChunk) -> void:
+	if _chunk_rooftop_socket_ids.has(chunk.coord):
+		_unregister_chunk_metadata(chunk.coord)
+
+	var s_ids: Array[String] = []
+	for socket: Dictionary in chunk.rooftop_sockets:
+		var sid: String = socket.get("socket_id", "")
+		if not sid.is_empty():
+			registered_rooftop_sockets[sid] = socket
+			s_ids.append(sid)
+	_chunk_rooftop_socket_ids[chunk.coord] = s_ids
+
+	var b_ids: Array[String] = []
+	for b_rec: Dictionary in chunk.building_records:
+		var bid: String = b_rec.get("building_id", "")
+		if not bid.is_empty():
+			registered_buildings[bid] = b_rec
+			b_ids.append(bid)
+	_chunk_building_ids[chunk.coord] = b_ids
+
+func _unregister_chunk_metadata(c: Vector2i) -> void:
+	if _chunk_rooftop_socket_ids.has(c):
+		for sid: String in _chunk_rooftop_socket_ids[c]:
+			if registered_rooftop_sockets.has(sid):
+				var socket: Dictionary = registered_rooftop_sockets[sid]
+				var occupant: Node = socket.get("occupant", null)
+				if is_instance_valid(occupant) and not occupant.is_queued_for_deletion():
+					if occupant.has_method("despawn_unloaded"):
+						occupant.despawn_unloaded()
+					else:
+						occupant.queue_free()
+				registered_rooftop_sockets.erase(sid)
+		_chunk_rooftop_socket_ids.erase(c)
+
+	if _chunk_building_ids.has(c):
+		for bid: String in _chunk_building_ids[c]:
+			registered_buildings.erase(bid)
+		_chunk_building_ids.erase(c)
+
+func get_available_rooftop_sockets() -> Array[Dictionary]:
+	var available: Array[Dictionary] = []
+	for socket: Dictionary in registered_rooftop_sockets.values():
+		var is_occ: bool = socket.get("is_occupied", false)
+		var occ: Variant = socket.get("occupant", null)
+		if is_occ and (occ == null or not is_instance_valid(occ)):
+			socket["is_occupied"] = false
+			socket["occupant"] = null
+			is_occ = false
+		if not is_occ:
+			available.append(socket)
+	return available
+
+func get_rooftop_sockets_in_radius(center_pos: Vector3, min_dist: float = 0.0, max_dist: float = 120.0, unoccupied_only: bool = true) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for socket: Dictionary in registered_rooftop_sockets.values():
+		var is_occ: bool = socket.get("is_occupied", false)
+		var occ: Variant = socket.get("occupant", null)
+		if is_occ and (occ == null or not is_instance_valid(occ)):
+			socket["is_occupied"] = false
+			socket["occupant"] = null
+			is_occ = false
+		if unoccupied_only and is_occ:
+			continue
+		var wpos: Vector3 = socket.get("world_position", Vector3.ZERO)
+		var d: float = center_pos.distance_to(wpos)
+		if d >= min_dist and d <= max_dist:
+			var copy: Dictionary = socket.duplicate()
+			copy["distance"] = d
+			results.append(copy)
+	results.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["distance"]) < float(b["distance"])
+	)
+	return results
+
+func get_building_records_in_radius(center_pos: Vector3, radius: float = 120.0) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for b_rec: Dictionary in registered_buildings.values():
+		var wpos: Vector3 = b_rec.get("world_position", Vector3.ZERO)
+		var d: float = center_pos.distance_to(wpos)
+		if d <= radius:
+			var copy: Dictionary = b_rec.duplicate()
+			copy["distance"] = d
+			results.append(copy)
+	results.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["distance"]) < float(b["distance"])
+	)
+	return results
+
+func occupy_rooftop_socket(socket_id: String) -> bool:
+	if registered_rooftop_sockets.has(socket_id):
+		registered_rooftop_sockets[socket_id]["is_occupied"] = true
+		return true
+	return false
+
+func set_socket_occupant(socket_id: String, occupant: Node3D) -> void:
+	if registered_rooftop_sockets.has(socket_id):
+		registered_rooftop_sockets[socket_id]["occupant"] = occupant
+		registered_rooftop_sockets[socket_id]["is_occupied"] = is_instance_valid(occupant)
+
+func get_socket_occupant(socket_id: String) -> Node3D:
+	if registered_rooftop_sockets.has(socket_id):
+		var occ: Variant = registered_rooftop_sockets[socket_id].get("occupant", null)
+		if is_instance_valid(occ):
+			return occ as Node3D
+	return null
+
+func release_rooftop_socket(socket_id: String) -> void:
+	if registered_rooftop_sockets.has(socket_id):
+		registered_rooftop_sockets[socket_id]["is_occupied"] = false
+		registered_rooftop_sockets[socket_id]["occupant"] = null
 
 # ==============================================================================
 # QUERIES & TELEMETRY
@@ -511,7 +647,7 @@ func query_natural_spawn_candidates(center_pos: Vector3, category: String = "gro
 				var heading := (center_pos - pt)
 				heading.y = 0.0
 				var h_norm := heading.normalized() if heading.length_squared() > 0.01 else Vector3.FORWARD
-				results.append({
+				var cand_data: Dictionary = {
 					"position": pt,
 					"heading": h_norm,
 					"category": category,
@@ -519,7 +655,22 @@ func query_natural_spawn_candidates(center_pos: Vector3, category: String = "gro
 					"source_name": "%s_Chunk_%d_%d" % [category.capitalize(), chunk.coord.x, chunk.coord.y],
 					"distance": d,
 					"validation_result": "VALID"
-				})
+				}
+				if category == "rooftop":
+					for socket: Dictionary in chunk.rooftop_sockets:
+						var swpos: Vector3 = socket.get("world_position", Vector3.ZERO) as Vector3
+						if swpos.distance_squared_to(pt) < 1.0:
+							cand_data["socket_id"] = socket.get("socket_id", "")
+							cand_data["building_id"] = socket.get("building_id", "")
+							cand_data["building_type"] = socket.get("building_type", "")
+							cand_data["usable_clearance"] = socket.get("usable_clearance", 4.0)
+							cand_data["height"] = socket.get("height", 0.0)
+							cand_data["surface_type"] = socket.get("surface_type", "concrete")
+							cand_data["rotation_y"] = socket.get("rotation_y", 0.0)
+							cand_data["equipment_position"] = socket.get("equipment_position", Vector3.ZERO)
+							cand_data["lookout_position"] = socket.get("lookout_position", Vector3.ZERO)
+							break
+				results.append(cand_data)
 
 	results.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["distance"]) < float(b["distance"])

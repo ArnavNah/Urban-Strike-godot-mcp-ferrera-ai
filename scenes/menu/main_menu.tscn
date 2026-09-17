@@ -6,19 +6,21 @@
 [ext_resource type="PackedScene" uid="uid://8ner1vxmx6iv" path="res://scenes/environment/city/building_large_b.tscn" id="7_pstia"]
 [ext_resource type="PackedScene" uid="uid://cfisbv4tqybil" path="res://scenes/environment/roads/wide_avenue.tscn" id="7_si58d"]
 [ext_resource type="PackedScene" uid="uid://8boti1nhvhol" path="res://Player model/body.glb" id="10_3h20m"]
+[ext_resource type="Texture2D" uid="uid://7cn8s4u7sijp" path="res://assets/ui/icons/heli_silhouette.svg" id="11_p1nwe"]
 [ext_resource type="PackedScene" uid="uid://bia2j1rijnc06" path="res://Player model/top propeller.glb" id="11_uaj4g"]
 [ext_resource type="PackedScene" uid="uid://c2e68nm5rs24y" path="res://Player model/back propeller.glb" id="12_si58d"]
+[ext_resource type="Script" uid="uid://c5oo4ygb7jp3a" path="res://scripts/ui/menu_brackets.gd" id="13_prbor"]
 [ext_resource type="FontFile" uid="uid://oqpdnawjrvdg" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="14_si58d"]
 [ext_resource type="FontFile" uid="uid://c0o5e1d8pafa7" path="res://assets/ui/fonts/Inter-Regular.ttf" id="15_anexq"]
 [ext_resource type="Script" uid="uid://bpudroewq14h" path="res://scripts/ui/tactical_menu_button.gd" id="16_qvxhw"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_si58d"]
-sky_top_color = Color(0.18, 0.44, 0.72, 1)
-sky_horizon_color = Color(0.98, 0.74, 0.4, 1)
-sky_curve = 0.12
-ground_bottom_color = Color(0.28, 0.32, 0.36, 1)
-ground_horizon_color = Color(0.96, 0.72, 0.4, 1)
-ground_curve = 0.08
+sky_top_color = Color(0.02, 0.04, 0.1, 1)
+sky_horizon_color = Color(0.92, 0.45, 0.14, 1)
+sky_curve = 0.06
+ground_bottom_color = Color(0.08, 0.09, 0.12, 1)
+ground_horizon_color = Color(0.35, 0.24, 0.16, 1)
+ground_curve = 0.05
 
 [sub_resource type="Sky" id="Sky_anexq"]
 sky_material = SubResource("ProceduralSkyMaterial_si58d")
@@ -27,22 +29,24 @@ sky_material = SubResource("ProceduralSkyMaterial_si58d")
 background_mode = 2
 sky = SubResource("Sky_anexq")
 ambient_light_source = 2
-ambient_light_color = Color(0.48, 0.58, 0.7, 1)
-ambient_light_energy = 1.2
+ambient_light_color = Color(0.14, 0.18, 0.26, 1)
+ambient_light_energy = 0.52
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.12
-glow_bloom = 0.02
+glow_intensity = 0.18
+glow_bloom = 0.04
+fog_enabled = true
 fog_mode = 1
-fog_light_color = Color(0.92, 0.76, 0.5, 1)
-fog_density = 1.0
-fog_sky_affect = 0.3
-fog_depth_begin = 60.0
+fog_light_color = Color(0.18, 0.2, 0.26, 1)
+fog_density = 0.3
+fog_sky_affect = 0.25
+fog_depth_begin = 45.0
 fog_depth_end = 220.0
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_si58d"]
-albedo_color = Color(0.22, 0.25, 0.28, 1)
-roughness = 0.9
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_p1nwe"]
+albedo_color = Color(0.13, 0.15, 0.19, 1)
+metallic = 0.1
+roughness = 0.32
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_anexq"]
 size = Vector2(500, 500)
@@ -90,20 +94,22 @@ top_radius = 0.18
 bottom_radius = 0.18
 height = 1.2
 
-[sub_resource type="Gradient" id="Gradient_d4hu8"]
-offsets = PackedFloat32Array(0, 0.22, 0.38, 0.62, 0.78, 1)
-colors = PackedColorArray(0.02, 0.03, 0.06, 0.1, 0.02, 0.03, 0.06, 0.4, 0.02, 0.03, 0.06, 0.85, 0.02, 0.03, 0.06, 0.85, 0.02, 0.03, 0.06, 0.4, 0.02, 0.03, 0.06, 0.1)
-
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_p1nwe"]
-gradient = SubResource("Gradient_d4hu8")
-width = 512
-
 [sub_resource type="Gradient" id="Gradient_prbor"]
-offsets = PackedFloat32Array(0, 0.18, 0.82, 1)
-colors = PackedColorArray(0, 0, 0, 0.3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.35)
+offsets = PackedFloat32Array(0, 0.22, 0.38, 0.54, 0.68, 1)
+colors = PackedColorArray(0.02, 0.03, 0.05, 0.92, 0.02, 0.03, 0.05, 0.8, 0.02, 0.03, 0.05, 0.48, 0.02, 0.03, 0.05, 0.12, 0.02, 0.03, 0.05, 0, 0.02, 0.03, 0.05, 0)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_27h4x"]
 gradient = SubResource("Gradient_prbor")
+width = 1024
+height = 1
+
+[sub_resource type="Gradient" id="Gradient_gdhp0"]
+offsets = PackedFloat32Array(0, 0.1, 0.9, 1)
+colors = PackedColorArray(0, 0, 0, 0.45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_pstia"]
+gradient = SubResource("Gradient_gdhp0")
+width = 1
 height = 512
 fill_to = Vector2(0, 1)
 
@@ -136,15 +142,15 @@ environment = SubResource("Environment_prbor")
 
 [node name="KeyLight" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=1237906180]
 transform = Transform3D(0.81915176, 0.15809903, -0.5513569, 0, 0.9612612, 0.27563727, 0.5735763, -0.2257888, 0.7874192, 0, 25, 0)
-light_color = Color(1, 0.82, 0.6, 1)
-light_energy = 1.3
+light_color = Color(1, 0.72, 0.45, 1)
+light_energy = 1.8
 shadow_enabled = true
-directional_shadow_max_distance = 220.0
+directional_shadow_max_distance = 250.0
 
 [node name="RimLight" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=35836523]
 transform = Transform3D(-0.819152, 0.14845249, 0.55403227, 0, 0.96592575, -0.258819, -0.5735764, -0.21201214, -0.79124004, 0, 0, 0)
-light_color = Color(0.4, 0.6, 0.85, 1)
-light_energy = 0.6
+light_color = Color(0.3, 0.45, 0.65, 1)
+light_energy = 0.7
 
 [node name="Skyline" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=1793709121]
 
@@ -170,13 +176,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, -8, -40)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, -8, -60)
 
 [node name="GroundPlane" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Skyline" unique_id=167355176]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -8.12, 0)
-material_override = SubResource("StandardMaterial3D_si58d")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -8.02, 0)
+material_override = SubResource("StandardMaterial3D_p1nwe")
 mesh = SubResource("PlaneMesh_anexq")
 
 [node name="HeliModel" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=900089510]
 physics_interpolation_mode = 2
-transform = Transform3D(0.99999994, 0, 0, 0, 0.9993907, 0.03489949, 0, -0.03489949, 0.9993908, 4.8, 6, 8)
+transform = Transform3D(-0.4377569, -0.039013308, 0.89824647, -0.017441772, 0.99923855, 0.03489949, -0.8989242, -0.00038951816, -0.43810406, 3.6, 5, 14.5)
 
 [node name="Visuals" type="Node3D" parent="SubViewportContainer/SubViewport/HeliModel" unique_id=1032332748]
 transform = Transform3D(1.3, 0, 0, 0, 1.3, 0, 0, 0, 1.3, 0, 0, 0)
@@ -229,21 +235,24 @@ mesh = SubResource("CylinderMesh_7wy5f")
 
 [node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport" unique_id=1481927109]
 physics_interpolation_mode = 2
-transform = Transform3D(0.9781475, -0.012692708, 0.20752394, 0, 0.9981349, 0.061048556, -0.20791167, -0.059714492, 0.9763234, 0, 7.5, 26)
+transform = Transform3D(0.9832548, -0.009537471, 0.18198581, 0, 0.9986296, 0.05233597, -0.18223551, -0.051459596, 0.9819076, -0.8, 6.8, 23.5)
 current = true
 fov = 65.0
 
 [node name="UISoundPlayer" type="AudioStreamPlayer" parent="." unique_id=640189523]
 
-[node name="ScreenOverlay" type="TextureRect" parent="." unique_id=953555753]
-layout_mode = 0
+[node name="CanvasLayer_UI" type="CanvasLayer" parent="." unique_id=1210809744]
+
+[node name="MainMenuUI" type="Control" parent="CanvasLayer_UI" unique_id=8535702]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-texture = SubResource("GradientTexture2D_p1nwe")
-expand_mode = 1
 
-[node name="VignetteOverlay" type="TextureRect" parent="." unique_id=244956018]
+[node name="BackgroundShade" type="TextureRect" parent="CanvasLayer_UI/MainMenuUI" unique_id=147313937]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -251,104 +260,225 @@ mouse_filter = 2
 texture = SubResource("GradientTexture2D_27h4x")
 expand_mode = 1
 
-[node name="SafeArea" type="MarginContainer" parent="." unique_id=1202686410]
+[node name="VignetteOverlay" type="TextureRect" parent="CanvasLayer_UI/MainMenuUI" unique_id=257426684]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
-theme_override_constants/margin_left = 80
-theme_override_constants/margin_top = 70
-theme_override_constants/margin_right = 80
-theme_override_constants/margin_bottom = 50
+texture = SubResource("GradientTexture2D_pstia")
+expand_mode = 1
 
-[node name="CenterLayout" type="CenterContainer" parent="SafeArea" unique_id=446292800]
-layout_mode = 2
+[node name="TopLeftFlavorText" type="VBoxContainer" parent="CanvasLayer_UI/MainMenuUI" unique_id=855459239]
+layout_mode = 0
+anchor_left = 0.04
+anchor_top = 0.045
+anchor_right = 0.04
+anchor_bottom = 0.045
 mouse_filter = 2
+theme_override_constants/separation = 2
 
-[node name="MenuColumn" type="VBoxContainer" parent="SafeArea/CenterLayout" unique_id=1692544693]
-custom_minimum_size = Vector2(320, 0)
+[node name="@Label@25024" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopLeftFlavorText" unique_id=1603516277]
 layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-
-[node name="TitleBox" type="VBoxContainer" parent="SafeArea/CenterLayout/MenuColumn" unique_id=1002322816]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="TitleLabel" type="Label" parent="SafeArea/CenterLayout/MenuColumn/TitleBox" unique_id=491012397]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.96, 0.97, 0.98, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.45)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 2
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
 theme_override_fonts/font = ExtResource("14_si58d")
-theme_override_font_sizes/font_size = 58
-text = "HELI-STRIKE"
-horizontal_alignment = 1
-vertical_alignment = 1
+theme_override_font_sizes/font_size = 12
+text = "STRIKE FAST"
 
-[node name="SubtitleLabel" type="Label" parent="SafeArea/CenterLayout/MenuColumn/TitleBox" unique_id=590793106]
+[node name="@Label@25025" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopLeftFlavorText" unique_id=246902346]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.56, 0.64, 0.74, 1)
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
 theme_override_fonts/font = ExtResource("14_si58d")
-theme_override_font_sizes/font_size = 17
-text = "URBAN AIR COMBAT"
-horizontal_alignment = 1
-vertical_alignment = 1
+theme_override_font_sizes/font_size = 12
+text = "CONTROL THE SKIES"
 
-[node name="TitleSpacer" type="Control" parent="SafeArea/CenterLayout/MenuColumn" unique_id=183023040]
-custom_minimum_size = Vector2(0, 32)
+[node name="@Label@25026" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopLeftFlavorText" unique_id=1950393844]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 12
+text = "OWN THE CITY"
 
-[node name="ButtonContainer" type="VBoxContainer" parent="SafeArea/CenterLayout/MenuColumn" unique_id=908103446]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="PlayButton" type="Button" parent="SafeArea/CenterLayout/MenuColumn/ButtonContainer" unique_id=2116941894]
-custom_minimum_size = Vector2(320, 54)
-layout_mode = 2
-script = ExtResource("16_qvxhw")
-action_title = "PLAY"
-
-[node name="HangarButton" type="Button" parent="SafeArea/CenterLayout/MenuColumn/ButtonContainer" unique_id=646471266]
-custom_minimum_size = Vector2(320, 54)
-layout_mode = 2
-script = ExtResource("16_qvxhw")
-action_title = "HANGAR"
-
-[node name="SettingsButton" type="Button" parent="SafeArea/CenterLayout/MenuColumn/ButtonContainer" unique_id=523410440]
-custom_minimum_size = Vector2(320, 54)
-layout_mode = 2
-script = ExtResource("16_qvxhw")
-action_title = "SETTINGS"
-
-[node name="QuitButton" type="Button" parent="SafeArea/CenterLayout/MenuColumn/ButtonContainer" unique_id=1708583393]
-custom_minimum_size = Vector2(320, 54)
-layout_mode = 2
-script = ExtResource("16_qvxhw")
-action_title = "QUIT"
-
-[node name="FooterHBox" type="HBoxContainer" parent="SafeArea" unique_id=1085244286]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 8
+[node name="TopRightFlavorText" type="VBoxContainer" parent="CanvasLayer_UI/MainMenuUI" unique_id=1583947148]
+layout_mode = 0
+anchor_left = 0.96
+anchor_top = 0.045
+anchor_right = 0.96
+anchor_bottom = 0.045
+grow_horizontal = 0
 mouse_filter = 2
+theme_override_constants/separation = 2
 
-[node name="BuildLabel" type="Label" parent="SafeArea/FooterHBox" unique_id=2079724768]
+[node name="@Label@25027" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopRightFlavorText" unique_id=1994864653]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.42, 0.48, 0.56, 0.65)
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 12
+text = "URBAN"
+horizontal_alignment = 2
+
+[node name="@Label@25028" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopRightFlavorText" unique_id=499951249]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 12
+text = "AIR COMBAT"
+horizontal_alignment = 2
+
+[node name="@Label@25029" type="Label" parent="CanvasLayer_UI/MainMenuUI/TopRightFlavorText" unique_id=720599354]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.48, 0.58, 0.6)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 12
+text = "OPS"
+horizontal_alignment = 2
+
+[node name="BuildInfo" type="Label" parent="CanvasLayer_UI/MainMenuUI" unique_id=524931154]
+layout_mode = 0
+anchor_left = 0.04
+anchor_top = 0.95
+anchor_right = 0.04
+anchor_bottom = 0.95
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.35, 0.42, 0.5, 0.6)
 theme_override_fonts/font = ExtResource("15_anexq")
 theme_override_font_sizes/font_size = 11
 text = "BUILD 1.0.4"
 
-[node name="FooterSpacer" type="Control" parent="SafeArea/FooterHBox" unique_id=1389679633]
-layout_mode = 2
-size_flags_horizontal = 3
+[node name="InputHints" type="HBoxContainer" parent="CanvasLayer_UI/MainMenuUI" unique_id=773414099]
+layout_mode = 0
+anchor_left = 0.96
+anchor_top = 0.95
+anchor_right = 0.96
+anchor_bottom = 0.95
+grow_horizontal = 0
+grow_vertical = 0
 mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="PromptLabel" type="Label" parent="SafeArea/FooterHBox" unique_id=113873913]
+[node name="PromptLabel" type="Label" parent="CanvasLayer_UI/MainMenuUI/InputHints" unique_id=24610773]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.42, 0.48, 0.56, 0.65)
-theme_override_fonts/font = ExtResource("15_anexq")
-theme_override_font_sizes/font_size = 11
-text = "ENTER  SELECT    ESC  BACK"
+theme_override_colors/font_color = Color(0.45, 0.54, 0.64, 0.75)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 13
+text = "[ENTER] SELECT  |  [ESC] BACK"
+
+[node name="MenuColumn" type="VBoxContainer" parent="CanvasLayer_UI/MainMenuUI" unique_id=952174688]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 0
+anchor_left = 0.15
+anchor_top = 0.22
+anchor_right = 0.15
+anchor_bottom = 0.22
+offset_right = 500.0
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Branding" type="VBoxContainer" parent="CanvasLayer_UI/MainMenuUI/MenuColumn" unique_id=163376172]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="DecorativeTop" type="HBoxContainer" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding" unique_id=738304069]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="LineTopL" type="ColorRect" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/DecorativeTop" unique_id=2001381175]
+custom_minimum_size = Vector2(30, 1)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.35, 0.44, 0.54, 0.6)
+
+[node name="HelicopterIcon" type="TextureRect" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/DecorativeTop" unique_id=287113594]
+modulate = Color(0.7, 0.8, 0.9, 0.75)
+custom_minimum_size = Vector2(34, 17)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = ExtResource("11_p1nwe")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="LineTopR" type="ColorRect" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/DecorativeTop" unique_id=1453876118]
+custom_minimum_size = Vector2(30, 1)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.35, 0.44, 0.54, 0.6)
+
+[node name="Title" type="Label" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding" unique_id=1542987624]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.99, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/line_spacing = 0
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 4
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 66
+text = "HELI-STRIKE"
+horizontal_alignment = 1
+
+[node name="SubtitleRow" type="HBoxContainer" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding" unique_id=460086122]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="LineSubL" type="ColorRect" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/SubtitleRow" unique_id=667982764]
+custom_minimum_size = Vector2(30, 1)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.35, 0.44, 0.54, 0.6)
+
+[node name="Subtitle" type="Label" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/SubtitleRow" unique_id=1340038590]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.78, 0.85)
+theme_override_fonts/font = ExtResource("14_si58d")
+theme_override_font_sizes/font_size = 21
+text = "URBAN AIR COMBAT"
+horizontal_alignment = 1
+
+[node name="LineSubR" type="ColorRect" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/Branding/SubtitleRow" unique_id=1327367836]
+custom_minimum_size = Vector2(30, 1)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.35, 0.44, 0.54, 0.6)
+
+[node name="MenuSpacer" type="Control" parent="CanvasLayer_UI/MainMenuUI/MenuColumn" unique_id=502347899]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+
+[node name="MenuContainer" type="VBoxContainer" parent="CanvasLayer_UI/MainMenuUI/MenuColumn" unique_id=1468258740]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayButton" type="Button" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/MenuContainer" unique_id=2132229895]
+custom_minimum_size = Vector2(500, 72)
+layout_mode = 2
+script = ExtResource("16_qvxhw")
+action_title = "PLAY"
+is_primary = true
+
+[node name="HangarButton" type="Button" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/MenuContainer" unique_id=997882448]
+custom_minimum_size = Vector2(500, 72)
+layout_mode = 2
+script = ExtResource("16_qvxhw")
+action_title = "HANGAR"
+
+[node name="SettingsButton" type="Button" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/MenuContainer" unique_id=2026486511]
+custom_minimum_size = Vector2(500, 72)
+layout_mode = 2
+script = ExtResource("16_qvxhw")
+action_title = "SETTINGS"
+
+[node name="QuitButton" type="Button" parent="CanvasLayer_UI/MainMenuUI/MenuColumn/MenuContainer" unique_id=123203097]
+custom_minimum_size = Vector2(500, 72)
+layout_mode = 2
+script = ExtResource("16_qvxhw")
+action_title = "QUIT"
+
+[node name="BracketsSpacer" type="Control" parent="CanvasLayer_UI/MainMenuUI/MenuColumn" unique_id=1842052814]
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+
+[node name="DecorativeBottom" type="Control" parent="CanvasLayer_UI/MainMenuUI/MenuColumn" unique_id=1998608368]
+custom_minimum_size = Vector2(500, 10)
+layout_mode = 2
+script = ExtResource("13_prbor")

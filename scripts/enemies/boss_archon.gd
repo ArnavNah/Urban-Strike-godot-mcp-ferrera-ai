@@ -186,7 +186,8 @@ func _fire_chin_cannon() -> void:
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool")
 	if pool and pool.has_method("spawn_projectile"):
-		pool.spawn_projectile(muzzle_pos, fire_dir.normalized(), false, 5.0)
+		var scaled_dmg: float = 5.0 * CombatDirector.get_damage_multiplier()
+		pool.spawn_projectile(muzzle_pos, fire_dir.normalized(), false, scaled_dmg)
 
 	var flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
 	if flash_scene:
@@ -222,7 +223,7 @@ func _fire_rocket_salvo(count: int) -> void:
 			var spawn_pos := global_position + spread_offset
 			var fire_dir := (global_position.direction_to(_player.global_position) + Vector3(randf_range(-0.2, 0.2), 0.2, randf_range(-0.2, 0.2))).normalized()
 			missile.transform.origin = spawn_pos
-			missile.damage = 18.0
+			missile.damage = 18.0 * CombatDirector.get_damage_multiplier()
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(missile)
 			missile.call_deferred("launch", spawn_pos, fire_dir, _player, false)

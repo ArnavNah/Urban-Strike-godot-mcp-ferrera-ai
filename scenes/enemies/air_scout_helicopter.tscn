@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_u3l3o"]
 [ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_xt4kw"]
+[ext_resource type="PackedScene" uid="uid://c7hvr4ed6dmux" path="res://assets/Enemies/flying enemies/enemi1.glb" id="3_xt4kw"]
 
 [sub_resource type="Resource" id="Resource_uytkb"]
 script = ExtResource("2_xt4kw")
@@ -26,18 +27,9 @@ approach_timeout = 4.0
 damage_per_shot = 2.0
 fire_rate = 9.0
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_bhqhl"]
-radius = 0.75
-height = 2.4
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ef3un"]
-albedo_color = Color(0.85, 0.55, 0.15, 1)
-metallic = 0.4
-roughness = 0.5
-
-[sub_resource type="BoxMesh" id="BoxMesh_epv42"]
-material = SubResource("StandardMaterial3D_ef3un")
-size = Vector3(0.9, 0.8, 2.4)
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_uytkb"]
+radius = 0.85
+height = 3.4
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ifcng"]
 albedo_color = Color(0.12, 0.12, 0.12, 1)
@@ -53,14 +45,11 @@ script = ExtResource("1_u3l3o")
 archetype = SubResource("Resource_uytkb")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1566042637]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
-shape = SubResource("CapsuleShape3D_bhqhl")
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_uytkb")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=1249754934]
 transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
-
-[node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1883776409]
-mesh = SubResource("BoxMesh_epv42")
 
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=785295983]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
@@ -71,6 +60,9 @@ mesh = SubResource("BoxMesh_dfmdl")
 [node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1715389081]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
 mesh = SubResource("BoxMesh_dfmdl")
+
+[node name="Model" parent="Visuals" unique_id=1997999516 instance=ExtResource("3_xt4kw")]
+transform = Transform3D(-9.616506e-09, 0, 0.22, 0, 0.22, 0, -0.22, 0, -9.616506e-09, 0, -0.12, 0.74)
 
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1573159423]
 target_position = Vector3(0, 0, -45)

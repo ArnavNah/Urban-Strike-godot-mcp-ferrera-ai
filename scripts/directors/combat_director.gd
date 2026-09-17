@@ -11,27 +11,28 @@ extends Node
 
 # Default capacities by wave
 const WAVE_TOKEN_CONFIG := {
-	1: { "ground_tokens": 1, "air_tokens": 0, "max_attackers": 1, "danger_cap": 5 },
-	2: { "ground_tokens": 1, "air_tokens": 0, "max_attackers": 1, "danger_cap": 6 },
-	3: { "ground_tokens": 2, "air_tokens": 0, "max_attackers": 2, "danger_cap": 7 },
-	4: { "ground_tokens": 2, "air_tokens": 0, "max_attackers": 2, "danger_cap": 8 },
-	5: { "ground_tokens": 2, "air_tokens": 0, "max_attackers": 2, "danger_cap": 9 },
-	6: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 10 },
-	7: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 12 },
-	8: { "ground_tokens": 3, "air_tokens": 1, "max_attackers": 3, "danger_cap": 14 },
-	9: { "ground_tokens": 3, "air_tokens": 1, "max_attackers": 4, "danger_cap": 16 },
-	10: { "ground_tokens": 1, "air_tokens": 0, "max_attackers": 2, "danger_cap": 14 }
+	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 6 },
+	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 7 },
+	3: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 8 },
+	4: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 3, "danger_cap": 9 },
+	5: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 10 },
+	6: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 11 },
+	7: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 12 },
+	8: { "ground_tokens": 3, "air_tokens": 2, "max_attackers": 5, "danger_cap": 14 },
+	9: { "ground_tokens": 3, "air_tokens": 2, "max_attackers": 5, "danger_cap": 16 },
+	10: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 16 }
 }
 
 # Token costs by attack type
 const TOKEN_COST_INFANTRY: int = 1
 const TOKEN_COST_TURRET: int = 1
-const TOKEN_COST_AIR_SCOUT: int = 2
-const TOKEN_COST_TANK_CANNON: int = 3
-const TOKEN_COST_ROCKET_VOLLEY: int = 3
-const TOKEN_COST_SAM_MISSILE: int = 4
-const TOKEN_COST_MORTAR_STRIKE: int = 4
-const TOKEN_COST_JAMMER_OFFENSE: int = 2
+const TOKEN_COST_AIR_SCOUT: int = 1
+const TOKEN_COST_AIR_GUNSHIP: int = 2
+const TOKEN_COST_TANK_CANNON: int = 1
+const TOKEN_COST_ROCKET_VOLLEY: int = 2
+const TOKEN_COST_SAM_MISSILE: int = 2
+const TOKEN_COST_MORTAR_STRIKE: int = 2
+const TOKEN_COST_JAMMER_OFFENSE: int = 1
 
 # Projectile danger costs
 const DANGER_COST_BULLET: int = 1
@@ -42,11 +43,23 @@ const DANGER_COST_MORTAR_ZONE: int = 4
 const DANGER_COST_BOSS_ORDNANCE: int = 3
 
 @export var current_wave: int = 1
-@export var max_ground_attack_slots: int = 1
-@export var max_air_attack_slots: int = 0
-@export var max_concurrent_attackers: int = 1
-@export var max_projectile_danger: int = 5
+@export var max_ground_attack_slots: int = 2
+@export var max_air_attack_slots: int = 1
+@export var max_concurrent_attackers: int = 2
+@export var max_projectile_danger: int = 6
 @export var slot_lease_duration: float = 6.0
+var total_leases_granted: int = 0
+var last_rejection_reasons: Dictionary = {
+	"alive": 0,
+	"control": 0,
+	"deployment": 0,
+	"monopoly": 0,
+	"max_attackers": 0,
+	"tokens": 0,
+	"heavy": 0,
+	"homing": 0,
+	"danger": 0
+}
 
 # Active token leases: Dictionary[Node3D, Dictionary]
 # Structure: {
@@ -117,10 +130,27 @@ var active_homing_locks: int:
 
 ## Backwards-compatible slot limit setter
 func set_wave_limits(ground: int, air: int) -> void:
-	max_ground_attack_slots = ground
-	max_air_attack_slots = air
-	if not WAVE_TOKEN_CONFIG.has(current_wave):
-		max_concurrent_attackers = maxi(1, ground + air)
+	if ground == 0 and air == 0:
+		# Explicit combat suppression (e.g., player death or victory)
+		max_ground_attack_slots = 0
+		max_air_attack_slots = 0
+		max_concurrent_attackers = 0
+		_cleanup_slots()
+		return
+
+	var cfg: Dictionary = WAVE_TOKEN_CONFIG.get(current_wave, WAVE_TOKEN_CONFIG[1])
+	if ground > 0:
+		max_ground_attack_slots = ground
+	else:
+		max_ground_attack_slots = int(cfg.get("ground_tokens", 2))
+
+	if air > 0:
+		max_air_attack_slots = air
+	else:
+		# Safeguard: Never overwrite positive air capacity with zero from unconfigured wave definitions
+		max_air_attack_slots = int(cfg.get("air_tokens", 1))
+
+	max_concurrent_attackers = maxi(2, max_ground_attack_slots + max_air_attack_slots)
 	_cleanup_slots()
 
 ## Primary Phase 10B attack permission request
@@ -134,21 +164,26 @@ func request_attack_permission(
 	attack_type: String = "ordinary"
 ) -> bool:
 	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+		last_rejection_reasons["alive"] += 1
 		return false
 	if "is_alive" in enemy and not enemy.is_alive:
+		last_rejection_reasons["alive"] += 1
 		return false
 
 	# Pause / player control safety: disallow enemy attack leases if player is dead or control disabled
 	var player := get_tree().get_first_node_in_group("player")
 	if is_instance_valid(player):
 		if "is_alive" in player and not player.is_alive:
+			last_rejection_reasons["control"] += 1
 			return false
 		if "_control_enabled" in player and not player._control_enabled:
+			last_rejection_reasons["control"] += 1
 			return false
 
 	# Deployment safety: disallow attack leases while deployment countdown is active
 	var wm := get_tree().get_first_node_in_group("wave_manager")
 	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
+		last_rejection_reasons["deployment"] += 1
 		return false
 
 	_cleanup_slots()
@@ -164,44 +199,66 @@ func request_attack_permission(
 	var last_rel: float = _enemy_last_release_time.get(enemy, -100.0)
 	if (now - last_rel) < 0.6 and _waiting_enemies.size() > 0 and not _waiting_enemies.has(enemy):
 		_add_to_waiting(enemy)
+		last_rejection_reasons["monopoly"] += 1
 		return false
 
 	# 3. Global Attacker Count Constraint
 	if _active_leases.size() >= max_concurrent_attackers:
 		_add_to_waiting(enemy)
+		last_rejection_reasons["max_attackers"] += 1
 		return false
 
 	# 4. Token Capacity Constraints
 	var ground_used: int = get_ground_tokens_used()
 	var air_used: int = get_air_tokens_used()
+	var effective_tokens: int = token_cost
 
 	if is_air:
-		if (air_used + token_cost) > max_air_attack_slots:
+		if max_air_attack_slots <= 0:
 			_add_to_waiting(enemy)
+			last_rejection_reasons["tokens"] += 1
 			return false
+		if (air_used + effective_tokens) > max_air_attack_slots:
+			if air_used == 0 and max_air_attack_slots > 0:
+				effective_tokens = max_air_attack_slots
+			else:
+				_add_to_waiting(enemy)
+				last_rejection_reasons["tokens"] += 1
+				return false
 	else:
-		if (ground_used + token_cost) > max_ground_attack_slots:
+		if max_ground_attack_slots <= 0:
 			_add_to_waiting(enemy)
+			last_rejection_reasons["tokens"] += 1
 			return false
+		if (ground_used + effective_tokens) > max_ground_attack_slots:
+			if ground_used == 0 and max_ground_attack_slots > 0:
+				effective_tokens = max_ground_attack_slots
+			else:
+				_add_to_waiting(enemy)
+				last_rejection_reasons["tokens"] += 1
+				return false
 
 	# 5. Heavy Attack Mutual Exclusion: At most ONE heavy attack across the entire battlefield
 	if is_heavy and _active_heavy_attackers.size() > 0:
 		_add_to_waiting(enemy)
+		last_rejection_reasons["heavy"] += 1
 		return false
 
 	# 6. Homing Lock Constraint: At most ONE active homing lock against the player
 	if is_homing and _active_homing_lock_holders.size() > 0:
 		_add_to_waiting(enemy)
+		last_rejection_reasons["homing"] += 1
 		return false
 
 	# 7. Projectile Danger Budget Capacity Check
 	if (current_danger_used + danger_cost) > max_projectile_danger:
 		_add_to_waiting(enemy)
+		last_rejection_reasons["danger"] += 1
 		return false
 
 	# All checks passed: Grant the lease
 	var lease := {
-		"tokens": token_cost,
+		"tokens": effective_tokens,
 		"is_air": is_air,
 		"is_heavy": is_heavy,
 		"is_homing": is_homing,
@@ -211,6 +268,7 @@ func request_attack_permission(
 	}
 	_active_leases[enemy] = lease
 	current_danger_used += danger_cost
+	total_leases_granted += 1
 
 	if is_heavy:
 		_active_heavy_attackers.append(enemy)
@@ -275,7 +333,7 @@ func release_danger_capacity(source: Variant, fallback_amount: int = 0) -> void:
 		var amt: int = res_info.get("amount", fallback_amount)
 		current_danger_used = maxi(0, current_danger_used - amt)
 		_active_danger_reservations.erase(source)
-	elif fallback_amount > 0:
+	elif source == null and fallback_amount > 0:
 		current_danger_used = maxi(0, current_danger_used - fallback_amount)
 
 ## Transfer danger capacity from enemy lease to in-flight projectile
@@ -319,6 +377,18 @@ func get_active_heavy_count() -> int:
 ## Record damage dealt to player for telemetry DPM calculation
 func record_player_damage(amount: float) -> void:
 	_damage_history.append({ "time": _gameplay_time, "amount": amount })
+
+## Calculates single shared enemy damage progression multiplier:
+## multiplier = min(1.0 + 0.10 * elapsed_minutes, 2.5)
+func get_damage_progression_multiplier() -> float:
+	var elapsed_minutes: float = _gameplay_time / 60.0
+	return minf(1.0 + 0.10 * elapsed_minutes, 2.5)
+
+## Global static helper for querying the active combat progression damage multiplier
+static func get_damage_multiplier() -> float:
+	if instance:
+		return instance.get_damage_progression_multiplier()
+	return 1.0
 
 func get_player_damage_per_minute() -> float:
 	var cutoff := _gameplay_time - 60.0
@@ -421,6 +491,8 @@ func get_debug_combat_telemetry() -> Dictionary:
 		"waiting_enemies_count": _waiting_enemies.size(),
 		"watchdog_reclaimed_leases": watchdog_reclaimed_leases,
 		"watchdog_reclaimed_danger": watchdog_reclaimed_danger,
+		"total_leases_granted": total_leases_granted,
+		"rejection_reasons": last_rejection_reasons.duplicate(),
 		"player_dpm": get_player_damage_per_minute()
 	}
 

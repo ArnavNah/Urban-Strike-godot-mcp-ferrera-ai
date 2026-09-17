@@ -25,14 +25,21 @@ const HALF_SIZE: float = 64.0
 
 const BuildingSmallScene := preload("res://scenes/environment/city/building_small.tscn")
 const BuildingSmallBScene := preload("res://scenes/environment/city/building_small_b.tscn")
+const BuildingSmallCScene := preload("res://scenes/environment/city/building_small_c.tscn")
 const BuildingMediumScene := preload("res://scenes/environment/city/building_medium.tscn")
 const BuildingMediumBScene := preload("res://scenes/environment/city/building_medium_b.tscn")
+const BuildingMediumCScene := preload("res://scenes/environment/city/building_medium_c.tscn")
 const BuildingLargeScene := preload("res://scenes/environment/city/building_large.tscn")
 const BuildingLargeBScene := preload("res://scenes/environment/city/building_large_b.tscn")
+const BuildingSkyscraperCScene := preload("res://scenes/environment/city/building_skyscraper_c.tscn")
 const WarehouseScene := preload("res://scenes/environment/city/warehouse.tscn")
 const WarehouseSawtoothScene := preload("res://scenes/environment/city/warehouse_sawtooth.tscn")
 const ParkingLotScene := preload("res://scenes/environment/city/parking_lot.tscn")
 const CivicPlazaScene := preload("res://scenes/environment/city/civic_plaza.tscn")
+
+const TownHouseAScene := preload("res://scenes/environment/town/town_house_a.tscn")
+const TownCabinScene := preload("res://scenes/environment/town/town_cabin.tscn")
+const TownWorkshopScene := preload("res://scenes/environment/town/town_workshop.tscn")
 
 const ParkedVehicleScene := preload("res://scenes/environment/props/parked_vehicle.tscn")
 const WreckedVehicleScene := preload("res://scenes/environment/props/wrecked_vehicle.tscn")
@@ -194,6 +201,10 @@ var objective_candidates: Array[Vector3] = []
 var pickup_candidates: Array[Vector3] = []
 var safe_open_positions: Array[Vector3] = []
 
+# Rich building and rooftop socket metadata for gameplay queries
+var rooftop_sockets: Array[Dictionary] = []
+var building_records: Array[Dictionary] = []
+
 # Road configuration
 var ns_is_avenue: bool = false
 var ew_is_avenue: bool = false
@@ -257,6 +268,8 @@ func _clear_all() -> void:
 	objective_candidates.clear()
 	pickup_candidates.clear()
 	safe_open_positions.clear()
+	rooftop_sockets.clear()
+	building_records.clear()
 
 func _clear_hlod() -> void:
 	if is_instance_valid(hlod_root):
@@ -283,6 +296,8 @@ func _clear_full_detail() -> void:
 	objective_candidates.clear()
 	pickup_candidates.clear()
 	safe_open_positions.clear()
+	rooftop_sockets.clear()
+	building_records.clear()
 
 # ==============================================================================
 # HLOD BUILDER (Lightweight distant skyline)
@@ -307,13 +322,6 @@ func _build_hlod() -> void:
 	hlod_root.add_child(base_mesh)
 
 	# 2. Four quadrant skyline silhouettes with district-tuned palettes
-	var quad_centers: Array[Vector3] = [
-		Vector3(-36.0, 0.0, -36.0),
-		Vector3(36.0, 0.0, -36.0),
-		Vector3(-36.0, 0.0, 36.0),
-		Vector3(36.0, 0.0, 36.0)
-	]
-
 	var b_size: Vector3
 	var sil_mat: Material = ConcreteMat
 	match district_type:
@@ -336,18 +344,36 @@ func _build_hlod() -> void:
 	var rng := _get_chunk_rng()
 
 	for i in range(4):
-		var center := quad_centers[i]
-		var sil_mesh := MeshInstance3D.new()
-		sil_mesh.name = "Silhouette_%d" % i
-		var box := BoxMesh.new()
-		var height_jitter: float = rng.randf_range(0.85, 1.15)
-		var cur_h: float = b_size.y * height_jitter
-		box.size = Vector3(b_size.x, cur_h, b_size.z)
-		box.material = sil_mat
-		sil_mesh.mesh = box
-		sil_mesh.position = center + Vector3(0.0, cur_h * 0.5, 0.0)
-		sil_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		hlod_root.add_child(sil_mesh)
+		var x_sign: float = -1.0 if (i == 0 or i == 2) else 1.0
+		var z_sign: float = -1.0 if (i == 0 or i == 1) else 1.0
+
+		# Primary silhouette box (closer to street intersection)
+		var center_a := Vector3(x_sign * 26.0, 0.0, z_sign * 26.0)
+		var sil_mesh_a := MeshInstance3D.new()
+		sil_mesh_a.name = "Silhouette_%d_A" % i
+		var box_a := BoxMesh.new()
+		var h_jitter_a: float = rng.randf_range(0.9, 1.15)
+		var cur_h_a: float = b_size.y * h_jitter_a
+		box_a.size = Vector3(b_size.x * 0.85, cur_h_a, b_size.z * 0.85)
+		box_a.material = sil_mat
+		sil_mesh_a.mesh = box_a
+		sil_mesh_a.position = center_a + Vector3(0.0, cur_h_a * 0.5, 0.0)
+		sil_mesh_a.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hlod_root.add_child(sil_mesh_a)
+
+		# Secondary silhouette box (deeper in the block)
+		var center_b := Vector3(x_sign * 46.0, 0.0, z_sign * 46.0)
+		var sil_mesh_b := MeshInstance3D.new()
+		sil_mesh_b.name = "Silhouette_%d_B" % i
+		var box_b := BoxMesh.new()
+		var h_jitter_b: float = rng.randf_range(0.7, 1.0)
+		var cur_h_b: float = b_size.y * h_jitter_b
+		box_b.size = Vector3(b_size.x * 0.75, cur_h_b, b_size.z * 0.75)
+		box_b.material = sil_mat
+		sil_mesh_b.mesh = box_b
+		sil_mesh_b.position = center_b + Vector3(0.0, cur_h_b * 0.5, 0.0)
+		sil_mesh_b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hlod_root.add_child(sil_mesh_b)
 
 # ==============================================================================
 # FULL DETAIL BUILDER
@@ -597,110 +623,514 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	mm_fences.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	staging.add_child(mm_fences)
 
+static func _get_building_catalog() -> Dictionary:
+	return {
+		"skyscraper_a": {
+			"scene": BuildingLargeScene,
+			"name": "BuildingLarge",
+			"size": Vector2(29.44, 15.27),
+			"height": 64.0,
+			"has_flat_roof": true,
+			"roof_clearance": 5.5,
+			"roof_height": 64.12,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(-8.0, 64.12, 0.0)
+		},
+		"skyscraper_b": {
+			"scene": BuildingLargeBScene,
+			"name": "BuildingLargeB",
+			"size": Vector2(28.63, 13.60),
+			"height": 58.24,
+			"has_flat_roof": true,
+			"roof_clearance": 5.0,
+			"roof_height": 58.36,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(-8.0, 58.36, 0.0)
+		},
+		"skyscraper_c": {
+			"scene": BuildingSkyscraperCScene,
+			"name": "BuildingSkyscraperC",
+			"size": Vector2(13.60, 13.60),
+			"height": 51.84,
+			"has_flat_roof": true,
+			"roof_clearance": 5.0,
+			"roof_height": 51.90,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(0.0, 51.90, 0.0)
+		},
+		"medium_a": {
+			"scene": BuildingMediumScene,
+			"name": "BuildingMedium",
+			"size": Vector2(25.00, 19.87),
+			"height": 27.34,
+			"has_flat_roof": true,
+			"roof_clearance": 7.0,
+			"roof_height": 27.46,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(0.0, 27.46, 0.0)
+		},
+		"medium_b": {
+			"scene": BuildingMediumBScene,
+			"name": "BuildingMediumB",
+			"size": Vector2(22.38, 20.48),
+			"height": 28.88,
+			"has_flat_roof": true,
+			"roof_clearance": 6.0,
+			"roof_height": 29.00,
+			"surface_type": "concrete",
+			"center_offset": Vector3(0.0, 0.0, 0.89),
+			"marker_offset": Vector3(0.0, 29.00, 0.0)
+		},
+		"medium_c": {
+			"scene": BuildingMediumCScene,
+			"name": "BuildingMediumC",
+			"size": Vector2(20.84, 15.14),
+			"height": 20.58,
+			"has_flat_roof": true,
+			"roof_clearance": 6.0,
+			"roof_height": 20.65,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(0.0, 20.65, 0.0)
+		},
+		"small_a": {
+			"scene": BuildingSmallScene,
+			"name": "BuildingSmall",
+			"size": Vector2(18.46, 14.12),
+			"height": 14.08,
+			"has_flat_roof": true,
+			"roof_clearance": 5.0,
+			"roof_height": 14.20,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(0.0, 14.20, 0.0)
+		},
+		"small_b": {
+			"scene": BuildingSmallBScene,
+			"name": "BuildingSmallB",
+			"size": Vector2(13.55, 17.16),
+			"height": 11.37,
+			"has_flat_roof": true,
+			"roof_clearance": 4.5,
+			"roof_height": 11.50,
+			"surface_type": "concrete",
+			"marker_offset": Vector3(0.0, 11.50, 0.0)
+		},
+		"small_c": {
+			"scene": BuildingSmallCScene,
+			"name": "BuildingSmallC",
+			"size": Vector2(10.60, 14.20),
+			"height": 12.73,
+			"has_flat_roof": true,
+			"roof_clearance": 4.0,
+			"roof_height": 12.75,
+			"surface_type": "concrete",
+			"center_offset": Vector3(0.0, 0.0, -0.9),
+			"marker_offset": Vector3(0.0, 12.75, 0.0)
+		},
+		"warehouse_a": {
+			"scene": WarehouseScene,
+			"name": "Warehouse",
+			"size": Vector2(28.16, 14.42),
+			"height": 13.25,
+			"has_flat_roof": true,
+			"roof_clearance": 4.5,
+			"roof_height": 12.38,
+			"surface_type": "metal",
+			"marker_offset": Vector3(5.4, 12.38, 0.0)
+		},
+		"warehouse_b": {
+			"scene": WarehouseSawtoothScene,
+			"name": "WarehouseSawtooth",
+			"size": Vector2(26.26, 29.51),
+			"height": 15.85,
+			"has_flat_roof": true,
+			"roof_clearance": 5.0,
+			"roof_height": 12.12,
+			"surface_type": "metal",
+			"center_offset": Vector3(0.67, 0.0, 1.0),
+			"marker_offset": Vector3(0.0, 12.12, 0.0)
+		},
+		"town_house": {
+			"scene": TownHouseAScene,
+			"name": "TownHouseA",
+			"size": Vector2(5.2, 4.2),
+			"height": 5.62,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 5.62,
+			"surface_type": "shingle"
+		},
+		"town_cabin": {
+			"scene": TownCabinScene,
+			"name": "TownCabin",
+			"size": Vector2(4.6, 3.8),
+			"height": 4.52,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 4.52,
+			"surface_type": "wood"
+		},
+		"town_workshop": {
+			"scene": TownWorkshopScene,
+			"name": "TownWorkshop",
+			"size": Vector2(5.2, 4.2),
+			"height": 5.87,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 5.87,
+			"surface_type": "metal"
+		},
+		"parking_lot": {
+			"scene": ParkingLotScene,
+			"name": "ParkingLot",
+			"size": Vector2(24.0, 12.0),
+			"height": 0.2,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "asphalt"
+		},
+		"civic_plaza": {
+			"scene": CivicPlazaScene,
+			"name": "CivicPlaza",
+			"size": Vector2(36.0, 36.0),
+			"height": 6.0,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "concrete"
+		},
+		"container_stack": {
+			"scene": ContainerStackScene,
+			"name": "ContainerStack",
+			"size": Vector2(5.8, 6.1),
+			"height": 5.15,
+			"has_flat_roof": true,
+			"roof_clearance": 2.5,
+			"roof_height": 5.15,
+			"surface_type": "metal",
+			"marker_offset": Vector3(0.0, 5.15, 0.0)
+		},
+		"storage_tanks": {
+			"scene": StorageTanksScene,
+			"name": "StorageTanks",
+			"size": Vector2(15.8, 8.7),
+			"height": 4.33,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "metal"
+		},
+		"solar_array": {
+			"scene": SolarArrayScene,
+			"name": "SolarArray",
+			"size": Vector2(5.3, 3.1),
+			"height": 0.92,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "solar"
+		},
+		"water_tower": {
+			"scene": WaterTowerScene,
+			"name": "WaterTower",
+			"size": Vector2(3.0, 2.9),
+			"height": 7.5,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "metal"
+		},
+		"radio_tower": {
+			"scene": RadioTowerScene,
+			"name": "RadioTower",
+			"size": Vector2(12.0, 12.0),
+			"height": 55.0,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "metal"
+		}
+	}
+
+func _place_lot_building(
+	entry: Dictionary,
+	u_norm: float,
+	v_norm: float,
+	q: int,
+	lot_idx: int,
+	x_inner: float,
+	z_inner: float,
+	block_w: float,
+	block_d: float,
+	occupied_rects: Array[Rect2],
+	rng: RandomNumberGenerator,
+	forced_rot_step: int = -1,
+	fallback_keys: Array[String] = []
+) -> bool:
+	var cat := _get_building_catalog()
+	var rot_step: int = forced_rot_step if forced_rot_step >= 0 else rng.randi_range(0, 3)
+	var rot_y: float = float(rot_step) * (PI * 0.5)
+
+	var b_size: Vector2 = entry["size"] as Vector2
+	var eff_w: float = b_size.y if (rot_step % 2 == 1) else b_size.x
+	var eff_d: float = b_size.x if (rot_step % 2 == 1) else b_size.y
+	var half_w: float = eff_w * 0.5
+	var half_d: float = eff_d * 0.5
+
+	var min_u: float = x_inner + 0.8
+	var max_u: float = 62.0 - 0.8
+	var min_v: float = z_inner + 0.8
+	var max_v: float = 62.0 - 0.8
+
+	# Check if building fits within the quadrant parcel boundaries
+	if eff_w > (max_u - min_u) or eff_d > (max_v - min_v):
+		for fb_key: String in fallback_keys:
+			if cat.has(fb_key):
+				var remaining_fbs: Array[String] = []
+				for k in fallback_keys:
+					if k != fb_key:
+						remaining_fbs.append(k)
+				if _place_lot_building(cat[fb_key], u_norm, v_norm, q, lot_idx, x_inner, z_inner, block_w, block_d, occupied_rects, rng, forced_rot_step, remaining_fbs):
+					return true
+		return false
+
+	var u_x: float = x_inner + u_norm * block_w
+	var v_z: float = z_inner + v_norm * block_d
+	u_x += rng.randf_range(-0.4, 0.4)
+	v_z += rng.randf_range(-0.4, 0.4)
+
+	u_x = clampf(u_x, min_u + half_w, max_u - half_w)
+	v_z = clampf(v_z, min_v + half_d, max_v - half_d)
+
+	var proposed_rect := Rect2(u_x - half_w, v_z - half_d, eff_w, eff_d)
+	var clearance: float = 1.5
+	var test_rect := proposed_rect.grow(clearance * 0.5)
+
+	var collides: bool = false
+	for occ: Rect2 in occupied_rects:
+		if test_rect.intersects(occ):
+			collides = true
+			break
+
+	if collides:
+		for fb_key: String in fallback_keys:
+			if cat.has(fb_key):
+				var remaining_fbs: Array[String] = []
+				for k in fallback_keys:
+					if k != fb_key:
+						remaining_fbs.append(k)
+				if _place_lot_building(cat[fb_key], u_norm, v_norm, q, lot_idx, x_inner, z_inner, block_w, block_d, occupied_rects, rng, forced_rot_step, remaining_fbs):
+					return true
+		return false
+
+	occupied_rects.append(test_rect)
+
+	var x_sign: float = -1.0 if (q == 0 or q == 2) else 1.0
+	var z_sign: float = -1.0 if (q == 0 or q == 1) else 1.0
+	var final_pos := Vector3(x_sign * u_x, 0.0, z_sign * v_z)
+
+	var scene: PackedScene = entry["scene"] as PackedScene
+	var b_inst := scene.instantiate() as Node3D
+	if not b_inst:
+		return false
+
+	b_inst.name = "Building_Q%d_L%d" % [q, lot_idx]
+	b_inst.position = final_pos
+	b_inst.rotation.y = rot_y
+	buildings_root.add_child(b_inst)
+
+	var b_name: String = entry["name"] as String
+	var b_rec: Dictionary = {
+		"building_id": b_inst.name,
+		"chunk_coord": coord,
+		"building_type": b_name,
+		"world_position": global_position + final_pos,
+		"local_position": final_pos,
+		"footprint_size": b_size,
+		"height": entry["height"],
+		"has_rooftop_socket": entry["has_flat_roof"],
+		"rooftop_socket_id": ""
+	}
+
+	if entry["has_flat_roof"]:
+		var m_roof: Marker3D = b_inst.get_node_or_null("RooftopDefensePoint") as Marker3D
+		if not m_roof:
+			m_roof = b_inst.get_node_or_null("RooftopSpawnPoint") as Marker3D
+
+		var marker_offset: Vector3 = Vector3(0.0, entry.get("roof_height", entry["height"]), 0.0)
+		if is_instance_valid(m_roof):
+			marker_offset = m_roof.position
+		elif entry.has("marker_offset"):
+			marker_offset = entry["marker_offset"] as Vector3
+
+		var marker_rotated: Vector3 = b_inst.transform.basis * marker_offset
+		var socket_local_pos: Vector3 = final_pos + marker_rotated
+		var socket_world_pos: Vector3 = global_position + socket_local_pos
+		var socket_id: String = "Roof_C%d_%d_Q%d_L%d" % [coord.x, coord.y, q, lot_idx]
+		b_rec["rooftop_socket_id"] = socket_id
+
+		var equip_pos: Vector3 = Vector3.ZERO
+		var m_equip: Marker3D = b_inst.get_node_or_null("RooftopPoints/Equipment") as Marker3D
+		if is_instance_valid(m_equip):
+			equip_pos = global_position + final_pos + (b_inst.transform.basis * m_equip.position)
+
+		var lookout_pos: Vector3 = Vector3.ZERO
+		var m_lookout: Marker3D = b_inst.get_node_or_null("RooftopPoints/Lookout") as Marker3D
+		if is_instance_valid(m_lookout):
+			lookout_pos = global_position + final_pos + (b_inst.transform.basis * m_lookout.position)
+
+		var socket_data: Dictionary = {
+			"socket_id": socket_id,
+			"chunk_coord": coord,
+			"building_id": b_inst.name,
+			"building_type": b_name,
+			"world_position": socket_world_pos,
+			"local_position": socket_local_pos,
+			"rotation_y": rot_y,
+			"usable_clearance": entry["roof_clearance"],
+			"height": marker_offset.y,
+			"is_occupied": false,
+			"surface_type": entry["surface_type"],
+			"equipment_position": equip_pos,
+			"lookout_position": lookout_pos
+		}
+		rooftop_sockets.append(socket_data)
+
+	building_records.append(b_rec)
+	return true
+
 func _build_buildings(rng: RandomNumberGenerator) -> void:
 	buildings_root = Node3D.new()
 	buildings_root.name = "Buildings"
 	add_child(buildings_root)
 
-	var quad_offsets: Array[Vector3] = [
-		Vector3(-36.0, 0.0, -36.0),
-		Vector3(36.0, 0.0, -36.0),
-		Vector3(-36.0, 0.0, 36.0),
-		Vector3(36.0, 0.0, 36.0)
-	]
+	rooftop_sockets.clear()
+	building_records.clear()
 
-	for i in range(4):
-		var pos_offset := quad_offsets[i]
-		# Deterministic parcel setback within safe road bounds [-40, -32] and [32, 40]
-		var setback_x: float = rng.randf_range(-1.8, 1.8)
-		var setback_z: float = rng.randf_range(-1.8, 1.8)
-		pos_offset += Vector3(setback_x, 0.0, setback_z)
+	var cat := _get_building_catalog()
 
-		var scene_to_instance: PackedScene = null
+	var x_inner: float = 12.0 if ns_is_avenue else 8.5
+	var z_inner: float = 12.0 if ew_is_avenue else 8.5
+	var block_w: float = 62.0 - x_inner
+	var block_d: float = 62.0 - z_inner
 
+	for q in range(4):
+		var occupied_rects: Array[Rect2] = []
 		match district_type:
 			DistrictType.HELIPAD:
-				# Helipad chunk: low-profile structures, open tarmac
-				if i == 0:
-					scene_to_instance = ParkingLotScene
-				elif i == 1:
-					scene_to_instance = BuildingSmallScene
-				elif i == 2:
-					scene_to_instance = CivicPlazaScene
+				# Chunk (0,0): Keep central 24m x 24m clear. Place low-profile structures in outer quadrant.
+				var helipad_lot_entry: Dictionary
+				var h_fallbacks: Array[String] = ["parking_lot", "small_c"]
+				if q == 0:
+					helipad_lot_entry = cat["parking_lot"]
+				elif q == 1:
+					helipad_lot_entry = cat["small_c"]
+				elif q == 2:
+					helipad_lot_entry = cat["parking_lot"]
 				else:
-					scene_to_instance = BuildingSmallBScene
-			DistrictType.HIGH_RISE:
-				# Landmark tall compositions downtown
-				if (absi(coord.x) == 1 and absi(coord.y) == 1 and i == 0):
-					scene_to_instance = BuildingLargeScene
-				elif (coord.x == 2 and coord.y == 0 and i == 0):
-					scene_to_instance = RadioTowerScene
-				else:
-					var pick: int = rng.randi_range(0, 3)
-					if pick == 0:
-						scene_to_instance = BuildingLargeScene
-					elif pick == 1:
-						scene_to_instance = BuildingLargeBScene
-					elif pick == 2:
-						scene_to_instance = BuildingMediumScene
-					else:
-						scene_to_instance = BuildingMediumBScene
-			DistrictType.MID_RISE:
-				if (absi(coord.x) == 3 and absi(coord.y) == 1 and i == 0):
-					scene_to_instance = CivicPlazaScene
-				else:
-					var pick_m: int = rng.randi_range(0, 4)
-					if pick_m == 0:
-						scene_to_instance = BuildingMediumScene
-					elif pick_m == 1:
-						scene_to_instance = BuildingMediumBScene
-					elif pick_m == 2:
-						scene_to_instance = BuildingSmallScene
-					elif pick_m == 3:
-						scene_to_instance = BuildingSmallBScene
-					else:
-						scene_to_instance = ParkingLotScene
-			DistrictType.INDUSTRIAL:
-				# Industrial Landmark: Water Tower Depot or Storage Complex
-				if (absi(coord.x) == 4 or absi(coord.y) == 4) and i == 0:
-					scene_to_instance = WaterTowerScene
-				elif (absi(coord.x) == 5 and i == 0):
-					scene_to_instance = StorageTanksScene
-				else:
-					var pick_i: int = rng.randi_range(0, 4)
-					if pick_i == 0:
-						scene_to_instance = WarehouseScene
-					elif pick_i == 1:
-						scene_to_instance = WarehouseSawtoothScene
-					elif pick_i == 2:
-						scene_to_instance = ContainerStackScene
-					elif pick_i == 3:
-						scene_to_instance = StorageTanksScene
-					else:
-						scene_to_instance = ParkingLotScene
-			DistrictType.RESIDENTIAL, _:
-				# Outskirts Landmark: Solar Array farm
-				if (absi(coord.x) == 6 and absi(coord.y) == 6 and i == 0):
-					scene_to_instance = SolarArrayScene
-				else:
-					var pick_r: int = rng.randi_range(0, 3)
-					if pick_r == 0:
-						scene_to_instance = BuildingSmallScene
-					elif pick_r == 1:
-						scene_to_instance = BuildingSmallBScene
-					elif pick_r == 2:
-						scene_to_instance = CivicPlazaScene
-					else:
-						scene_to_instance = ParkingLotScene
+					helipad_lot_entry = cat["small_b"]
+				_place_lot_building(helipad_lot_entry, 0.52, 0.52, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, h_fallbacks)
 
-		if scene_to_instance:
-			var b_inst := scene_to_instance.instantiate() as Node3D
-			if b_inst:
-				b_inst.name = "Building_Q%d" % i
-				b_inst.position = pos_offset
-				var rot_step: int = rng.randi_range(0, 3)
-				b_inst.rotation.y = float(rot_step) * (PI * 0.5)
-				buildings_root.add_child(b_inst)
+			DistrictType.HIGH_RISE:
+				var pattern_hr: int = rng.randi_range(0, 2)
+				if coord.x == 2 and coord.y == 0 and q == 0:
+					# Landmark Radio Tower quad
+					_place_lot_building(cat["radio_tower"], 0.28, 0.28, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
+					_place_lot_building(cat["medium_b"], 0.74, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
+					_place_lot_building(cat["small_c"], 0.50, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+				elif pattern_hr == 0:
+					# Archetype A: Skyscraper Anchor + Mid-Rise Flanks + Parking
+					var tower_entry: Dictionary = cat["skyscraper_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
+					var wing_entry: Dictionary = cat["medium_b"] if rng.randf() < 0.5 else cat["medium_c"]
+					var rear_entry: Dictionary = cat["skyscraper_c"] if rng.randf() < 0.6 else cat["medium_a"]
+					_place_lot_building(tower_entry, 0.26, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_c", "medium_a"])
+					_place_lot_building(wing_entry, 0.24, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a", "small_c"])
+					_place_lot_building(rear_entry, 0.74, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c", "small_b"])
+					_place_lot_building(cat["parking_lot"], 0.72, 0.26, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+				elif pattern_hr == 1:
+					# Archetype B: Urban Canyons (2-3 slender towers with wide flight alleys)
+					var t1: Dictionary = cat["skyscraper_c"]
+					var t2: Dictionary = cat["medium_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
+					var t3: Dictionary = cat["skyscraper_c"] if rng.randf() < 0.6 else cat["medium_c"]
+					_place_lot_building(t1, 0.22, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
+					_place_lot_building(t2, 0.74, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
+					_place_lot_building(t3, 0.24, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+				else:
+					# Archetype C: Civic / Tower Landmark
+					var landmark_tower: Dictionary = cat["skyscraper_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
+					_place_lot_building(cat["civic_plaza"], 0.44, 0.44, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(landmark_tower, 0.80, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_c", "medium_c"])
+					_place_lot_building(cat["small_b"], 0.24, 0.80, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+
+			DistrictType.MID_RISE:
+				var pattern_mr: int = rng.randi_range(0, 2)
+				if pattern_mr == 0:
+					# Archetype A: Commercial Street Frontage (4 lots lining streets)
+					var m_front: Dictionary = cat["medium_b"] if rng.randf() < 0.5 else cat["medium_a"]
+					var m_side: Dictionary = cat["small_a"] if rng.randf() < 0.5 else cat["small_b"]
+					var m_rear: Dictionary = cat["medium_c"]
+					_place_lot_building(m_front, 0.24, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a", "small_c"])
+					_place_lot_building(m_side, 0.24, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(m_rear, 0.74, 0.24, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+				elif pattern_mr == 1:
+					# Archetype B: Commercial Plaza Block
+					var m_office: Dictionary = cat["medium_a"] if rng.randf() < 0.5 else cat["medium_b"]
+					_place_lot_building(cat["parking_lot"], 0.26, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(m_office, 0.74, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
+					_place_lot_building(cat["small_b"], 0.24, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_workshop"])
+				else:
+					# Archetype C: Dense Office Quad (L-shape around courtyard)
+					_place_lot_building(cat["medium_c"], 0.22, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
+					_place_lot_building(cat["small_a"], 0.22, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["medium_b"], 0.74, 0.22, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
+					_place_lot_building(cat["parking_lot"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+
+			DistrictType.INDUSTRIAL:
+				var pattern_ind: int = rng.randi_range(0, 2)
+				if pattern_ind == 0:
+					# Archetype A: Logistics Yard (Warehouse + Container Stacks + Yard Office)
+					var wh: Dictionary = cat["warehouse_a"] if rng.randf() < 0.6 else cat["warehouse_b"]
+					_place_lot_building(wh, 0.34, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
+					_place_lot_building(cat["container_stack"], 0.22, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.44, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["small_c"], 0.74, 0.62, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+				elif pattern_ind == 1:
+					# Archetype B: Tank Farm & Storage (Storage tanks + Water tower + Containers)
+					_place_lot_building(cat["storage_tanks"], 0.28, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
+					_place_lot_building(cat["water_tower"], 0.72, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_b"], 0.24, 0.72, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.70, 0.70, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+				else:
+					# Archetype C: Sawtooth Depot
+					_place_lot_building(cat["warehouse_b"], 0.38, 0.38, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
+					_place_lot_building(cat["container_stack"], 0.78, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["parking_lot"], 0.78, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+
+			DistrictType.RESIDENTIAL, _:
+				var pattern_res: int = rng.randi_range(0, 2)
+				if pattern_res == 0:
+					# Archetype A: Suburban Multi-House Cluster (5-6 houses/cabins with front yards)
+					_place_lot_building(cat["town_house"], 0.18, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.18, 0.44, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.18, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_workshop"], 0.52, 0.24, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_cabin"], 0.52, 0.52, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.74, 0.72, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+				elif pattern_res == 1:
+					# Archetype B: Rural Workshop & Greenery
+					_place_lot_building(cat["town_workshop"], 0.24, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["solar_array"], 0.24, 0.68, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.66, 0.26, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.68, 0.68, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+				else:
+					# Archetype C: Village Square (houses around open central courtyard)
+					_place_lot_building(cat["town_house"], 0.20, 0.20, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.72, 0.20, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_workshop"], 0.20, 0.72, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.72, 0.72, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
 
 func _build_props(rng: RandomNumberGenerator) -> void:
 	props_root = Node3D.new()
@@ -724,8 +1154,30 @@ func _build_streetlight_multimesh() -> void:
 	mm_inst.name = "StreetlightsMultiMesh"
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.instance_count = 8
 
+	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
+	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
+	var ns_pole_x: float = ns_shoulder_w * 0.5 - 0.4
+	var ew_pole_z: float = ew_shoulder_w * 0.5 - 0.4
+
+	var lamp_positions: Array[Vector3] = []
+	var z_intervals: Array[float] = [-46.0, -24.0, 24.0, 46.0]
+	for z_pos in z_intervals:
+		lamp_positions.append(Vector3(-ns_pole_x, 3.5, z_pos))
+		lamp_positions.append(Vector3(ns_pole_x, 3.5, z_pos))
+
+	var x_intervals: Array[float] = [-46.0, -24.0, 24.0, 46.0]
+	for x_pos in x_intervals:
+		lamp_positions.append(Vector3(x_pos, 3.5, -ew_pole_z))
+		lamp_positions.append(Vector3(x_pos, 3.5, ew_pole_z))
+
+	# Helipad chunk (0,0): Keep central 26m takeoff perimeter completely clear
+	if coord == Vector2i.ZERO:
+		lamp_positions = lamp_positions.filter(func(p: Vector3) -> bool:
+			return absf(p.x) > 13.0 or absf(p.z) > 13.0
+		)
+
+	mm.instance_count = lamp_positions.size()
 	var pole_mesh := CylinderMesh.new()
 	pole_mesh.top_radius = 0.12
 	pole_mesh.bottom_radius = 0.16
@@ -733,19 +1185,8 @@ func _build_streetlight_multimesh() -> void:
 	pole_mesh.material = ConcreteAgedMat
 	mm.mesh = pole_mesh
 
-	var offsets: Array[Vector3] = [
-		Vector3(-10.0, 3.5, -45.0),
-		Vector3(-10.0, 3.5, -20.0),
-		Vector3(-10.0, 3.5, 20.0),
-		Vector3(-10.0, 3.5, 45.0),
-		Vector3(10.0, 3.5, -45.0),
-		Vector3(10.0, 3.5, -20.0),
-		Vector3(10.0, 3.5, 20.0),
-		Vector3(10.0, 3.5, 45.0)
-	]
-
-	for idx in range(8):
-		var t := Transform3D(Basis(), offsets[idx])
+	for idx in range(lamp_positions.size()):
+		var t := Transform3D(Basis(), lamp_positions[idx])
 		mm.set_instance_transform(idx, t)
 
 	mm_inst.multimesh = mm
@@ -753,20 +1194,28 @@ func _build_streetlight_multimesh() -> void:
 	props_root.add_child(mm_inst)
 
 func _build_vehicles(rng: RandomNumberGenerator) -> void:
-	var car_positions: Array[Vector3] = [
-		Vector3(-12.5, 0.0, -30.0),
-		Vector3(-12.5, 0.0, -21.0),
-		Vector3(-12.5, 0.0, 21.0),
-		Vector3(12.5, 0.0, -29.0),
-		Vector3(12.5, 0.0, 23.0),
-		Vector3(12.5, 0.0, 31.0)
+	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
+	var car_x: float = ns_asphalt_w * 0.5 - 1.1
+
+	var car_candidates: Array[Vector3] = [
+		Vector3(-car_x, 0.0, -32.0),
+		Vector3(-car_x, 0.0, -22.0),
+		Vector3(-car_x, 0.0, 22.0),
+		Vector3(car_x, 0.0, -30.0),
+		Vector3(car_x, 0.0, 24.0),
+		Vector3(car_x, 0.0, 32.0)
 	]
 
-	for idx in range(car_positions.size()):
-		var base_pos: Vector3 = car_positions[idx]
-		var jitter_z: float = rng.randf_range(-1.2, 1.2)
+	if coord == Vector2i.ZERO:
+		car_candidates = car_candidates.filter(func(p: Vector3) -> bool:
+			return absf(p.x) > 13.0 or absf(p.z) > 13.0
+		)
+
+	for idx in range(car_candidates.size()):
+		var base_pos: Vector3 = car_candidates[idx]
+		var jitter_z: float = rng.randf_range(-1.0, 1.0)
 		var spawn_pos: Vector3 = base_pos + Vector3(0.0, 0.0, jitter_z)
-		var rot_y: float = (PI if base_pos.x < 0.0 else 0.0) + rng.randf_range(-0.06, 0.06)
+		var rot_y: float = (PI if base_pos.x < 0.0 else 0.0) + rng.randf_range(-0.04, 0.04)
 
 		var is_wreck: bool = (district_type == DistrictType.INDUSTRIAL or district_type == DistrictType.RESIDENTIAL) and (idx == 1 or idx == 4) and (rng.randf() < 0.35)
 		var v_node: Node3D = null
@@ -779,7 +1228,6 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 			v_node.name = "Vehicle_%d" % idx
 			v_node.position = spawn_pos
 			v_node.rotation.y = rot_y
-			# Distance-based shadow LOD at creation time: only central chunks cast vehicle shadows
 			if coord.length() > 1.0:
 				for vc in v_node.find_children("*", "GeometryInstance3D", true, false):
 					var v_gi := vc as GeometryInstance3D
@@ -789,18 +1237,30 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 
 func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 	_init_shared_prop_resources()
+	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
+	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
+	var tree_x: float = ns_shoulder_w * 0.5 + 2.5
+	var tree_z: float = ew_shoulder_w * 0.5 + 2.5
 
 	var tree_positions: Array[Vector3] = [
-		Vector3(-15.0, 0.0, -48.0),
-		Vector3(-15.0, 0.0, 48.0),
-		Vector3(15.0, 0.0, -48.0),
-		Vector3(15.0, 0.0, 48.0),
-		Vector3(-48.0, 0.0, -15.0),
-		Vector3(48.0, 0.0, -15.0),
-		Vector3(-48.0, 0.0, 15.0),
-		Vector3(48.0, 0.0, 15.0)
+		Vector3(-tree_x, 0.0, -48.0),
+		Vector3(-tree_x, 0.0, 48.0),
+		Vector3(tree_x, 0.0, -48.0),
+		Vector3(tree_x, 0.0, 48.0),
+		Vector3(-48.0, 0.0, -tree_z),
+		Vector3(48.0, 0.0, -tree_z),
+		Vector3(-48.0, 0.0, tree_z),
+		Vector3(48.0, 0.0, tree_z)
 	]
+
+	if coord == Vector2i.ZERO:
+		tree_positions = tree_positions.filter(func(p: Vector3) -> bool:
+			return absf(p.x) > 14.0 or absf(p.z) > 14.0
+		)
+
 	var count: int = tree_positions.size()
+	if count == 0:
+		return
 
 	var mm_trunks := MultiMeshInstance3D.new()
 	mm_trunks.name = "TreeTrunksMultiMesh"
@@ -856,13 +1316,13 @@ func _build_micro_scenes(rng: RandomNumberGenerator) -> void:
 
 	if district_type == DistrictType.INDUSTRIAL:
 		if rng.randf() < 0.6:
-			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(12.0)), Vector3(13.2, 0.5, 24.0))
+			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(12.0)), Vector3(18.2, 0.5, 24.0))
 			barrier_transforms.append(b1)
-			var b2 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(-8.0)), Vector3(13.2, 0.5, 28.0))
+			var b2 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(-8.0)), Vector3(18.2, 0.5, 28.0))
 			barrier_transforms.append(b2)
 	elif district_type == DistrictType.RESIDENTIAL:
 		if rng.randf() < 0.4:
-			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(5.0)), Vector3(-13.2, 0.5, -22.0))
+			var b1 := Transform3D(Basis().rotated(Vector3.UP, deg_to_rad(5.0)), Vector3(-18.2, 0.5, -22.0))
 			barrier_transforms.append(b1)
 
 	if not barrier_transforms.is_empty():
@@ -910,8 +1370,13 @@ func _populate_gameplay_candidates() -> void:
 	air_entry_positions.append(origin + Vector3(0.0, 45.0, -60.0))
 	air_entry_positions.append(origin + Vector3(0.0, 45.0, 60.0))
 
-	# 3. Rooftop spawn points: traverse instantiated buildings for exact roof markers
-	if is_instance_valid(buildings_root):
+	# 3. Rooftop spawn points: collect from rooftop_sockets with fallback
+	for socket in rooftop_sockets:
+		var r_pos: Vector3 = socket.get("world_position", Vector3.ZERO) as Vector3
+		if not rooftop_spawn_points.has(r_pos):
+			rooftop_spawn_points.append(r_pos)
+
+	if rooftop_spawn_points.is_empty() and is_instance_valid(buildings_root):
 		for b_child in buildings_root.get_children():
 			if b_child is Node3D:
 				var m_roof: Marker3D = b_child.get_node_or_null("RooftopDefensePoint") as Marker3D
@@ -920,7 +1385,6 @@ func _populate_gameplay_candidates() -> void:
 				if m_roof:
 					rooftop_spawn_points.append(m_roof.global_position)
 				else:
-					# Fallback: estimate from district height
 					var est_y: float = 14.0
 					match district_type:
 						DistrictType.HIGH_RISE: est_y = 64.0
@@ -932,6 +1396,8 @@ func _populate_gameplay_candidates() -> void:
 	# 4. Objective candidates: key building centers or roofs
 	if not rooftop_spawn_points.is_empty():
 		objective_candidates.append(rooftop_spawn_points[0])
+		if rooftop_spawn_points.size() > 2:
+			objective_candidates.append(rooftop_spawn_points[2])
 	objective_candidates.append(origin + Vector3(36.0, 0.3, 36.0))
 	objective_candidates.append(origin + Vector3(-36.0, 0.3, -36.0))
 

@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://e4w2v7a8c1f9n"]
+[gd_scene format=3 uid="uid://bai7b5dyrtkiv"]
 
-[ext_resource type="Script" path="res://scripts/vfx/muzzle_flash.gd" id="1_flash"]
+[ext_resource type="Script" uid="uid://di5wfiqui2v2d" path="res://scripts/vfx/muzzle_flash.gd" id="1_flash"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 shading_mode = 0
@@ -11,13 +11,8 @@ material = SubResource("StandardMaterial3D_1")
 radius = 0.2
 height = 0.4
 
-[node name="MuzzleFlash" type="Node3D"]
+[node name="MuzzleFlash" type="Node3D" unique_id=1002272855]
 script = ExtResource("1_flash")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=40573081]
 mesh = SubResource("SphereMesh_1")
-
-[node name="OmniLight3D" type="OmniLight3D" parent="."]
-light_color = Color(1, 0.85, 0.4, 1)
-light_energy = 2.0
-omni_range = 4.0
