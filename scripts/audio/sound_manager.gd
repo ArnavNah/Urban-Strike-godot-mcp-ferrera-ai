@@ -151,7 +151,7 @@ func _on_combat_impact(_hit_pos: Vector3, _normal: Vector3, is_armored: bool, _i
 		_last_impact_terrain_time = now
 		_play_sweep(105.0, 45.0, 0.04, 0.18, true)
 
-func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, _source_pos: Vector3, is_shield_hit: bool) -> void:
+func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, _source_pos: Vector3, is_shield_hit: bool, _metadata: Dictionary = {}) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - _last_player_hit_time < 0.06:
 		return

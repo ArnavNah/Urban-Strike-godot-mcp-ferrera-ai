@@ -719,7 +719,7 @@ func _on_setting_changed(key: String, val: Variant) -> void:
 			_high_contrast_indicators = bool(val)
 			queue_redraw()
 
-func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, source_pos: Vector3, is_shield: bool) -> void:
+func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, source_pos: Vector3, is_shield: bool, _metadata: Dictionary = {}) -> void:
 	var cam := get_viewport().get_camera_3d()
 	if not cam or not is_instance_valid(_player):
 		return

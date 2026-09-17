@@ -666,7 +666,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 			EventBus.camera_shake_requested.emit(0.15)
 		if EventBus and EventBus.has_signal("player_damaged_directional"):
 			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
-			EventBus.player_damaged_directional.emit(0.0, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, true)
+			EventBus.player_damaged_directional.emit(0.0, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, true, {"target_id": get_instance_id()})
 		return
 
 	# Emergency Aegis Countermeasure: Trigger when falling below 35% hull
@@ -694,7 +694,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		EventBus.player_health_changed.emit(current_health, max_health)
 		if EventBus.has_signal("player_damaged_directional"):
 			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
-			EventBus.player_damaged_directional.emit(amount, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, false)
+			EventBus.player_damaged_directional.emit(amount, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, false, {"target_id": get_instance_id()})
 		if EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.25)
 

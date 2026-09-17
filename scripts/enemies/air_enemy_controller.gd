@@ -960,7 +960,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.5, 0), amount, false)
+		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.5, 0), amount, false, {"target_id": get_instance_id()})
 
 	if visuals:
 		var tw := create_tween()

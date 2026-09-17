@@ -112,6 +112,8 @@ func _ready() -> void:
 	success = test_damage_number_pooling_and_limits(log_lines) and success
 	append_log("Running test 46 (Damage categories, actual crits & player damage)...", log_lines)
 	success = test_damage_number_categories_and_player_damage(log_lines) and success
+	append_log("Running test 47 (Damage aggregation, clutter reduction & death flush)...", log_lines)
+	success = test_damage_number_aggregation_and_clutter_reduction(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -7189,4 +7191,249 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 	manager._disconnect_events()
 	vp.queue_free()
 	append_log("  -> Test 46 PASSED: Damage categories, actual crits, player damage & deduplication fully validated.", logs)
+	return true
+
+func test_damage_number_aggregation_and_clutter_reduction(logs: Array[String]) -> bool:
+	append_log("[TEST 47] Damage Number Aggregation, Clutter Reduction & Death Flush...", logs)
+
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	add_child(vp)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 10.0, 15.0)
+	cam.look_at_from_position(cam.position, Vector3(0.0, 0.0, 0.0), Vector3.UP)
+	cam.current = true
+	vp.add_child(cam)
+
+	var manager := DamageNumberManager.new()
+	vp.add_child(manager)
+	manager.set_camera(cam)
+
+	var visible_pos := Vector3(0.0, 0.0, 0.0)
+
+	var deactivate_all := func():
+		for label in manager._pool:
+			if is_instance_valid(label) and label.is_active:
+				label.deactivate()
+		manager.flush_all_buckets()
+		for label in manager._pool:
+			if is_instance_valid(label) and label.is_active:
+				label.deactivate()
+
+	var get_active_labels := func() -> Array[DamageNumber]:
+		var actives: Array[DamageNumber] = []
+		for label in manager._pool:
+			if is_instance_valid(label) and label.is_active:
+				actives.append(label)
+		return actives
+
+	# --- Sub-step 1: Ten known hits against one enemy ---
+	deactivate_all.call()
+	var enemy_a_id := 5001
+	for i in range(10):
+		EventBus.damage_number_spawned.emit(visible_pos, 12.5, false, {"target_id": enemy_a_id})
+
+	# Bucket is currently accumulating (window not yet expired)
+	if manager.get_pending_bucket_count() != 1:
+		append_log("FAIL: [Step 1] Expected exactly 1 pending bucket for enemy A, got %d" % manager.get_pending_bucket_count(), logs)
+		vp.queue_free()
+		return false
+
+	var total_accum := manager.get_bucket_total(enemy_a_id, DamageNumberManager.DamageCategory.NORMAL)
+	if absf(total_accum - 125.0) > 0.001:
+		append_log("FAIL: [Step 1] Expected bucket total 125.0, got %.3f" % total_accum, logs)
+		vp.queue_free()
+		return false
+
+	# Active labels must remain 0 during collection window (no intermediate overlapping cumulative numbers!)
+	if manager.get_active_count() != 0:
+		append_log("FAIL: [Step 1] Active labels displayed before bucket completion: %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	# Advance time past 100 ms window (e.g. 0.11s)
+	manager._process(0.11)
+
+	# Exactly 1 completed number emitted
+	var actives_step1: Array = get_active_labels.call()
+	if actives_step1.size() != 1:
+		append_log("FAIL: [Step 1] Expected exactly 1 emitted number after window completion, got %d" % actives_step1.size(), logs)
+		vp.queue_free()
+		return false
+
+	var lbl1: DamageNumber = actives_step1[0]
+	if lbl1.text != "125":
+		append_log("FAIL: [Step 1] Expected label text '125', got '%s'" % lbl1.text, logs)
+		vp.queue_free()
+		return false
+
+	append_log("  -> Sub-step 1: Ten known hits against one enemy aggregated into exactly 1 number ('125') verified.", logs)
+
+	# --- Sub-step 2: Simultaneous hits on two distinct enemies ---
+	deactivate_all.call()
+	var enemy_1_id := 6001
+	var enemy_2_id := 6002
+	var pos_1 := Vector3(-2.0, 0.0, 0.0)
+	var pos_2 := Vector3(2.0, 0.0, 0.0)
+
+	# 3 hits to enemy 1 (20.0 each = 60.0)
+	for i in range(3):
+		EventBus.damage_number_spawned.emit(pos_1, 20.0, false, {"target_id": enemy_1_id})
+
+	# 2 hits to enemy 2 (45.0 each = 90.0)
+	for i in range(2):
+		EventBus.damage_number_spawned.emit(pos_2, 45.0, false, {"target_id": enemy_2_id})
+
+	if manager.get_pending_bucket_count() != 2:
+		append_log("FAIL: [Step 2] Expected 2 distinct pending buckets, got %d" % manager.get_pending_bucket_count(), logs)
+		vp.queue_free()
+		return false
+
+	manager._process(0.11)
+	var actives_step2: Array = get_active_labels.call()
+	if actives_step2.size() != 2:
+		append_log("FAIL: [Step 2] Expected 2 distinct active labels for 2 enemies, got %d" % actives_step2.size(), logs)
+		vp.queue_free()
+		return false
+
+	var texts_step2 := [actives_step2[0].text, actives_step2[1].text]
+	if not ("60" in texts_step2 and "90" in texts_step2):
+		append_log("FAIL: [Step 2] Expected numbers '60' and '90', got %s" % str(texts_step2), logs)
+		vp.queue_free()
+		return false
+
+	append_log("  -> Sub-step 2: Simultaneous hits on two distinct enemies remained strictly separate ('60' & '90').", logs)
+
+	# --- Sub-step 3: Mixed categories on the same enemy ---
+	deactivate_all.call()
+	var enemy_mixed_id := 7001
+	# Normal damage: 2 hits of 15.0 = 30.0
+	EventBus.damage_number_spawned.emit(visible_pos, 15.0, false, {"target_id": enemy_mixed_id})
+	EventBus.damage_number_spawned.emit(visible_pos, 15.0, false, {"target_id": enemy_mixed_id})
+	# Critical damage: 1 hit of 80.0
+	EventBus.damage_number_spawned.emit(visible_pos, 80.0, true, {"target_id": enemy_mixed_id, "is_critical": true})
+
+	if manager.get_pending_bucket_count() != 2:
+		append_log("FAIL: [Step 3] Normal and Critical damage on same target must produce separate buckets", logs)
+		vp.queue_free()
+		return false
+
+	manager._process(0.11)
+	var actives_step3: Array = get_active_labels.call()
+	if actives_step3.size() != 2:
+		append_log("FAIL: [Step 3] Expected 2 active labels for mixed categories, got %d" % actives_step3.size(), logs)
+		vp.queue_free()
+		return false
+
+	var has_normal := false
+	var has_crit := false
+	for lbl in actives_step3:
+		if lbl.category == DamageNumber.DamageCategory.NORMAL and lbl.text == "30":
+			has_normal = true
+		elif lbl.category == DamageNumber.DamageCategory.CRITICAL and lbl.text.contains("80"):
+			has_crit = true
+
+	if not (has_normal and has_crit):
+		append_log("FAIL: [Step 3] Expected separate Normal ('30') and Critical ('★ 80') labels", logs)
+		vp.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: Mixed categories on same enemy kept strictly separate (Normal '30' & Critical '★ 80').", logs)
+
+	# --- Sub-step 4: Target death before window closes ---
+	deactivate_all.call()
+	var dying_dummy := TargetDummy.new()
+	vp.add_child(dying_dummy)
+	dying_dummy.global_position = Vector3(1.0, 0.0, -1.0)
+	var dummy_id := dying_dummy.get_instance_id()
+
+	# Hit 1: 30.0 damage at t=0
+	EventBus.damage_number_spawned.emit(dying_dummy.global_position, 30.0, false, {"target_id": dummy_id})
+	# Hit 2: 40.0 damage at t=0.02
+	manager._process(0.02)
+	EventBus.damage_number_spawned.emit(dying_dummy.global_position, 40.0, false, {"target_id": dummy_id})
+
+	# Window has NOT expired yet (remaining ~0.08s)
+	if manager.get_active_count() != 0:
+		append_log("FAIL: [Step 4] Label displayed prematurely before death or window close", logs)
+		dying_dummy.queue_free()
+		vp.queue_free()
+		return false
+
+	# Target dies: emits EventBus.enemy_destroyed and queues free
+	EventBus.enemy_destroyed.emit(dying_dummy, 50)
+	dying_dummy.queue_free()
+
+	# Must have flushed immediately upon death signal!
+	var actives_step4: Array = get_active_labels.call()
+	if actives_step4.size() != 1:
+		append_log("FAIL: [Step 4] Expected exactly 1 label flushed immediately upon target death, got %d" % actives_step4.size(), logs)
+		vp.queue_free()
+		return false
+
+	var death_lbl: DamageNumber = actives_step4[0]
+	if death_lbl.text != "70":
+		append_log("FAIL: [Step 4] Expected total '70' (30 + 40 lethal) on death flush, got '%s'" % death_lbl.text, logs)
+		vp.queue_free()
+		return false
+
+	append_log("  -> Sub-step 4: Target death immediately flushed pending bucket ('70') using cached position without memory leak.", logs)
+
+	# --- Sub-step 5: Player damage aggregation ---
+	deactivate_all.call()
+	var player_id := 9999
+	EventBus.player_damaged_directional.emit(14.5, visible_pos, Vector3.ZERO, false, {"target_id": player_id})
+	EventBus.player_damaged_directional.emit(14.5, visible_pos, Vector3.ZERO, false, {"target_id": player_id})
+
+	if manager.get_pending_bucket_count() != 1:
+		append_log("FAIL: [Step 5] Rapid player damage should aggregate into 1 pending bucket", logs)
+		vp.queue_free()
+		return false
+
+	manager._process(0.11)
+	var actives_step5: Array = get_active_labels.call()
+	if actives_step5.size() != 1:
+		append_log("FAIL: [Step 5] Expected 1 label for aggregated player damage, got %d" % actives_step5.size(), logs)
+		vp.queue_free()
+		return false
+
+	var player_lbl: DamageNumber = actives_step5[0]
+	if not player_lbl.text.contains("-29"):
+		append_log("FAIL: [Step 5] Expected player label '▼ -29', got '%s'" % player_lbl.text, logs)
+		vp.queue_free()
+		return false
+
+	append_log("  -> Sub-step 5: Player damage aggregated into single indicator ('▼ -29') verified.", logs)
+
+	# --- Sub-step 6: Large total abbreviation ---
+	if DamageNumber.format_damage_value(1200.0) != "1.2K":
+		append_log("FAIL: [Step 6] Expected 1200.0 to format as '1.2K', got '%s'" % DamageNumber.format_damage_value(1200.0), logs)
+		vp.queue_free()
+		return false
+	if DamageNumber.format_damage_value(3400000.0) != "3.4M":
+		append_log("FAIL: [Step 6] Expected 3400000.0 to format as '3.4M', got '%s'" % DamageNumber.format_damage_value(3400000.0), logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 6: Large total abbreviation ('1.2K' & '3.4M') verified.", logs)
+
+	# --- Sub-step 7: Clean scene exit ---
+	deactivate_all.call()
+	EventBus.damage_number_spawned.emit(visible_pos, 50.0, false, {"target_id": 8888})
+	if manager.get_pending_bucket_count() != 1:
+		append_log("FAIL: [Step 7] Failed to create pending bucket before exit", logs)
+		vp.queue_free()
+		return false
+
+	manager._exit_tree()
+	if manager.get_pending_bucket_count() != 0:
+		append_log("FAIL: [Step 7] Pending buckets not cleared on _exit_tree()", logs)
+		vp.queue_free()
+		return false
+	append_log("  -> Sub-step 7: Scene exit cleanly clears pending buckets with 0 leaks.", logs)
+	manager._disconnect_events()
+	manager.queue_free()
+	cam.queue_free()
+	vp.queue_free()
+	append_log("  -> Test 47 PASSED: Damage number aggregation, clutter reduction & death flush fully validated.", logs)
 	return true

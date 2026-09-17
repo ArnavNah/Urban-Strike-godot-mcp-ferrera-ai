@@ -248,7 +248,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		if eb.has_signal("boss_health_changed"):
 			eb.emit_signal("boss_health_changed", current_health, max_health, current_phase)
 		if eb.has_signal("damage_number_spawned"):
-			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false)
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false, {"target_id": get_instance_id()})
 
 	if current_health <= 0.0:
 		_die()

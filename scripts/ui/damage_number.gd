@@ -17,6 +17,18 @@ var manager: DamageNumberManager = null
 var _tween: Tween = null
 var category: int = DamageCategory.NORMAL
 
+static func format_damage_value(val: float) -> String:
+	if val >= 1_000_000.0:
+		return "%.1fM" % (val / 1_000_000.0)
+	elif val >= 1_000.0:
+		return "%.1fK" % (val / 1_000.0)
+	elif val >= 1.0:
+		return str(int(roundf(val)))
+	elif val > 0.0:
+		return "%.1f" % val
+	else:
+		return "0"
+
 func _ready() -> void:
 	if not is_active:
 		set_process(false)
@@ -64,7 +76,7 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 	match category:
 		DamageCategory.CRITICAL:
 			# Actual critical damage: gold, slightly larger, stronger pop, multi-cue icon
-			text = "★ %d" % int(amount) if amount >= 1.0 else "★ %.1f" % amount
+			text = "★ %s" % format_damage_value(amount)
 			add_theme_font_size_override("font_size", 22)
 			add_theme_color_override("font_color", Color(1.0, 0.82, 0.15, 1.0))
 			pivot_offset = size * 0.5
@@ -74,7 +86,7 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 				_tween.tween_property(self, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		DamageCategory.PLAYER:
 			# Player damage received: distinct red treatment with downward arrow + negative indicator
-			text = "▼ -%d" % int(amount) if amount >= 1.0 else "▼ -%.1f" % amount
+			text = "▼ -%s" % format_damage_value(amount)
 			add_theme_font_size_override("font_size", 18)
 			add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
 			pivot_offset = size * 0.5
@@ -84,7 +96,7 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 				_tween.tween_property(self, "scale", Vector2.ONE, 0.10).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		DamageCategory.BLOCKED:
 			# Blocked or zero-damage hits: steel cyan, shield tag
-			text = "[SHIELD] 0" if amount <= 0.0 else "[BLOCKED] %d" % int(amount)
+			text = "[SHIELD] 0" if amount <= 0.0 else "[BLOCKED] %s" % format_damage_value(amount)
 			add_theme_font_size_override("font_size", 15)
 			add_theme_color_override("font_color", Color(0.65, 0.85, 1.0, 0.95))
 			pivot_offset = size * 0.5
@@ -94,7 +106,7 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 				_tween.tween_property(self, "scale", Vector2.ONE, 0.08).set_ease(Tween.EASE_OUT)
 		_: # DamageCategory.NORMAL
 			# Normal enemy damage: cream/off-white, standard clean number
-			text = str(int(amount)) if amount >= 1.0 else "%.1f" % amount
+			text = format_damage_value(amount)
 			add_theme_font_size_override("font_size", 16)
 			add_theme_color_override("font_color", Color(0.96, 0.94, 0.88, 1.0))
 			pivot_offset = size * 0.5

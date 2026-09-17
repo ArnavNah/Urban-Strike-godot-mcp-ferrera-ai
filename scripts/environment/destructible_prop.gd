@@ -27,7 +27,7 @@ func take_damage(amount: float, _source: Node = null, hit_pos: Vector3 = Vector3
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
 		var p: Vector3 = hit_pos if hit_pos != Vector3.ZERO else ((global_position if is_inside_tree() else position) + Vector3(0, 1.2, 0))
-		eb.emit_signal("damage_number_spawned", p, amount, false)
+		eb.emit_signal("damage_number_spawned", p, amount, false, {"target_id": get_instance_id()})
 
 	if current_health <= 0.0:
 		_destroy_prop()

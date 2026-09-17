@@ -3,7 +3,8 @@ extends Control
 
 ## High-performance preallocated label pool for combat damage numbers.
 ## Replaces per-hit instantiation/destruction with zero-allocation pooling,
-## camera frustum/screen culling, preset-aware active caps, and multi-cue category handling.
+## camera frustum/screen culling, preset-aware active caps, multi-cue category handling,
+## and a 100 ms per-target aggregation window to eliminate continuous-fire clutter.
 
 static var instance: DamageNumberManager = null
 
@@ -19,6 +20,7 @@ const PRESET_BUDGET_MEDIUM: int = 40
 const PRESET_BUDGET_HIGH: int = 56
 const MAX_EFFECT_DISTANCE_SQ: float = 150.0 * 150.0
 const SCREEN_CULL_MARGIN: float = 50.0
+const AGGREGATION_WINDOW: float = 0.10 # 100 ms fixed aggregation window from first hit
 
 @export var pool_size: int = 64
 @export var max_active_numbers: int = 40
@@ -30,6 +32,7 @@ var _active_labels: Array[DamageNumber] = []
 var _cached_camera: Camera3D = null
 var _recent_event_keys: Dictionary = {}
 var _last_dedup_frame: int = -1
+var _pending_buckets: Dictionary = {} # key: "%d_%d" % [target_id, category] -> Dictionary
 
 func _get_event_bus() -> Node:
 	if is_inside_tree():
@@ -56,6 +59,7 @@ func _exit_tree() -> void:
 	_active_labels.clear()
 	_free_labels.clear()
 	_recent_event_keys.clear()
+	_pending_buckets.clear()
 
 	if instance == self:
 		instance = null
@@ -65,6 +69,20 @@ func _ready() -> void:
 	_init_pool()
 	_connect_events()
 
+func _process(delta: float) -> void:
+	if _pending_buckets.is_empty():
+		return
+
+	var expired_keys: Array[String] = []
+	for key in _pending_buckets:
+		var bucket: Dictionary = _pending_buckets[key]
+		bucket["time_remaining"] -= delta
+		if bucket["time_remaining"] <= 0.0:
+			expired_keys.append(key)
+
+	for key in expired_keys:
+		_flush_bucket(key)
+
 func _connect_events() -> void:
 	var eb := _get_event_bus()
 	if not eb:
@@ -73,6 +91,8 @@ func _connect_events() -> void:
 		eb.damage_number_spawned.connect(_on_damage_spawned)
 	if eb.has_signal("player_damaged_directional") and not eb.player_damaged_directional.is_connected(_on_player_damaged_directional):
 		eb.player_damaged_directional.connect(_on_player_damaged_directional)
+	if eb.has_signal("enemy_destroyed") and not eb.enemy_destroyed.is_connected(_on_enemy_destroyed):
+		eb.enemy_destroyed.connect(_on_enemy_destroyed)
 
 func _disconnect_events() -> void:
 	var eb := _get_event_bus()
@@ -82,6 +102,8 @@ func _disconnect_events() -> void:
 		eb.damage_number_spawned.disconnect(_on_damage_spawned)
 	if eb.has_signal("player_damaged_directional") and eb.player_damaged_directional.is_connected(_on_player_damaged_directional):
 		eb.player_damaged_directional.disconnect(_on_player_damaged_directional)
+	if eb.has_signal("enemy_destroyed") and eb.enemy_destroyed.is_connected(_on_enemy_destroyed):
+		eb.enemy_destroyed.disconnect(_on_enemy_destroyed)
 
 func set_preset(preset_name: String) -> void:
 	match preset_name.to_lower():
@@ -131,19 +153,41 @@ func get_active_camera() -> Camera3D:
 
 	return _cached_camera
 
-func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool) -> void:
+func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool = false, metadata: Dictionary = {}) -> void:
 	var cat := DamageCategory.NORMAL
-	if amount <= 0.0:
+	if amount <= 0.0 or metadata.get("is_blocked", false):
 		cat = DamageCategory.BLOCKED
-	elif is_critical:
+	elif metadata.get("is_player", false) or metadata.get("target_type", "") == "player":
+		cat = DamageCategory.PLAYER
+	elif is_critical or metadata.get("is_critical", false):
 		cat = DamageCategory.CRITICAL
-	spawn_damage_number(pos, amount, is_critical, cat)
+	spawn_damage_number(pos, amount, is_critical, cat, metadata)
 
-func _on_player_damaged_directional(amount: float, hit_pos: Vector3, source_pos: Vector3, is_shield_hit: bool) -> void:
+func _get_player_target_id() -> int:
+	if is_inside_tree():
+		var player := get_tree().get_first_node_in_group("player")
+		if is_instance_valid(player):
+			return player.get_instance_id()
+	return 1
+
+func _on_player_damaged_directional(amount: float, hit_pos: Vector3, source_pos: Vector3, is_shield_hit: bool, metadata: Dictionary = {}) -> void:
+	var player_tid: int = metadata.get("target_id", 0)
+	var meta: Dictionary = metadata.duplicate()
+	meta["source_pos"] = source_pos
+	if player_tid != 0:
+		meta["target_id"] = player_tid
 	if is_shield_hit or amount <= 0.0:
-		spawn_damage_number(hit_pos, 0.0, false, DamageCategory.BLOCKED, {"is_blocked": true, "source_pos": source_pos})
+		meta["is_blocked"] = true
+		spawn_damage_number(hit_pos, 0.0, false, DamageCategory.BLOCKED, meta)
 	else:
-		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER, {"is_player": true, "source_pos": source_pos})
+		meta["is_player"] = true
+		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER, meta)
+
+func _on_enemy_destroyed(enemy: Node3D, _points: int = 0) -> void:
+	if not is_instance_valid(enemy):
+		return
+	var tid := enemy.get_instance_id()
+	flush_target_buckets(tid)
 
 func spawn_damage_number(
 	pos: Vector3,
@@ -152,7 +196,34 @@ func spawn_damage_number(
 	category: int = DamageCategory.NORMAL,
 	metadata: Dictionary = {}
 ) -> void:
-	# Duplicate Prevention: drop identical category/amount/approx-pos events in the same frame
+	var target_id: int = metadata.get("target_id", 0)
+	if target_id != 0:
+		# Per-target 100 ms fixed aggregation window
+		var bucket_key := "%d_%d" % [target_id, category]
+		if _pending_buckets.has(bucket_key):
+			var bucket: Dictionary = _pending_buckets[bucket_key]
+			bucket["total_amount"] += amount
+			bucket["hit_count"] += 1
+			bucket["last_pos"] = pos
+			if is_critical:
+				bucket["is_critical"] = true
+			for k in metadata:
+				if not bucket["metadata"].has(k):
+					bucket["metadata"][k] = metadata[k]
+		else:
+			_pending_buckets[bucket_key] = {
+				"target_id": target_id,
+				"category": category,
+				"total_amount": amount,
+				"hit_count": 1,
+				"last_pos": pos,
+				"time_remaining": AGGREGATION_WINDOW,
+				"is_critical": is_critical,
+				"metadata": metadata.duplicate()
+			}
+		return
+
+	# Untargeted fallback: immediate display with same-frame duplicate prevention
 	var current_frame := Engine.get_process_frames()
 	if current_frame != _last_dedup_frame:
 		_last_dedup_frame = current_frame
@@ -163,6 +234,56 @@ func spawn_damage_number(
 		return
 	_recent_event_keys[dedup_key] = true
 
+	_display_damage_number(pos, amount, is_critical, category, metadata)
+
+func _flush_bucket(key: String) -> void:
+	if not _pending_buckets.has(key):
+		return
+	var bucket: Dictionary = _pending_buckets[key]
+	_pending_buckets.erase(key)
+
+	var pos: Vector3 = bucket.get("last_pos", Vector3.ZERO)
+	var amount: float = bucket.get("total_amount", 0.0)
+	var is_critical: bool = bucket.get("is_critical", false)
+	var category: int = bucket.get("category", DamageCategory.NORMAL)
+	var metadata: Dictionary = bucket.get("metadata", {})
+
+	_display_damage_number(pos, amount, is_critical, category, metadata)
+
+func flush_target_buckets(target_id: int) -> void:
+	if _pending_buckets.is_empty():
+		return
+	var to_flush: Array[String] = []
+	for key in _pending_buckets:
+		var bucket: Dictionary = _pending_buckets[key]
+		if bucket.get("target_id", 0) == target_id:
+			to_flush.append(key)
+	for key in to_flush:
+		_flush_bucket(key)
+
+func flush_all_buckets() -> void:
+	if _pending_buckets.is_empty():
+		return
+	var keys: Array = _pending_buckets.keys()
+	for key in keys:
+		_flush_bucket(str(key))
+
+func get_pending_bucket_count() -> int:
+	return _pending_buckets.size()
+
+func get_bucket_total(target_id: int, category: int = DamageCategory.NORMAL) -> float:
+	var key := "%d_%d" % [target_id, category]
+	if _pending_buckets.has(key):
+		return _pending_buckets[key].get("total_amount", 0.0)
+	return 0.0
+
+func _display_damage_number(
+	pos: Vector3,
+	amount: float,
+	is_critical: bool = false,
+	category: int = DamageCategory.NORMAL,
+	metadata: Dictionary = {}
+) -> void:
 	var cam := get_active_camera()
 	if not cam or not cam.is_inside_tree():
 		return

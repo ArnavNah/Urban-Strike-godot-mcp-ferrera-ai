@@ -277,7 +277,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	_trigger_damage_flash()
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false)
+		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false, {"target_id": get_instance_id()})
 	if current_health <= 0.0:
 		_die()
 
