@@ -78,6 +78,9 @@ static var _crate_mesh: BoxMesh = null
 static var _fence_mesh: BoxMesh = null
 static var _truck_chassis_mesh: BoxMesh = null
 static var _truck_cab_mesh: BoxMesh = null
+static var _kenney_tree_small_mesh: Mesh = null
+static var _kenney_tree_large_mesh: Mesh = null
+static var _kenney_planter_mesh: Mesh = null
 
 static func _init_shared_prop_resources() -> void:
 	if _shared_props_initialized:
@@ -180,6 +183,34 @@ static func _init_shared_prop_resources() -> void:
 	_truck_cab_mesh = BoxMesh.new()
 	_truck_cab_mesh.size = Vector3(2.2, 1.0, 1.8)
 	_truck_cab_mesh.material = cab_mat
+
+	# Cache Kenney suburban tree and planter meshes
+	var small_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/tree-small.glb") as PackedScene
+	if small_scene:
+		var temp_node := small_scene.instantiate() as Node3D
+		if temp_node:
+			var mi := temp_node.find_child("tree-small", true, false) as MeshInstance3D
+			if mi and mi.mesh:
+				_kenney_tree_small_mesh = mi.mesh
+			temp_node.free()
+
+	var large_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/tree-large.glb") as PackedScene
+	if large_scene:
+		var temp_node := large_scene.instantiate() as Node3D
+		if temp_node:
+			var mi := temp_node.find_child("tree-large", true, false) as MeshInstance3D
+			if mi and mi.mesh:
+				_kenney_tree_large_mesh = mi.mesh
+			temp_node.free()
+
+	var planter_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/planter.glb") as PackedScene
+	if planter_scene:
+		var temp_node := planter_scene.instantiate() as Node3D
+		if temp_node:
+			var mi := temp_node.find_child("planter", true, false) as MeshInstance3D
+			if mi and mi.mesh:
+				_kenney_planter_mesh = mi.mesh
+			temp_node.free()
 
 var coord: Vector2i = Vector2i.ZERO
 var detail_level: DetailLevel = DetailLevel.UNLOADED
@@ -390,6 +421,14 @@ func _get_chunk_rng() -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
 	var h: int = chunk_seed
 	h = ((h ^ (coord.x * 73856093)) ^ (coord.y * 19349663)) & 0x7FFFFFFF
+	h = ((h ^ (h >> 13)) * 1274126177) & 0x7FFFFFFF
+	rng.seed = h
+	return rng
+
+func _get_decoration_rng() -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	var h: int = chunk_seed ^ 0x5F3759DF
+	h = ((h ^ (coord.x * 45293047)) ^ (coord.y * 31415926)) & 0x7FFFFFFF
 	h = ((h ^ (h >> 13)) * 1274126177) & 0x7FFFFFFF
 	rng.seed = h
 	return rng
@@ -947,6 +986,8 @@ func _place_lot_building(
 		"world_position": global_position + final_pos,
 		"local_position": final_pos,
 		"footprint_size": b_size,
+		"effective_size": Vector2(eff_w, eff_d),
+		"bounds_rect": Rect2(final_pos.x - eff_w * 0.5, final_pos.z - eff_d * 0.5, eff_w, eff_d),
 		"height": entry["height"],
 		"has_rooftop_socket": entry["has_flat_roof"],
 		"rooftop_socket_id": ""
@@ -1237,6 +1278,314 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 
 func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 	_init_shared_prop_resources()
+	var dec_rng := _get_decoration_rng()
+
+	# Foliage shadow casting: OFF on LOW preset (or beyond center chunks), ON on Medium/High in center area
+	var shadow_setting: GeometryInstance3D.ShadowCastingSetting = (
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (coord.length() > 1.5 or SaveSystem.low_particles)
+		else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+
+	# Fallback if Kenney meshes are unavailable
+	if _kenney_tree_small_mesh == null:
+		_build_procedural_fallback_trees(rng, shadow_setting)
+		return
+
+	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
+	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
+	var x_inner: float = 12.0 if ns_is_avenue else 8.5
+	var z_inner: float = 12.0 if ew_is_avenue else 8.5
+
+	var small_transforms: Array[Transform3D] = []
+	var large_transforms: Array[Transform3D] = []
+	var planter_transforms: Array[Transform3D] = []
+	var placed_vegetation: Array[Dictionary] = []
+
+	# --------------------------------------------------------------------------
+	# 1. Sidewalk Avenue Trees & Planters (Replaces procedural cylinder slots)
+	# --------------------------------------------------------------------------
+	var tree_x: float = ns_shoulder_w * 0.5 + 2.2
+	var tree_z: float = ew_shoulder_w * 0.5 + 2.2
+	var sidewalk_slots: Array[Vector3] = [
+		Vector3(-tree_x, 0.12, -48.0),
+		Vector3(-tree_x, 0.12, 48.0),
+		Vector3(tree_x, 0.12, -48.0),
+		Vector3(tree_x, 0.12, 48.0),
+		Vector3(-48.0, 0.12, -tree_z),
+		Vector3(48.0, 0.12, -tree_z),
+		Vector3(-48.0, 0.12, tree_z),
+		Vector3(48.0, 0.12, tree_z)
+	]
+
+	for slot_pos in sidewalk_slots:
+		if coord == Vector2i.ZERO:
+			if absf(slot_pos.x) < 16.0 and absf(slot_pos.z) < 16.0:
+				continue
+		# Industrial district: sparse planting (skip ~50% of avenue slots)
+		if district_type == DistrictType.INDUSTRIAL and dec_rng.randf() < 0.5:
+			continue
+
+		if not _is_vegetation_position_clear(slot_pos, 1.2, placed_vegetation, x_inner, z_inner):
+			continue
+
+		var t_type := "small"
+		if district_type == DistrictType.RESIDENTIAL:
+			t_type = "large" if dec_rng.randf() < 0.6 else "small"
+		elif district_type == DistrictType.HIGH_RISE:
+			t_type = "planter" if dec_rng.randf() < 0.4 else "small"
+		else:
+			t_type = "small" if dec_rng.randf() < 0.7 else "large"
+
+		_add_vegetation_instance(slot_pos, t_type, dec_rng, small_transforms, large_transforms, planter_transforms, placed_vegetation)
+
+	# --------------------------------------------------------------------------
+	# 2. Pocket Trees & Planters in Unused Gaps (District-Sensitive Density)
+	# --------------------------------------------------------------------------
+	var max_additional: int = 0
+	match district_type:
+		DistrictType.RESIDENTIAL: max_additional = 8
+		DistrictType.MID_RISE: max_additional = 4
+		DistrictType.HIGH_RISE: max_additional = 3
+		DistrictType.INDUSTRIAL: max_additional = 2
+		DistrictType.HELIPAD: max_additional = 1
+
+	var target_additional: int = dec_rng.randi_range(int(max_additional * 0.5), max_additional)
+	var additional_placed: int = 0
+
+	var quad_templates: Array[Vector2] = [
+		Vector2(54.0, 54.0),
+		Vector2(54.0, 34.0),
+		Vector2(34.0, 54.0),
+		Vector2(42.0, 42.0),
+		Vector2(46.0, 22.0),
+		Vector2(22.0, 46.0),
+		Vector2(30.0, 30.0)
+	]
+
+	for q in range(4):
+		if additional_placed >= target_additional:
+			break
+		var x_sign: float = -1.0 if (q == 0 or q == 2) else 1.0
+		var z_sign: float = -1.0 if (q == 0 or q == 1) else 1.0
+
+		for tmpl in quad_templates:
+			if additional_placed >= target_additional:
+				break
+			var cand_x: float = x_sign * (tmpl.x + dec_rng.randf_range(-2.0, 2.0))
+			var cand_z: float = z_sign * (tmpl.y + dec_rng.randf_range(-2.0, 2.0))
+			var cand_pos := Vector3(cand_x, 0.10, cand_z)
+
+			if not _is_vegetation_position_clear(cand_pos, 1.4, placed_vegetation, x_inner, z_inner):
+				continue
+
+			var min_dist_b: float = _get_min_distance_to_buildings(cand_pos)
+			var t_type := "small"
+			if district_type == DistrictType.RESIDENTIAL:
+				t_type = "large" if (min_dist_b >= 4.0 and dec_rng.randf() < 0.55) else "small"
+			elif district_type == DistrictType.HIGH_RISE or district_type == DistrictType.MID_RISE:
+				t_type = "planter" if min_dist_b < 3.2 else "small"
+			else:
+				t_type = "small"
+
+			_add_vegetation_instance(cand_pos, t_type, dec_rng, small_transforms, large_transforms, planter_transforms, placed_vegetation)
+			additional_placed += 1
+
+			# In residential areas, occasionally place a companion tree to form a natural cluster of 2-3
+			if district_type == DistrictType.RESIDENTIAL and additional_placed < target_additional and dec_rng.randf() < 0.65:
+				var comp_angle: float = dec_rng.randf_range(0.0, TAU)
+				var comp_dist: float = dec_rng.randf_range(2.8, 4.2)
+				var comp_pos := cand_pos + Vector3(cos(comp_angle) * comp_dist, 0.0, sin(comp_angle) * comp_dist)
+				if _is_vegetation_position_clear(comp_pos, 1.2, placed_vegetation, x_inner, z_inner):
+					_add_vegetation_instance(comp_pos, "small", dec_rng, small_transforms, large_transforms, planter_transforms, placed_vegetation)
+					additional_placed += 1
+
+	# --------------------------------------------------------------------------
+	# 3. Commit Batched MultiMeshInstance3D Nodes
+	# --------------------------------------------------------------------------
+	if not small_transforms.is_empty() and _kenney_tree_small_mesh:
+		var mm_small := MultiMeshInstance3D.new()
+		mm_small.name = "KenneyTreesSmallMultiMesh"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = small_transforms.size()
+		mm.mesh = _kenney_tree_small_mesh
+		for i in range(small_transforms.size()):
+			mm.set_instance_transform(i, small_transforms[i])
+		mm_small.multimesh = mm
+		mm_small.cast_shadow = shadow_setting
+		props_root.add_child(mm_small)
+
+	if not large_transforms.is_empty() and _kenney_tree_large_mesh:
+		var mm_large := MultiMeshInstance3D.new()
+		mm_large.name = "KenneyTreesLargeMultiMesh"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = large_transforms.size()
+		mm.mesh = _kenney_tree_large_mesh
+		for i in range(large_transforms.size()):
+			mm.set_instance_transform(i, large_transforms[i])
+		mm_large.multimesh = mm
+		mm_large.cast_shadow = shadow_setting
+		props_root.add_child(mm_large)
+
+	if not planter_transforms.is_empty() and _kenney_planter_mesh:
+		var mm_planter := MultiMeshInstance3D.new()
+		mm_planter.name = "KenneyPlantersMultiMesh"
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = planter_transforms.size()
+		mm.mesh = _kenney_planter_mesh
+		for i in range(planter_transforms.size()):
+			mm.set_instance_transform(i, planter_transforms[i])
+		mm_planter.multimesh = mm
+		mm_planter.cast_shadow = shadow_setting
+		props_root.add_child(mm_planter)
+
+func _add_vegetation_instance(
+	pos: Vector3,
+	type: String,
+	rng: RandomNumberGenerator,
+	small_list: Array[Transform3D],
+	large_list: Array[Transform3D],
+	planter_list: Array[Transform3D],
+	placed: Array[Dictionary]
+) -> void:
+	var scale_factor: float = 10.0
+	var rad: float = 1.2
+	if type == "large":
+		scale_factor = 10.0 * rng.randf_range(0.85, 1.15)
+		rad = 1.4
+	elif type == "planter":
+		scale_factor = 5.0 * rng.randf_range(0.90, 1.10)
+		rad = 1.0
+	else:
+		scale_factor = 10.0 * rng.randf_range(0.85, 1.15)
+		rad = 1.2
+
+	var rot_y: float = rng.randf_range(0.0, TAU)
+	var b := Basis().rotated(Vector3.UP, rot_y).scaled(Vector3(scale_factor, scale_factor, scale_factor))
+	var t := Transform3D(b, pos)
+
+	match type:
+		"large": large_list.append(t)
+		"planter": planter_list.append(t)
+		_: small_list.append(t)
+
+	placed.append({
+		"pos": pos,
+		"type": type,
+		"radius": rad
+	})
+
+func _get_min_distance_to_buildings(pos: Vector3) -> float:
+	var min_d := 999.0
+	for b: Dictionary in building_records:
+		var b_pos: Vector3 = b["local_position"]
+		var b_sz: Vector2 = b.get("effective_size", b["footprint_size"])
+		var dx := maxf(0.0, absf(pos.x - b_pos.x) - b_sz.x * 0.5)
+		var dz := maxf(0.0, absf(pos.z - b_pos.z) - b_sz.y * 0.5)
+		var d := Vector2(dx, dz).length()
+		if d < min_d:
+			min_d = d
+	return min_d
+
+func _is_vegetation_position_clear(
+	pos: Vector3,
+	radius: float,
+	placed: Array[Dictionary],
+	x_inner: float,
+	z_inner: float
+) -> bool:
+	# 1. Chunk boundary exclusion (keep 3m away from chunk seams)
+	if absf(pos.x) > (60.0 - radius) or absf(pos.z) > (60.0 - radius):
+		return false
+
+	# 2. Road corridors and turning clearance
+	if absf(pos.x) < (x_inner + radius + 0.6) or absf(pos.z) < (z_inner + radius + 0.6):
+		return false
+
+	# 3. Central Helipad Zone (chunk 0, 0)
+	if coord == Vector2i.ZERO:
+		if absf(pos.x) < 16.0 and absf(pos.z) < 16.0:
+			return false
+
+	# 4. Building footprints & setbacks
+	for b: Dictionary in building_records:
+		var b_pos: Vector3 = b["local_position"]
+		var b_sz: Vector2 = b.get("effective_size", b["footprint_size"])
+		var margin: float = 1.0
+		if absf(pos.x - b_pos.x) < (b_sz.x * 0.5 + radius + margin) and absf(pos.z - b_pos.z) < (b_sz.y * 0.5 + radius + margin):
+			return false
+
+	# 5. Local gameplay spawn markers, objectives, and pickup bays
+	var local_spawns: Array[Vector3] = [
+		Vector3(0.0, 0.3, 0.0),
+		Vector3(0.0, 0.3, -56.0),
+		Vector3(0.0, 0.3, 56.0),
+		Vector3(-56.0, 0.3, 0.0),
+		Vector3(56.0, 0.3, 0.0),
+		Vector3(-20.0, 0.3, -20.0),
+		Vector3(20.0, 0.3, -20.0),
+		Vector3(-20.0, 0.3, 20.0),
+		Vector3(20.0, 0.3, 20.0)
+	]
+	for sp in local_spawns:
+		if Vector2(pos.x - sp.x, pos.z - sp.z).length() < 6.0:
+			return false
+
+	var local_pickups: Array[Vector3] = [
+		Vector3(-24.0, 0.5, -12.0),
+		Vector3(24.0, 0.5, 12.0),
+		Vector3(-12.0, 0.5, 24.0),
+		Vector3(12.0, 0.5, -24.0)
+	]
+	for pk in local_pickups:
+		if Vector2(pos.x - pk.x, pos.z - pk.z).length() < 4.8:
+			return false
+
+	var local_objectives: Array[Vector3] = [
+		Vector3(36.0, 0.3, 36.0),
+		Vector3(-36.0, 0.3, -36.0)
+	]
+	for ob in local_objectives:
+		if Vector2(pos.x - ob.x, pos.z - ob.z).length() < 5.5:
+			return false
+
+	# 6. Streetlights
+	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
+	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
+	var ns_pole_x: float = ns_shoulder_w * 0.5 - 0.4
+	var ew_pole_z: float = ew_shoulder_w * 0.5 - 0.4
+	for z_pos in [-46.0, -24.0, 24.0, 46.0]:
+		if Vector2(pos.x - (-ns_pole_x), pos.z - z_pos).length() < 2.5:
+			return false
+		if Vector2(pos.x - ns_pole_x, pos.z - z_pos).length() < 2.5:
+			return false
+	for x_pos in [-46.0, -24.0, 24.0, 46.0]:
+		if Vector2(pos.x - x_pos, pos.z - (-ew_pole_z)).length() < 2.5:
+			return false
+		if Vector2(pos.x - x_pos, pos.z - ew_pole_z).length() < 2.5:
+			return false
+
+	# 7. Parked / wrecked vehicles along curbs
+	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
+	var car_x: float = ns_asphalt_w * 0.5 - 1.1
+	for car_z in [-32.0, -22.0, 22.0, 24.0, 30.0, 32.0]:
+		if Vector2(pos.x - (-car_x), pos.z - car_z).length() < 3.5:
+			return false
+		if Vector2(pos.x - car_x, pos.z - car_z).length() < 3.5:
+			return false
+
+	# 8. Separation from already placed vegetation in this chunk
+	for other: Dictionary in placed:
+		var other_pos: Vector3 = other["pos"]
+		if Vector2(pos.x - other_pos.x, pos.z - other_pos.z).length() < 2.8:
+			return false
+
+	return true
+
+func _build_procedural_fallback_trees(rng: RandomNumberGenerator, shadow_crowns: GeometryInstance3D.ShadowCastingSetting) -> void:
 	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
 	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
 	var tree_x: float = ns_shoulder_w * 0.5 + 2.5
@@ -1282,11 +1631,6 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 	upper_mm.transform_format = MultiMesh.TRANSFORM_3D
 	upper_mm.instance_count = count
 	upper_mm.mesh = _tree_upper_crown_mesh
-
-	var shadow_crowns: GeometryInstance3D.ShadowCastingSetting = (
-		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if coord.length() > 1.5 
-		else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	)
 
 	for idx in range(count):
 		var scale_val: float = rng.randf_range(0.85, 1.22)

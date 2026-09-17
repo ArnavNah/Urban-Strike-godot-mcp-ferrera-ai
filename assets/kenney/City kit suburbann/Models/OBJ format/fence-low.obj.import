@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://dscv3mlbtxffb"
+path="res://.godot/imported/fence-low.obj-968f91c6af8adb57d2956b6e7dde7959.mesh"
+
+[deps]
+
+files=["res://.godot/imported/fence-low.obj-968f91c6af8adb57d2956b6e7dde7959.mesh"]
+
+source_file="res://assets/kenney/City kit suburbann/Models/OBJ format/fence-low.obj"
+dest_files=["res://.godot/imported/fence-low.obj-968f91c6af8adb57d2956b6e7dde7959.mesh", "res://.godot/imported/fence-low.obj-968f91c6af8adb57d2956b6e7dde7959.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false
