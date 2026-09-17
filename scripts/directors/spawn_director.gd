@@ -1198,8 +1198,6 @@ func get_air_population_cap() -> int:
 		return 2 if elapsed_survival_time < 180.0 else 3
 	if not encounter_config:
 		return 6
-	if elapsed_survival_time < 20.0:
-		return 0
 	if elapsed_survival_time < encounter_config.warmup_duration:
 		return mini(2, encounter_config.warmup_air_cap)
 	var progress := clampf(elapsed_survival_time / encounter_config.escalation_duration, 0.0, 1.0)

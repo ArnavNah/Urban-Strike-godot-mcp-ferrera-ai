@@ -4948,19 +4948,19 @@ func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[Stri
 	root_node.add_child(cd)
 
 	cd.set_wave(1)
-	if cd.max_ground_attack_slots != 1 or cd.max_air_attack_slots != 0 or cd.max_concurrent_attackers != 1 or cd.max_projectile_danger != 5:
+	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 2 or cd.max_projectile_danger != 6:
 		append_log("FAIL: [Step 2] Wave 1 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
 		root_node.queue_free()
 		return false
 
 	cd.set_wave(6)
-	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 3 or cd.max_projectile_danger != 10:
+	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 2 or cd.max_concurrent_attackers != 4 or cd.max_projectile_danger != 11:
 		append_log("FAIL: [Step 2] Wave 6 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
 		root_node.queue_free()
 		return false
 
 	cd.set_wave(9)
-	if cd.max_ground_attack_slots != 3 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 4 or cd.max_projectile_danger != 16:
+	if cd.max_ground_attack_slots != 3 or cd.max_air_attack_slots != 2 or cd.max_concurrent_attackers != 5 or cd.max_projectile_danger != 16:
 		append_log("FAIL: [Step 2] Wave 9 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
 		root_node.queue_free()
 		return false
@@ -4973,23 +4973,32 @@ func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[Stri
 	var e2 := Node3D.new()
 	e2.name = "DummyEnemy2"
 	root_node.add_child(e2)
+	var e3 := Node3D.new()
+	e3.name = "DummyEnemy3"
+	root_node.add_child(e3)
 
 	if not cd.request_attack_permission(e1, 1, false, false, false, 1):
 		append_log("FAIL: [Step 3] e1 was denied permission on empty Wave 1", logs)
 		root_node.queue_free()
 		return false
 
-	if cd.request_attack_permission(e2, 1, false, false, false, 1):
-		append_log("FAIL: [Step 3] e2 was granted permission exceeding Wave 1 max_attackers = 1", logs)
+	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e2 was denied permission within Wave 1 max_attackers = 2", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(e3, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e3 was granted permission exceeding Wave 1 max_attackers = 2", logs)
 		root_node.queue_free()
 		return false
 
 	cd.release_attack_permission(e1)
-	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
-		append_log("FAIL: [Step 3] e2 was denied permission after e1 released", logs)
+	cd.release_attack_permission(e2)
+	if not cd.request_attack_permission(e3, 1, false, false, false, 1):
+		append_log("FAIL: [Step 3] e3 was denied permission after slots released", logs)
 		root_node.queue_free()
 		return false
-	cd.release_attack_permission(e2)
+	cd.release_attack_permission(e3)
 
 	# 4. Single Heavy Attack Constraint
 	cd.set_wave(8) # ground tokens: 3, max attackers: 3
@@ -5044,18 +5053,18 @@ func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[Stri
 	cd.release_attack_permission(sam_unit2)
 
 	# 6. Projectile Danger Budget Reservation & Release
-	cd.set_wave(1) # danger_cap = 5
-	if not cd.reserve_danger_capacity("shotA", 3, 2.0):
-		append_log("FAIL: [Step 6] Failed to reserve 3 danger points under cap 5", logs)
+	cd.set_wave(1) # danger_cap = 6
+	if not cd.reserve_danger_capacity("shotA", 4, 2.0):
+		append_log("FAIL: [Step 6] Failed to reserve 4 danger points under cap 6", logs)
 		root_node.queue_free()
 		return false
 
 	if cd.reserve_danger_capacity("shotB", 3, 2.0):
-		append_log("FAIL: [Step 6] Reserved 3 danger points exceeding cap 5 (3 + 3 > 5)", logs)
+		append_log("FAIL: [Step 6] Reserved 3 danger points exceeding cap 6 (4 + 3 > 6)", logs)
 		root_node.queue_free()
 		return false
 
-	cd.release_danger_capacity("shotA", 3)
+	cd.release_danger_capacity("shotA", 4)
 	if not cd.reserve_danger_capacity("shotB", 3, 2.0):
 		append_log("FAIL: [Step 6] Failed to reserve shotB after shotA was released", logs)
 		root_node.queue_free()
@@ -5165,16 +5174,16 @@ func test_survivors_low_difficulty_enemy_ai_and_spawner_refinement(logs: Array[S
 	root_node.add_child(cd)
 
 	var expected_attacker_caps: Dictionary = {
-		1: { "attackers": 1, "air_tokens": 0 },
-		2: { "attackers": 1, "air_tokens": 0 },
-		3: { "attackers": 2, "air_tokens": 0 },
-		4: { "attackers": 2, "air_tokens": 0 },
-		5: { "attackers": 2, "air_tokens": 0 },
-		6: { "attackers": 3, "air_tokens": 1 },
-		7: { "attackers": 3, "air_tokens": 1 },
-		8: { "attackers": 3, "air_tokens": 1 },
-		9: { "attackers": 4, "air_tokens": 1 },
-		10: { "attackers": 2, "air_tokens": 0 },
+		1: { "attackers": 2, "air_tokens": 1 },
+		2: { "attackers": 2, "air_tokens": 1 },
+		3: { "attackers": 3, "air_tokens": 1 },
+		4: { "attackers": 3, "air_tokens": 2 },
+		5: { "attackers": 4, "air_tokens": 2 },
+		6: { "attackers": 4, "air_tokens": 2 },
+		7: { "attackers": 4, "air_tokens": 2 },
+		8: { "attackers": 5, "air_tokens": 2 },
+		9: { "attackers": 5, "air_tokens": 2 },
+		10: { "attackers": 4, "air_tokens": 2 },
 	}
 
 	for wave_num in range(1, 11):
@@ -5197,23 +5206,32 @@ func test_survivors_low_difficulty_enemy_ai_and_spawner_refinement(logs: Array[S
 	var e2 := Node3D.new()
 	e2.name = "DummyAttacker2"
 	root_node.add_child(e2)
+	var e3 := Node3D.new()
+	e3.name = "DummyAttacker3"
+	root_node.add_child(e3)
 
 	if not cd.request_attack_permission(e1, 1, false, false, false, 1):
 		append_log("FAIL: [Step 2] Attacker e1 denied initial attack permission on Wave 1", logs)
 		root_node.queue_free()
 		return false
 
-	if cd.request_attack_permission(e2, 1, false, false, false, 1):
-		append_log("FAIL: [Step 2] Attacker e2 granted permission exceeding Wave 1 limit of 1", logs)
+	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e2 denied permission within Wave 1 limit of 2", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.request_attack_permission(e3, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e3 granted permission exceeding Wave 1 limit of 2", logs)
 		root_node.queue_free()
 		return false
 
 	cd.release_attack_permission(e1)
-	if not cd.request_attack_permission(e2, 1, false, false, false, 1):
-		append_log("FAIL: [Step 2] Attacker e2 denied permission after e1 released slot", logs)
+	cd.release_attack_permission(e2)
+	if not cd.request_attack_permission(e3, 1, false, false, false, 1):
+		append_log("FAIL: [Step 2] Attacker e3 denied permission after e1 and e2 released slots", logs)
 		root_node.queue_free()
 		return false
-	cd.release_attack_permission(e2)
+	cd.release_attack_permission(e3)
 
 	# 3. Single Heavy Attack Exclusion Across Battlefield (Waves 1-10)
 	cd.set_wave(9) # Wave 9 allows 4 attackers, but heavy attack must remain capped at 1
@@ -6014,7 +6032,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 		return false
 
 	# Querying outside clearance radius (e.g. 20m away) must be clear
-	var far_pos := res_pos + Vector3(20.0, 0.0, 0.0)
+	var far_pos := res_pos + Vector3(0.0, 0.0, -20.0)
 	if not spawn_director.is_spawn_position_clear(far_pos, false, 10.0):
 		append_log("FAIL: Case 2 - is_spawn_position_clear falsely rejected position 20m away from reservation", logs)
 		root_node.queue_free()
