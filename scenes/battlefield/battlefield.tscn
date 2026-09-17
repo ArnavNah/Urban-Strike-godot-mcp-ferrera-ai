@@ -13,6 +13,7 @@
 [ext_resource type="PackedScene" uid="uid://be4m8k1v7w2ra" path="res://scenes/ui/death_screen.tscn" id="11_death"]
 [ext_resource type="PackedScene" uid="uid://df5m2wak4r1w8" path="res://scenes/ui/victory_screen.tscn" id="12_vic"]
 [ext_resource type="PackedScene" uid="uid://c5v8k2nax4w1q" path="res://scenes/ui/pause_menu.tscn" id="13_pause"]
+[ext_resource type="Script" uid="uid://dnn2oi0luvlcb" path="res://scripts/ui/damage_number_manager.gd" id="14_6sfjh"]
 [ext_resource type="PackedScene" uid="uid://c4n8m2v5k7w1q" path="res://scenes/audio/sound_manager.tscn" id="14_snd"]
 [ext_resource type="PackedScene" uid="uid://dg2m4v8k1sax7" path="res://scenes/ui/wave_hud.tscn" id="14_yexbb"]
 [ext_resource type="PackedScene" uid="uid://df2k8m4r1waq7" path="res://scenes/ui/run_end_screen.tscn" id="15_kjtcb"]
@@ -128,6 +129,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+script = ExtResource("14_6sfjh")
 
 [node name="WaveHUD" parent="UI" unique_id=520698955 instance=ExtResource("14_yexbb")]
 

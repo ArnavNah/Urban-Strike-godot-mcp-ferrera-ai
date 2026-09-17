@@ -160,6 +160,8 @@ static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -
 		VfxPool.instance.max_active_sparks = 6 if preset_name == "low" else 12
 		VfxPool.instance.max_active_flashes = 8 if preset_name == "low" else 12
 		VfxPool.instance.effect_distance = 110.0 if preset_name == "low" else 140.0
+	if DamageNumberManager.instance:
+		DamageNumberManager.instance.set_preset(preset_name)
 	if tree:
 		_apply_particle_budget(tree.root, preset_name == "low")
 

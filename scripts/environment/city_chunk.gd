@@ -1079,8 +1079,9 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(cat["radio_tower"], 0.28, 0.28, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(cat["medium_b"], 0.74, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
 					_place_lot_building(cat["small_c"], 0.50, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_b"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 				elif pattern_hr == 0:
-					# Archetype A: Skyscraper Anchor + Mid-Rise Flanks + Parking
+					# Archetype A: Skyscraper Anchor + Mid-Rise Flanks + Retail Infill + Parking
 					var tower_entry: Dictionary = cat["skyscraper_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
 					var wing_entry: Dictionary = cat["medium_b"] if rng.randf() < 0.5 else cat["medium_c"]
 					var rear_entry: Dictionary = cat["skyscraper_c"] if rng.randf() < 0.6 else cat["medium_a"]
@@ -1088,8 +1089,10 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(wing_entry, 0.24, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a", "small_c"])
 					_place_lot_building(rear_entry, 0.74, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c", "small_b"])
 					_place_lot_building(cat["parking_lot"], 0.72, 0.26, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_c"], 0.74, 0.46, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_b"], 0.48, 0.74, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 				elif pattern_hr == 1:
-					# Archetype B: Urban Canyons (2-3 slender towers with wide flight alleys)
+					# Archetype B: Urban Canyons (2-3 slender towers with street shops & parking)
 					var t1: Dictionary = cat["skyscraper_c"]
 					var t2: Dictionary = cat["medium_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
 					var t3: Dictionary = cat["skyscraper_c"] if rng.randf() < 0.6 else cat["medium_c"]
@@ -1097,17 +1100,21 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(t2, 0.74, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(t3, 0.24, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["small_a"], 0.48, 0.24, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_b"], 0.24, 0.48, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 				else:
-					# Archetype C: Civic / Tower Landmark
+					# Archetype C: Civic / Tower Landmark with plaza perimeter
 					var landmark_tower: Dictionary = cat["skyscraper_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
 					_place_lot_building(cat["civic_plaza"], 0.44, 0.44, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
 					_place_lot_building(landmark_tower, 0.80, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_c", "medium_c"])
 					_place_lot_building(cat["small_b"], 0.24, 0.80, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_c"], 0.80, 0.80, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_a"], 0.24, 0.24, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 
 			DistrictType.MID_RISE:
 				var pattern_mr: int = rng.randi_range(0, 2)
 				if pattern_mr == 0:
-					# Archetype A: Commercial Street Frontage (4 lots lining streets)
+					# Archetype A: Commercial Street Frontage & Courtyard Infill
 					var m_front: Dictionary = cat["medium_b"] if rng.randf() < 0.5 else cat["medium_a"]
 					var m_side: Dictionary = cat["small_a"] if rng.randf() < 0.5 else cat["small_b"]
 					var m_rear: Dictionary = cat["medium_c"]
@@ -1115,63 +1122,111 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(m_side, 0.24, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(m_rear, 0.74, 0.24, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["small_c"], 0.48, 0.24, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_b"], 0.24, 0.48, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 				elif pattern_mr == 1:
-					# Archetype B: Commercial Plaza Block
+					# Archetype B: Commercial Plaza & Retail Block
 					var m_office: Dictionary = cat["medium_a"] if rng.randf() < 0.5 else cat["medium_b"]
 					_place_lot_building(cat["parking_lot"], 0.26, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(m_office, 0.74, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(cat["small_b"], 0.24, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_workshop"])
+					_place_lot_building(cat["small_a"], 0.74, 0.50, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["small_c"], 0.26, 0.50, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 				else:
-					# Archetype C: Dense Office Quad (L-shape around courtyard)
+					# Archetype C: Dense Office Quad (L-shape with annexes)
 					_place_lot_building(cat["medium_c"], 0.22, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
 					_place_lot_building(cat["small_a"], 0.22, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 					_place_lot_building(cat["medium_b"], 0.74, 0.22, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(cat["parking_lot"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_b"], 0.48, 0.22, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["small_c"], 0.22, 0.48, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 
 			DistrictType.INDUSTRIAL:
 				var pattern_ind: int = rng.randi_range(0, 2)
 				if pattern_ind == 0:
-					# Archetype A: Logistics Yard (Warehouse + Container Stacks + Yard Office)
+					# Archetype A: Logistics Yard (Warehouse + Multi-Unit Container Rows + Storage)
 					var wh: Dictionary = cat["warehouse_a"] if rng.randf() < 0.6 else cat["warehouse_b"]
 					_place_lot_building(wh, 0.34, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(cat["container_stack"], 0.22, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["container_stack"], 0.44, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
-					_place_lot_building(cat["small_c"], 0.74, 0.62, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["container_stack"], 0.66, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["container_stack"], 0.22, 0.54, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.44, 0.54, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["storage_tanks"], 0.74, 0.28, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
+					_place_lot_building(cat["small_c"], 0.74, 0.62, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
 				elif pattern_ind == 1:
-					# Archetype B: Tank Farm & Storage (Storage tanks + Water tower + Containers)
+					# Archetype B: Tank Farm & Storage (Storage tanks + Water tower + Container rows)
 					_place_lot_building(cat["storage_tanks"], 0.28, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
 					_place_lot_building(cat["water_tower"], 0.72, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["small_b"], 0.24, 0.72, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["container_stack"], 0.70, 0.70, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["container_stack"], 0.70, 0.48, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["container_stack"], 0.48, 0.72, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["storage_tanks"], 0.50, 0.26, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
+					_place_lot_building(cat["small_c"], 0.24, 0.48, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 				else:
-					# Archetype C: Sawtooth Depot
+					# Archetype C: Sawtooth Depot & Freight Staging
 					_place_lot_building(cat["warehouse_b"], 0.38, 0.38, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
 					_place_lot_building(cat["container_stack"], 0.78, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
-					_place_lot_building(cat["parking_lot"], 0.78, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.78, 0.46, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["parking_lot"], 0.78, 0.72, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.26, 0.78, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["container_stack"], 0.48, 0.78, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 
 			DistrictType.RESIDENTIAL, _:
 				var pattern_res: int = rng.randi_range(0, 2)
 				if pattern_res == 0:
-					# Archetype A: Suburban Multi-House Cluster (5-6 houses/cabins with front yards)
-					_place_lot_building(cat["town_house"], 0.18, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
-					_place_lot_building(cat["town_cabin"], 0.18, 0.44, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_house"], 0.18, 0.68, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
-					_place_lot_building(cat["town_workshop"], 0.52, 0.24, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_cabin"], 0.52, 0.52, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_house"], 0.74, 0.72, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					# Archetype A: Dense Suburban Neighborhood (3 street rows of houses, cabins & workshops)
+					# Streetfront Row 1 (u ~ 0.18)
+					_place_lot_building(cat["town_house"], 0.18, 0.18, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.18, 0.38, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.18, 0.58, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.18, 0.78, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# Interior Neighborhood Row 2 (u ~ 0.46)
+					_place_lot_building(cat["town_workshop"], 0.46, 0.20, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.46, 0.40, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.46, 0.60, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_workshop"], 0.46, 0.80, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# Rear Avenue Row 3 (u ~ 0.76)
+					_place_lot_building(cat["town_house"], 0.76, 0.18, q, 8, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.76, 0.38, q, 9, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["solar_array"], 0.76, 0.58, q, 10, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_house"], 0.76, 0.78, q, 11, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 				elif pattern_res == 1:
-					# Archetype B: Rural Workshop & Greenery
-					_place_lot_building(cat["town_workshop"], 0.24, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["solar_array"], 0.24, 0.68, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
-					_place_lot_building(cat["town_cabin"], 0.66, 0.26, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_house"], 0.68, 0.68, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					# Archetype B: Homestead Farm & Workshop Crops (10-11 buildings)
+					# Workshop & Utilities Wing (u ~ 0.22)
+					_place_lot_building(cat["town_workshop"], 0.22, 0.22, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_cabin"], 0.22, 0.44, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["solar_array"], 0.22, 0.66, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["water_tower"], 0.22, 0.84, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# Central Homestead Core (u ~ 0.50)
+					_place_lot_building(cat["town_house"], 0.50, 0.22, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.50, 0.46, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_workshop"], 0.50, 0.72, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# Outer Agrarian Outbuildings (u ~ 0.76)
+					_place_lot_building(cat["town_cabin"], 0.76, 0.22, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["solar_array"], 0.76, 0.44, q, 8, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_house"], 0.76, 0.68, q, 9, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.76, 0.88, q, 10, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
 				else:
-					# Archetype C: Village Square (houses around open central courtyard)
+					# Archetype C: Village Square & Courtyard Perimeter Ring (10-11 buildings)
+					# Streetfront Flank (u ~ 0.20)
 					_place_lot_building(cat["town_house"], 0.20, 0.20, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
-					_place_lot_building(cat["town_cabin"], 0.72, 0.20, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_workshop"], 0.20, 0.72, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
-					_place_lot_building(cat["town_house"], 0.72, 0.72, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.20, 0.46, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_workshop"], 0.20, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# South Outer Perimeter (v ~ 0.78)
+					_place_lot_building(cat["town_house"], 0.46, 0.78, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.74, 0.78, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# East Outer Flank (u ~ 0.76)
+					_place_lot_building(cat["town_house"], 0.76, 0.52, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["town_cabin"], 0.76, 0.24, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# North Inner Flank (v ~ 0.20)
+					_place_lot_building(cat["town_workshop"], 0.46, 0.20, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					# Courtyard Accents & Greenery Anchors
+					_place_lot_building(cat["solar_array"], 0.46, 0.48, q, 8, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
+					_place_lot_building(cat["water_tower"], 0.74, 0.38, q, 9, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_house"])
+					_place_lot_building(cat["town_house"], 0.76, 0.88, q, 10, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["town_cabin"])
 
 func _build_props(rng: RandomNumberGenerator) -> void:
 	props_root = Node3D.new()
