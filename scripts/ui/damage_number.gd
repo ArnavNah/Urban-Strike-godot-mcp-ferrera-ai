@@ -1,6 +1,13 @@
 class_name DamageNumber
 extends Label
 
+enum DamageCategory {
+	NORMAL = 0,    # Cream/off-white, 16px, clean number e.g. "12"
+	CRITICAL = 1,  # Radiant gold, 22px, strong pop, e.g. "★ 75"
+	PLAYER = 2,    # Vivid red, 18px, downward cue, e.g. "▼ -16"
+	BLOCKED = 3    # Cool steel cyan, 15px, e.g. "[SHIELD] 0" or "BLOCKED"
+}
+
 var world_position: Vector3 = Vector3.ZERO
 var velocity_2d: Vector2 = Vector2.ZERO
 var lifetime: float = 0.65
@@ -8,6 +15,7 @@ var _age: float = 0.0
 var is_active: bool = false
 var manager: DamageNumberManager = null
 var _tween: Tween = null
+var category: int = DamageCategory.NORMAL
 
 func _ready() -> void:
 	if not is_active:
@@ -30,38 +38,70 @@ func reset_state() -> void:
 	velocity_2d = Vector2.ZERO
 	world_position = Vector3.ZERO
 	lifetime = 0.65
+	category = DamageCategory.NORMAL
 
 	remove_theme_font_size_override("font_size")
 	remove_theme_color_override("font_color")
 
-func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumberManager = null) -> void:
+func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumberManager = null, p_category: int = -1, metadata: Dictionary = {}) -> void:
 	reset_state()
 	manager = p_manager
 	world_position = pos
-	text = str(int(amount)) if amount >= 1.0 else "%.1f" % amount
+
+	# Category resolution:
+	if amount <= 0.0 or p_category == DamageCategory.BLOCKED or metadata.get("is_blocked", false):
+		category = DamageCategory.BLOCKED
+	elif p_category == DamageCategory.PLAYER or metadata.get("is_player", false) or metadata.get("target_type", "") == "player":
+		category = DamageCategory.PLAYER
+	elif is_critical or p_category == DamageCategory.CRITICAL or metadata.get("is_critical", false):
+		category = DamageCategory.CRITICAL
+	else:
+		category = DamageCategory.NORMAL
 
 	var rand_angle := randf_range(-PI * 0.75, -PI * 0.25)
 	velocity_2d = Vector2(cos(rand_angle), sin(rand_angle)) * randf_range(40.0, 75.0)
 
-	if is_critical or amount >= 30.0:
-		add_theme_font_size_override("font_size", 22)
-		add_theme_color_override("font_color", Color(1.0, 0.35, 0.1, 1.0))
-		pivot_offset = size * 0.5
-		scale = Vector2(1.3, 1.3)
-		_tween = create_tween()
-		if _tween:
-			_tween.tween_property(self, "scale", Vector2.ONE, 0.12).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	elif amount >= 10.0:
-		add_theme_font_size_override("font_size", 18)
-		add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
-		pivot_offset = size * 0.5
-		scale = Vector2(1.15, 1.15)
-		_tween = create_tween()
-		if _tween:
-			_tween.tween_property(self, "scale", Vector2.ONE, 0.10).set_ease(Tween.EASE_OUT)
-	else:
-		add_theme_font_size_override("font_size", 15)
-		add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1.0))
+	match category:
+		DamageCategory.CRITICAL:
+			# Actual critical damage: gold, slightly larger, stronger pop, multi-cue icon
+			text = "★ %d" % int(amount) if amount >= 1.0 else "★ %.1f" % amount
+			add_theme_font_size_override("font_size", 22)
+			add_theme_color_override("font_color", Color(1.0, 0.82, 0.15, 1.0))
+			pivot_offset = size * 0.5
+			scale = Vector2(1.4, 1.4)
+			_tween = create_tween()
+			if _tween:
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		DamageCategory.PLAYER:
+			# Player damage received: distinct red treatment with downward arrow + negative indicator
+			text = "▼ -%d" % int(amount) if amount >= 1.0 else "▼ -%.1f" % amount
+			add_theme_font_size_override("font_size", 18)
+			add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+			pivot_offset = size * 0.5
+			scale = Vector2(1.25, 1.25)
+			_tween = create_tween()
+			if _tween:
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.10).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		DamageCategory.BLOCKED:
+			# Blocked or zero-damage hits: steel cyan, shield tag
+			text = "[SHIELD] 0" if amount <= 0.0 else "[BLOCKED] %d" % int(amount)
+			add_theme_font_size_override("font_size", 15)
+			add_theme_color_override("font_color", Color(0.65, 0.85, 1.0, 0.95))
+			pivot_offset = size * 0.5
+			scale = Vector2(1.1, 1.1)
+			_tween = create_tween()
+			if _tween:
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.08).set_ease(Tween.EASE_OUT)
+		_: # DamageCategory.NORMAL
+			# Normal enemy damage: cream/off-white, standard clean number
+			text = str(int(amount)) if amount >= 1.0 else "%.1f" % amount
+			add_theme_font_size_override("font_size", 16)
+			add_theme_color_override("font_color", Color(0.96, 0.94, 0.88, 1.0))
+			pivot_offset = size * 0.5
+			scale = Vector2(1.15, 1.15)
+			_tween = create_tween()
+			if _tween:
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.08).set_ease(Tween.EASE_OUT)
 
 	# Initial screen alignment if camera is available
 	var cam: Camera3D = null

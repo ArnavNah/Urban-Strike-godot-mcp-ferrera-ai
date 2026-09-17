@@ -110,6 +110,8 @@ func _ready() -> void:
 	success = test_enemy_movement_purpose_and_steering_dynamics(log_lines) and success
 	append_log("Running test 45 (DamageNumberManager pooling, preset caps & burst resilience)...", log_lines)
 	success = test_damage_number_pooling_and_limits(log_lines) and success
+	append_log("Running test 46 (Damage categories, actual crits & player damage)...", log_lines)
+	success = test_damage_number_categories_and_player_damage(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -6931,7 +6933,7 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 		if c is DamageNumber and c.is_active:
 			sample_active = c
 			break
-	if not sample_active or sample_active.text != "75":
+	if not sample_active or not sample_active.text.contains("75"):
 		append_log("FAIL: Reused label state was not reset properly!", logs)
 		vp.queue_free()
 		return false
@@ -6969,8 +6971,222 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	append_log("  -> Sub-step 7: Damage application 100% unaffected by skipped visual numbers.", logs)
 
 	# Sub-step 8: Scene exit and clean disconnect
+	manager._disconnect_events()
 	vp.queue_free()
 	append_log("  -> Sub-step 8: DamageNumberManager exit and cleanup verified with 0 leaks.", logs)
 
 	append_log("  -> Test 45 PASSED: Damage number pooling, preset caps and burst resilience fully validated.", logs)
+	return true
+
+func test_damage_number_categories_and_player_damage(logs: Array[String]) -> bool:
+	append_log("[TEST 46] Damage Categories, Actual Crits, Player Damage & Duplicate Prevention...", logs)
+
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	add_child(vp)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 10.0, 15.0)
+	cam.look_at_from_position(cam.position, Vector3(0.0, 0.0, 0.0), Vector3.UP)
+	cam.current = true
+	vp.add_child(cam)
+
+	var manager := DamageNumberManager.new()
+	vp.add_child(manager)
+	manager.set_camera(cam)
+
+	var visible_pos := Vector3(0.0, 0.0, 0.0)
+
+	# Helper to find first active label
+	var get_active_label := func() -> DamageNumber:
+		for c in manager.get_children():
+			if c is DamageNumber and c.is_active:
+				return c
+		return null
+
+	# Helper to deactivate all labels
+	var deactivate_all := func() -> void:
+		for c in manager.get_children():
+			if c is DamageNumber and c.is_active:
+				c.deactivate()
+		manager._recent_event_keys.clear()
+
+	# Sub-step 1: Normal hit (cream/off-white, 16px, clean number)
+	deactivate_all.call()
+	manager.spawn_damage_number(visible_pos, 15.0, false, DamageNumber.DamageCategory.NORMAL)
+	var lbl_normal := get_active_label.call() as DamageNumber
+	if not lbl_normal:
+		append_log("FAIL: [Step 1] Normal damage label not spawned", logs)
+		vp.queue_free()
+		return false
+	if lbl_normal.category != DamageNumber.DamageCategory.NORMAL:
+		append_log("FAIL: [Step 1] Expected category NORMAL, got %d" % lbl_normal.category, logs)
+		vp.queue_free()
+		return false
+	if lbl_normal.text != "15":
+		append_log("FAIL: [Step 1] Expected text '15', got '%s'" % lbl_normal.text, logs)
+		vp.queue_free()
+		return false
+	if lbl_normal.get_theme_font_size("font_size") != 16:
+		append_log("FAIL: [Step 1] Expected font size 16 for normal damage, got %d" % lbl_normal.get_theme_font_size("font_size"), logs)
+		vp.queue_free()
+		return false
+	var col_normal := lbl_normal.get_theme_color("font_color")
+	if not col_normal.is_equal_approx(Color(0.96, 0.94, 0.88, 1.0)):
+		append_log("FAIL: [Step 1] Expected cream/off-white color for normal damage, got %s" % str(col_normal), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 1: Normal enemy hit (cream/off-white, 16px, clean text '15') verified.", logs)
+
+	# Sub-step 2: Actual critical damage (gold, 22px, '★' icon, stronger pop)
+	deactivate_all.call()
+	manager.spawn_damage_number(visible_pos, 75.0, true, DamageNumber.DamageCategory.CRITICAL)
+	var lbl_crit := get_active_label.call() as DamageNumber
+	if not lbl_crit:
+		append_log("FAIL: [Step 2] Critical damage label not spawned", logs)
+		vp.queue_free()
+		return false
+	if lbl_crit.category != DamageNumber.DamageCategory.CRITICAL:
+		append_log("FAIL: [Step 2] Expected category CRITICAL, got %d" % lbl_crit.category, logs)
+		vp.queue_free()
+		return false
+	if not lbl_crit.text.begins_with("★"):
+		append_log("FAIL: [Step 2] Expected critical text to contain '★' icon, got '%s'" % lbl_crit.text, logs)
+		vp.queue_free()
+		return false
+	if lbl_crit.get_theme_font_size("font_size") != 22:
+		append_log("FAIL: [Step 2] Expected font size 22 for critical damage, got %d" % lbl_crit.get_theme_font_size("font_size"), logs)
+		vp.queue_free()
+		return false
+	var col_crit := lbl_crit.get_theme_color("font_color")
+	if not col_crit.is_equal_approx(Color(1.0, 0.82, 0.15, 1.0)):
+		append_log("FAIL: [Step 2] Expected gold color for critical damage, got %s" % str(col_crit), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 2: Actual critical hit (gold, 22px, '★' multi-cue icon) verified.", logs)
+
+	# Sub-step 3: Removal of arbitrary numeric threshold logic (large 50.0 hit without crit metadata stays NORMAL)
+	deactivate_all.call()
+	EventBus.damage_number_spawned.emit(visible_pos, 50.0, false)
+	var lbl_large_normal := get_active_label.call() as DamageNumber
+	if not lbl_large_normal:
+		append_log("FAIL: [Step 3] Large damage label not spawned", logs)
+		vp.queue_free()
+		return false
+	if lbl_large_normal.category != DamageNumber.DamageCategory.NORMAL:
+		append_log("FAIL: [Step 3] Large hit was incorrectly categorized as %d instead of NORMAL!" % lbl_large_normal.category, logs)
+		vp.queue_free()
+		return false
+	if lbl_large_normal.text != "50" or lbl_large_normal.text.contains("★"):
+		append_log("FAIL: [Step 3] Large hit still formatted with critical text: '%s'" % lbl_large_normal.text, logs)
+		vp.queue_free()
+		return false
+	if lbl_large_normal.get_theme_font_size("font_size") != 16:
+		append_log("FAIL: [Step 3] Large hit without crit metadata scaled up font to %d!" % lbl_large_normal.get_theme_font_size("font_size"), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 3: Large 50-damage hit correctly renders as Normal (threshold crit logic fully removed).", logs)
+
+	# Sub-step 4: Player damage received (vivid red, 18px, '▼ -XX' downward cue)
+	deactivate_all.call()
+	EventBus.player_damaged_directional.emit(25.0, visible_pos, Vector3(0, 0, 5), false)
+	var lbl_player := get_active_label.call() as DamageNumber
+	if not lbl_player:
+		append_log("FAIL: [Step 4] Player damage label not spawned via player_damaged_directional", logs)
+		vp.queue_free()
+		return false
+	if lbl_player.category != DamageNumber.DamageCategory.PLAYER:
+		append_log("FAIL: [Step 4] Expected category PLAYER, got %d" % lbl_player.category, logs)
+		vp.queue_free()
+		return false
+	if not lbl_player.text.contains("▼") or not lbl_player.text.contains("-25"):
+		append_log("FAIL: [Step 4] Expected player damage text format '▼ -25', got '%s'" % lbl_player.text, logs)
+		vp.queue_free()
+		return false
+	if lbl_player.get_theme_font_size("font_size") != 18:
+		append_log("FAIL: [Step 4] Expected font size 18 for player damage, got %d" % lbl_player.get_theme_font_size("font_size"), logs)
+		vp.queue_free()
+		return false
+	var col_player := lbl_player.get_theme_color("font_color")
+	if not col_player.is_equal_approx(Color(1.0, 0.25, 0.25, 1.0)):
+		append_log("FAIL: [Step 4] Expected warning red color for player damage, got %s" % str(col_player), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 4: Player damage received (vivid red, 18px, '▼ -25' non-color indicator) verified.", logs)
+
+	# Sub-step 5: Blocked & zero-damage hits (steel cyan, 15px, '[SHIELD] 0' tag)
+	deactivate_all.call()
+	EventBus.player_damaged_directional.emit(0.0, visible_pos, Vector3(0, 0, 5), true)
+	var lbl_blocked := get_active_label.call() as DamageNumber
+	if not lbl_blocked:
+		append_log("FAIL: [Step 5] Blocked shield damage label not spawned", logs)
+		vp.queue_free()
+		return false
+	if lbl_blocked.category != DamageNumber.DamageCategory.BLOCKED:
+		append_log("FAIL: [Step 5] Expected category BLOCKED, got %d" % lbl_blocked.category, logs)
+		vp.queue_free()
+		return false
+	if not lbl_blocked.text.contains("SHIELD") and not lbl_blocked.text.contains("BLOCKED"):
+		append_log("FAIL: [Step 5] Expected blocked text with SHIELD/BLOCKED tag, got '%s'" % lbl_blocked.text, logs)
+		vp.queue_free()
+		return false
+	if lbl_blocked.get_theme_font_size("font_size") != 15:
+		append_log("FAIL: [Step 5] Expected font size 15 for blocked hit, got %d" % lbl_blocked.get_theme_font_size("font_size"), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+
+	# Zero-damage hit via damage_number_spawned also maps to BLOCKED
+	EventBus.damage_number_spawned.emit(visible_pos, 0.0, false)
+	var lbl_zero := get_active_label.call() as DamageNumber
+	if not lbl_zero or lbl_zero.category != DamageNumber.DamageCategory.BLOCKED:
+		append_log("FAIL: [Step 5] Zero-damage hit did not map to BLOCKED category", logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 5: Blocked and zero-damage hits (steel cyan, 15px, '[SHIELD] 0') verified.", logs)
+
+	# Sub-step 6: Resolved vs Pre-mitigation value consistency
+	deactivate_all.call()
+	# Incoming attack: 50 damage, 20% armor mitigation = 40 resolved damage
+	var raw_incoming := 50.0
+	var armor_reduct := 0.20
+	var resolved_dmg := raw_incoming * (1.0 - armor_reduct)
+	EventBus.player_damaged_directional.emit(resolved_dmg, visible_pos, Vector3.ZERO, false)
+	var lbl_resolved := get_active_label.call() as DamageNumber
+	if not lbl_resolved or not lbl_resolved.text.contains("-40"):
+		append_log("FAIL: [Step 6] Resolved damage display did not match mitigated value 40: '%s'" % (lbl_resolved.text if lbl_resolved else "null"), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 6: Resolved damage post-mitigation value displayed consistently (-40, not pre-mitigated 50).", logs)
+
+	# Sub-step 7: Duplicate prevention within same frame
+	deactivate_all.call()
+	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false)
+	if manager.get_active_count() != 1:
+		append_log("FAIL: [Step 7] Duplicate event was not prevented in same frame! Active count: %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 7: Same-frame duplicate damage event dropped successfully (active count strictly 1).", logs)
+
+	# Sub-step 8: Preserving existing 3-argument callers
+	deactivate_all.call()
+	EventBus.damage_number_spawned.emit(visible_pos, 18.0, false)
+	if manager.get_active_count() != 1:
+		append_log("FAIL: [Step 8] Legacy 3-argument caller failed to spawn label", logs)
+		vp.queue_free()
+		return false
+	deactivate_all.call()
+	append_log("  -> Sub-step 8: Legacy 3-argument signal callers verified with 0 runtime errors.", logs)
+
+	manager._disconnect_events()
+	vp.queue_free()
+	append_log("  -> Test 46 PASSED: Damage categories, actual crits, player damage & deduplication fully validated.", logs)
 	return true

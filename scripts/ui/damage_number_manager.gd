@@ -3,9 +3,16 @@ extends Control
 
 ## High-performance preallocated label pool for combat damage numbers.
 ## Replaces per-hit instantiation/destruction with zero-allocation pooling,
-## camera frustum/screen culling, and preset-aware active caps.
+## camera frustum/screen culling, preset-aware active caps, and multi-cue category handling.
 
 static var instance: DamageNumberManager = null
+
+enum DamageCategory {
+	NORMAL = 0,    # Cream/off-white, 16px, clean number e.g. "12"
+	CRITICAL = 1,  # Radiant gold, 22px, strong pop, e.g. "★ 75"
+	PLAYER = 2,    # Vivid red, 18px, downward cue, e.g. "▼ -16"
+	BLOCKED = 3    # Cool steel cyan, 15px, e.g. "[SHIELD] 0" or "BLOCKED"
+}
 
 const PRESET_BUDGET_LOW: int = 24
 const PRESET_BUDGET_MEDIUM: int = 40
@@ -21,6 +28,8 @@ var _pool: Array[DamageNumber] = []
 var _free_labels: Array[DamageNumber] = []
 var _active_labels: Array[DamageNumber] = []
 var _cached_camera: Camera3D = null
+var _recent_event_keys: Dictionary = {}
+var _last_dedup_frame: int = -1
 
 func _get_event_bus() -> Node:
 	if is_inside_tree():
@@ -35,16 +44,10 @@ func _enter_tree() -> void:
 	var preset := str(SaveSystem.get_setting("graphics_preset", "medium")).to_lower()
 	set_preset(preset)
 	_init_pool()
-	var eb := _get_event_bus()
-	if eb and eb.has_signal("damage_number_spawned"):
-		if not eb.damage_number_spawned.is_connected(_on_damage_spawned):
-			eb.damage_number_spawned.connect(_on_damage_spawned)
+	_connect_events()
 
 func _exit_tree() -> void:
-	var eb := _get_event_bus()
-	if eb and eb.has_signal("damage_number_spawned"):
-		if eb.damage_number_spawned.is_connected(_on_damage_spawned):
-			eb.damage_number_spawned.disconnect(_on_damage_spawned)
+	_disconnect_events()
 
 	for label in _pool:
 		if is_instance_valid(label):
@@ -52,6 +55,7 @@ func _exit_tree() -> void:
 
 	_active_labels.clear()
 	_free_labels.clear()
+	_recent_event_keys.clear()
 
 	if instance == self:
 		instance = null
@@ -59,10 +63,25 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_init_pool()
+	_connect_events()
+
+func _connect_events() -> void:
 	var eb := _get_event_bus()
-	if eb and eb.has_signal("damage_number_spawned"):
-		if not eb.damage_number_spawned.is_connected(_on_damage_spawned):
-			eb.damage_number_spawned.connect(_on_damage_spawned)
+	if not eb:
+		return
+	if eb.has_signal("damage_number_spawned") and not eb.damage_number_spawned.is_connected(_on_damage_spawned):
+		eb.damage_number_spawned.connect(_on_damage_spawned)
+	if eb.has_signal("player_damaged_directional") and not eb.player_damaged_directional.is_connected(_on_player_damaged_directional):
+		eb.player_damaged_directional.connect(_on_player_damaged_directional)
+
+func _disconnect_events() -> void:
+	var eb := _get_event_bus()
+	if not eb:
+		return
+	if eb.has_signal("damage_number_spawned") and eb.damage_number_spawned.is_connected(_on_damage_spawned):
+		eb.damage_number_spawned.disconnect(_on_damage_spawned)
+	if eb.has_signal("player_damaged_directional") and eb.player_damaged_directional.is_connected(_on_player_damaged_directional):
+		eb.player_damaged_directional.disconnect(_on_player_damaged_directional)
 
 func set_preset(preset_name: String) -> void:
 	match preset_name.to_lower():
@@ -113,9 +132,37 @@ func get_active_camera() -> Camera3D:
 	return _cached_camera
 
 func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool) -> void:
-	spawn_damage_number(pos, amount, is_critical)
+	var cat := DamageCategory.NORMAL
+	if amount <= 0.0:
+		cat = DamageCategory.BLOCKED
+	elif is_critical:
+		cat = DamageCategory.CRITICAL
+	spawn_damage_number(pos, amount, is_critical, cat)
 
-func spawn_damage_number(pos: Vector3, amount: float, is_critical: bool) -> void:
+func _on_player_damaged_directional(amount: float, hit_pos: Vector3, source_pos: Vector3, is_shield_hit: bool) -> void:
+	if is_shield_hit or amount <= 0.0:
+		spawn_damage_number(hit_pos, 0.0, false, DamageCategory.BLOCKED, {"is_blocked": true, "source_pos": source_pos})
+	else:
+		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER, {"is_player": true, "source_pos": source_pos})
+
+func spawn_damage_number(
+	pos: Vector3,
+	amount: float,
+	is_critical: bool = false,
+	category: int = DamageCategory.NORMAL,
+	metadata: Dictionary = {}
+) -> void:
+	# Duplicate Prevention: drop identical category/amount/approx-pos events in the same frame
+	var current_frame := Engine.get_process_frames()
+	if current_frame != _last_dedup_frame:
+		_last_dedup_frame = current_frame
+		_recent_event_keys.clear()
+
+	var dedup_key := "%d_%.1f_%.1f_%.1f_%.1f" % [category, amount, roundf(pos.x * 2.0) / 2.0, roundf(pos.y * 2.0) / 2.0, roundf(pos.z * 2.0) / 2.0]
+	if _recent_event_keys.has(dedup_key):
+		return
+	_recent_event_keys[dedup_key] = true
+
 	var cam := get_active_camera()
 	if not cam or not cam.is_inside_tree():
 		return
@@ -154,7 +201,7 @@ func spawn_damage_number(pos: Vector3, amount: float, is_critical: bool) -> void
 		randf_range(0.3, 0.7),
 		randf_range(-0.35, 0.35)
 	)
-	label.setup(pos + jitter, amount, is_critical, self)
+	label.setup(pos + jitter, amount, is_critical, self, category, metadata)
 
 func _on_label_deactivated(label: DamageNumber) -> void:
 	_active_labels.erase(label)

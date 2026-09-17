@@ -33,7 +33,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 	current_health = maxf(0.0, current_health - amount)
 	if EventBus:
-		EventBus.damage_number_spawned.emit(global_position + Vector3(0, 2.5, 0), amount, amount >= 30.0)
+		EventBus.damage_number_spawned.emit(global_position + Vector3(0, 2.5, 0), amount, false)
 
 	if current_health <= 0.0:
 		_destroy_radar()
