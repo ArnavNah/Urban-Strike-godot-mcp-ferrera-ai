@@ -13,9 +13,9 @@ const FONT_RAJ_BOLD: FontFile = preload("res://assets/ui/fonts/Rajdhani-Bold.ttf
 const FONT_INTER_REG: FontFile = preload("res://assets/ui/fonts/Inter-Regular.ttf")
 const FONT_INTER_SEMI: FontFile = preload("res://assets/ui/fonts/Inter-SemiBold.ttf")
 
-const SOUND_FOCUS: AudioStream = preload("res://assets/audio/ui/ui_focus.wav")
-const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/ui/ui_confirm.wav")
-const SOUND_BACK: AudioStream = preload("res://assets/audio/ui/ui_back.wav")
+const SOUND_FOCUS: AudioStream = preload("res://assets/audio/sfx/ui/ui_focus.wav")
+const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/sfx/ui/ui_confirm.wav")
+const SOUND_BACK: AudioStream = preload("res://assets/audio/sfx/ui/ui_back.wav")
 
 const COLOR_ACCENT_AMBER := Color(0.961, 0.725, 0.106, 1.0)
 const COLOR_COMBAT_RED := Color(0.92, 0.24, 0.24, 1.0)

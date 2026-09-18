@@ -11,12 +11,12 @@
 [ext_resource type="Material" uid="uid://dmqmstpvn8eaj" path="res://resources/environment/asphalt.tres" id="9_hxnjg"]
 [ext_resource type="Material" uid="uid://dl3wrfrxk82n8" path="res://resources/environment/sand.tres" id="10_mcxet"]
 [ext_resource type="PackedScene" uid="uid://dx7napa1shieq" path="res://scenes/environment/city/warehouse_sawtooth.tscn" id="13_1rkuc"]
-[ext_resource type="PackedScene" uid="uid://fg8q8jvu4wvd" path="res://assets/Models/GLB format/solar-panel-portrait-group.glb" id="13_fi8tn"]
+[ext_resource type="PackedScene" uid="uid://c6solarport003" path="res://scenes/environment/industrial/solar_panel_portrait.tscn" id="13_fi8tn"]
 [ext_resource type="PackedScene" uid="uid://dcg68b3fc75bj" path="res://scenes/environment/props/streetlight.tscn" id="13_x5vxh"]
 [ext_resource type="PackedScene" uid="uid://deiyhgkluqg1e" path="res://scenes/environment/props/barrier.tscn" id="14_6tw2u"]
 [ext_resource type="PackedScene" uid="uid://xnuy3yy0oear" path="res://scenes/environment/city/building_small_b.tscn" id="16_wy3wq"]
 [ext_resource type="PackedScene" uid="uid://cf8rppn38y0ws" path="res://scenes/environment/city/building_small.tscn" id="17_b81xo"]
-[ext_resource type="PackedScene" uid="uid://d2pqxavtvoq33" path="res://assets/Models/GLB format/chimney-large.glb" id="20_suj4i"]
+[ext_resource type="PackedScene" uid="uid://c6chimneylrg01" path="res://scenes/environment/industrial/chimney_large.tscn" id="20_suj4i"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_weqt7"]
 material = ExtResource("1_nvioq")

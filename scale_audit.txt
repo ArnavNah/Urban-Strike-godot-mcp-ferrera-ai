@@ -1,0 +1,125 @@
+=== PLAYER ===
+Player Helicopter: W(X)=12.06, H(Y)=4.71, L(Z)=14.61 [AABB: (-6.034557, -1.768047, -7.438143) to (6.030001, 2.93835, 7.172129)]
+  Player RotorBlurDisc radius=6.03, diameter=12.06
+  Player TopProp AABB size: (12.05992, 0.705185, 12.05897) (max horiz=12.06)
+  Player Body AABB size: (6.535589, 3.482376, 12.04686)
+  Collision: Capsule: r=1.90, h=9.60
+Mini Helicopter: W(X)=2.71, H(Y)=1.16, L(Z)=2.61 [AABB: (-1.260067, -0.184058, -1.333549) to (1.45422, 0.98, 1.279814)]
+  Collision: Box: (1.8, 0.8, 2.0)
+=== AIR ENEMIES ===
+Air Scout Helicopter: W(X)=13.02, H(Y)=3.69, L(Z)=13.35 [AABB: (-6.509999, -1.84719, -6.509999) to (6.509999, 1.840875, 6.838813)]
+  Collision: Capsule: r=1.55, h=6.20
+Air Attack Gunship: W(X)=19.32, H(Y)=4.84, L(Z)=19.32 [AABB: (-9.659999, -1.365215, -9.659999) to (9.659999, 3.475024, 9.659999)]
+  Collision: Capsule: r=2.10, h=8.40
+Air Rocket Raider: W(X)=15.70, H(Y)=3.38, L(Z)=15.70 [AABB: (-7.848, -1.609254, -7.848) to (7.848, 1.767839, 7.848)]
+  Collision: Capsule: r=1.80, h=7.20
+Air Jammer Helicopter: W(X)=25.76, H(Y)=5.58, L(Z)=25.76 [AABB: (-12.88, -2.695403, -12.88) to (12.88, 2.884, 12.88)]
+  Collision: Capsule: r=2.30, h=9.50
+Air Heavy Gunship: W(X)=17.58, H(Y)=4.49, L(Z)=18.17 [AABB: (-8.790804, 0.0784, -8.088805) to (8.790806, 4.570754, 10.08136)]
+  Collision: Box: (7.4, 4.3, 15.2)
+Air Transport Helicopter: W(X)=25.97, H(Y)=5.11, L(Z)=35.51 [AABB: (-12.985, -1.855, -17.755) to (12.985, 3.2595, 17.755)]
+  Collision: Capsule: r=2.80, h=12.00
+Air Ace Gunship: W(X)=24.48, H(Y)=3.38, L(Z)=24.48 [AABB: (-12.24, -1.46625, -12.24) to (12.24, 1.9125, 12.24)]
+  Collision: Capsule: r=2.50, h=10.20
+Hunter Helicopter: W(X)=18.45, H(Y)=4.74, L(Z)=18.45 [AABB: (-9.224999, -1.335537, -9.224999) to (9.224999, 3.39948, 9.224999)]
+  Collision: Capsule: r=2.05, h=8.20
+MIG-17 Striker: W(X)=8.34, H(Y)=3.69, L(Z)=10.54 [AABB: (-4.160885, -1.844969, -4.779572) to (4.181848, 1.843578, 5.757989)]
+  Collision: Box: (5.5, 2.3, 10.4)
+Boss Archon: W(X)=17.85, H(Y)=10.04, L(Z)=21.03 [AABB: (-8.924999, -3.538619, -9.45) to (8.924999, 6.498507, 11.57601)]
+  Collision: Box: (9.5, 6.7, 18.5)
+=== GROUND ENEMIES ===
+Tank: W(X)=9.11, H(Y)=5.34, L(Z)=7.65 [AABB: (-4.555167, -0.0, -3.824577) to (4.555167, 5.341528, 3.824491)]
+  Collision: Box: (5.6, 3.5, 7.7)
+Ground Turret: W(X)=4.22, H(Y)=2.28, L(Z)=5.30 [AABB: (-2.11, 0.0, -3.19) to (2.11, 2.28, 2.11)]
+  Collision: Cylinder: r=2.10, h=2.40
+Ground Scout Buggy: W(X)=5.61, H(Y)=3.29, L(Z)=4.71 [AABB: (-2.803752, -0.0, -2.354066) to (2.803752, 3.287765, 2.354013)]
+  Collision: Box: (3.5, 2.15, 4.95)
+Ground Rocket Technical: W(X)=3.67, H(Y)=2.73, L(Z)=5.60 [AABB: (-1.835434, 0.0, -2.737104) to (1.835434, 2.732518, 2.858345)]
+  Collision: Box: (3.85, 2.65, 6.2)
+Ground Mortar Carrier: W(X)=4.05, H(Y)=3.02, L(Z)=6.18 [AABB: (-2.025592, 0.0, -3.020678) to (2.025592, 3.015617, 3.15448)]
+  Collision: Box: (4.2, 2.9, 6.45)
+Ground Assault IFV: W(X)=4.20, H(Y)=3.13, L(Z)=6.95 [AABB: (-2.100002, 0.0, -3.474569) to (2.100002, 3.126395, 3.474569)]
+  Collision: Box: (5.2, 3.2, 7.2)
+Ground Troop Carrier APC: W(X)=4.36, H(Y)=3.24, L(Z)=6.64 [AABB: (-2.178545, 0.0, -3.24877) to (2.178545, 3.243327, 3.392675)]
+  Collision: Box: (4.5, 3.1, 7.0)
+Ground Jammer Vehicle: W(X)=7.95, H(Y)=5.07, L(Z)=6.68 [AABB: (-3.975824, -0.0, -3.338153) to (3.975824, 5.069856, 3.338078)]
+  Collision: Box: (4.85, 3.08, 6.8)
+SAM Site: W(X)=4.16, H(Y)=3.09, L(Z)=3.90 [AABB: (-1.95, 0.0, -1.95) to (2.21, 3.085166, 1.95)]
+  Collision: Cylinder: r=2.08, h=3.12
+Infantry Cluster: W(X)=2.53, H(Y)=1.75, L(Z)=1.97 [AABB: (-1.2625, 0.0, -0.8625) to (1.2625, 1.75, 1.1125)]
+  Collision: Box: (2.8, 1.9, 2.8)
+=== VEHICLES & PROPS ===
+Parked Vehicle: W(X)=2.45, H(Y)=1.95, L(Z)=4.80 [AABB: (-1.225, 0.15, -2.4) to (1.225, 2.1, 2.4)]
+Wrecked Vehicle: W(X)=2.53, H(Y)=1.78, L(Z)=4.20 [AABB: (-1.225, 0.090781, -2.1) to (1.303153, 1.866993, 2.1)]
+  Collision: Box: (2.4, 1.4, 4.4)
+Streetlight: W(X)=2.50, H(Y)=7.00, L(Z)=0.35 [AABB: (-0.4, 0.0, -0.175) to (2.1, 7.0, 0.175)]
+Tree Cluster: W(X)=5.80, H(Y)=7.75, L(Z)=5.80 [AABB: (-2.9, 0.0, -2.9) to (2.9, 7.75, 2.9)]
+Fuel Tank: W(X)=5.28, H(Y)=3.37, L(Z)=5.77 [AABB: (-2.639728, 0.0, -2.884728) to (2.639728, 3.365621, 2.884728)]
+  Collision: Box: (5.279456, 3.365621, 5.769456)
+Crate: W(X)=1.60, H(Y)=1.60, L(Z)=1.60 [AABB: (-0.8, 0.0, -0.8) to (0.8, 1.6, 0.8)]
+  Collision: Box: (1.6, 1.6, 1.6)
+Barrier: W(X)=3.00, H(Y)=1.00, L(Z)=0.80 [AABB: (-1.5, 0.0, -0.4) to (1.5, 1.0, 0.4)]
+  Collision: Box: (3.0, 1.0, 0.8)
+Sandbag: W(X)=2.60, H(Y)=0.85, L(Z)=0.85 [AABB: (-1.3, 0.0, -0.425) to (1.3, 0.85, 0.425)]
+  Collision: Box: (2.6, 0.85, 0.85)
+Antenna: W(X)=1.60, H(Y)=5.83, L(Z)=0.25 [AABB: (-0.8, 0.0, -0.125) to (0.8, 5.825, 0.125)]
+Fence: W(X)=4.00, H(Y)=2.40, L(Z)=0.10 [AABB: (-2.0, 0.0, -0.05) to (2.0, 2.4, 0.05)]
+  Collision: Box: (4.0, 2.4, 0.15)
+=== BUILDINGS ===
+Building Small: W(X)=18.46, H(Y)=14.08, L(Z)=14.12 [AABB: (-9.22976, -0.0, -7.059734) to (9.22976, 14.08, 7.059736)]
+  Collision: Box: (18.46, 14.08, 14.12)
+Building Small B: W(X)=13.55, H(Y)=11.37, L(Z)=17.16 [AABB: (-6.77632, 0.0, -8.5832) to (6.775088, 11.36712, 8.5768)]
+  Collision: Box: (13.56, 11.38, 17.16)
+Building Small C: W(X)=10.60, H(Y)=12.73, L(Z)=14.20 [AABB: (-5.301527, -0.0, -8.000001) to (5.301528, 12.73097, 6.200002)]
+  Collision: Box: (10.56, 12.69, 14.2)
+Building Medium: W(X)=25.00, H(Y)=27.34, L(Z)=19.87 [AABB: (-12.49644, 0.0, -9.936) to (12.50662, 27.342, 9.936002)]
+  Collision: Box: (25.0, 27.34, 19.87)
+Building Medium B: W(X)=22.38, H(Y)=28.88, L(Z)=20.48 [AABB: (-11.18758, -0.0, -9.351) to (11.18742, 28.875, 11.129)]
+  Collision: Box: (22.38, 28.88, 20.48)
+Building Medium C: W(X)=20.84, H(Y)=20.58, L(Z)=15.14 [AABB: (-10.41066, -0.0, -7.667999) to (10.42522, 20.58, 7.476002)]
+  Collision: Box: (20.8, 20.58, 15.12)
+Building Large: W(X)=29.44, H(Y)=64.00, L(Z)=15.27 [AABB: (-15.04, 0.0, -7.633402) to (14.4, 63.99899, 7.633402)]
+  Collision: Box: (14.08, 64.0, 15.26)
+Building Large B: W(X)=28.63, H(Y)=58.24, L(Z)=13.60 [AABB: (-14.80001, 0.0, -6.799999) to (13.8275, 58.24, 6.799999)]
+  Collision: Box: (13.6, 58.24, 13.6)
+Building Skyscraper C: W(X)=13.60, H(Y)=51.84, L(Z)=13.60 [AABB: (-6.800004, 0.0, -6.800001) to (6.799994, 51.84, 6.800001)]
+  Collision: Box: (13.6, 51.84, 13.6)
+Warehouse: W(X)=28.16, H(Y)=13.25, L(Z)=14.42 [AABB: (-14.08195, 0.0, -7.212242) to (14.08195, 13.25172, 7.212239)]
+  Collision: Box: (28.17, 12.26, 14.42)
+Warehouse Sawtooth: W(X)=26.26, H(Y)=15.85, L(Z)=29.51 [AABB: (-12.45833, -0.0, -13.75507) to (13.80476, 15.85, 15.75722)]
+  Collision: Box: (26.26, 12.0, 29.52)
+Storage Tanks: W(X)=15.79, H(Y)=4.33, L(Z)=8.74 [AABB: (-7.893936, 0.0, -3.708936) to (7.893936, 4.327227, 5.030591)]
+  Collision: Box: (6.787872, 4.327227, 7.417871)
+Container Stack: W(X)=5.76, H(Y)=5.15, L(Z)=6.09 [AABB: (-2.878621, 0.0, -3.04362) to (2.878621, 5.151592, 3.04362)]
+  Collision: Box: (2.757241, 2.575792, 6.087241)
+Chimney Large: W(X)=1.08, H(Y)=1.70, L(Z)=1.08 [AABB: (-0.54, 0.0, -0.54) to (0.54, 1.7, 0.54)]
+  Collision: Cylinder: r=0.54, h=1.70
+Chimney Small: W(X)=0.30, H(Y)=0.75, L(Z)=0.30 [AABB: (-0.15, 0.0, -0.15) to (0.15, 0.75, 0.15)]
+  Collision: Cylinder: r=0.15, h=0.75
+Solar Panel Portrait: W(X)=0.92, H(Y)=0.41, L(Z)=1.25 [AABB: (-0.4591, -0.0, -0.624286) to (0.4591, 0.40996, 0.624286)]
+  Collision: Box: (0.92, 0.41, 1.25)
+Town Cabin: W(X)=4.60, H(Y)=4.40, L(Z)=3.80 [AABB: (-2.3, 0.0, -1.9) to (2.3, 4.4, 1.9)]
+  Collision: Box: (4.6, 4.4, 3.8)
+Town House A: W(X)=5.20, H(Y)=5.50, L(Z)=4.20 [AABB: (-2.6, 0.0, -2.1) to (2.6, 5.5, 2.1)]
+  Collision: Box: (5.2, 5.5, 4.2)
+Town Workshop: W(X)=5.20, H(Y)=5.75, L(Z)=4.20 [AABB: (-2.6, 0.0, -2.1) to (2.6, 5.75, 2.1)]
+  Collision: Box: (5.2, 5.75, 4.2)
+Water Tower: W(X)=2.98, H(Y)=7.50, L(Z)=2.91 [AABB: (-1.491378, 0.0, -1.455649) to (1.491378, 7.495829, 1.455649)]
+  Collision: Box: (2.982755, 7.495829, 2.911299)
+Wind Turbine: W(X)=2.42, H(Y)=9.26, L(Z)=4.51 [AABB: (-1.209375, 0.0, -2.25373) to (1.209375, 9.255413, 2.25373)]
+  Collision: Box: (2.418751, 9.255413, 4.50746)
+Solar Array: W(X)=5.30, H(Y)=0.92, L(Z)=3.13 [AABB: (-2.648452, 0.0, -1.566338) to (2.648451, 0.918263, 1.566338)]
+  Collision: Box: (5.296903, 0.918263, 3.132675)
+=== MILITARY & OBJECTIVES ===
+Radar Station (Objective): W(X)=4.40, H(Y)=7.06, L(Z)=4.40 [AABB: (-2.2, 0.0, -2.2) to (2.2, 7.059807, 2.2)]
+  Collision: Cylinder: r=2.40, h=6.00
+Radar Site (Military): W(X)=22.00, H(Y)=2.80, L(Z)=22.00 [AABB: (-11.0, 0.0, -11.0) to (11.0, 2.8, 11.0)]
+  Collision: Box: (22.0, 0.4, 22.0)
+SAM Site (Military Env): W(X)=19.00, H(Y)=2.00, L(Z)=18.50 [AABB: (-9.5, 0.0, -10.5) to (9.5, 2.0, 8.0)]
+  Collision: Box: (18.0, 2.0, 3.0)
+Radio Tower: W(X)=7.00, H(Y)=29.00, L(Z)=6.00 [AABB: (-3.5, 0.0, -3.0) to (3.5, 29.0, 3.0)]
+  Collision: Box: (7.0, 4.0, 6.0)
+Checkpoint: W(X)=15.50, H(Y)=4.00, L(Z)=6.14 [AABB: (-8.5, 0.0, -2.5) to (7.0, 4.0, 3.644286)]
+  Collision: Box: (4.0, 4.0, 5.0)
+Hangar (Military): W(X)=28.25, H(Y)=11.20, L(Z)=26.30 [AABB: (-14.125, 0.0, -13.125) to (14.125, 11.2, 13.175)]
+  Collision: Box: (28.0, 10.4, 26.0)

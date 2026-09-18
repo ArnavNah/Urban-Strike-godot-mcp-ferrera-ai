@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://b31wyyum6a6e6"]
 
-[ext_resource type="PackedScene" uid="uid://ej64umoe51xh" path="res://assets/Models/GLB format/shipping-container-a.glb" id="1_m56su"]
-[ext_resource type="PackedScene" uid="uid://byavlv31uoh0j" path="res://assets/Models/GLB format/shipping-container-b.glb" id="3_t3ues"]
-[ext_resource type="PackedScene" uid="uid://cbeompows7yfk" path="res://assets/Models/GLB format/shipping-container-c.glb" id="4_8w0qd"]
+[ext_resource type="PackedScene" uid="uid://ej64umoe51xh" path="res://assets/environment/industrial/shipping_container_a.glb" id="1_m56su"]
+[ext_resource type="PackedScene" uid="uid://byavlv31uoh0j" path="res://assets/environment/industrial/shipping_container_b.glb" id="3_t3ues"]
+[ext_resource type="PackedScene" uid="uid://cbeompows7yfk" path="res://assets/environment/industrial/shipping_container_c.glb" id="4_8w0qd"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ba0r2"]
 size = Vector3(2.7572412, 2.5757918, 6.0872407)

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cgsoxyl21fjio"]
 
-[ext_resource type="PackedScene" uid="uid://dc3toxqk2npcy" path="res://assets/Models/GLB format/building-a.glb" id="1_jbf14"]
+[ext_resource type="PackedScene" uid="uid://dc3toxqk2npcy" path="res://assets/environment/buildings/building_medium_a.glb" id="1_jbf14"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_q68lt"]
 size = Vector3(25, 27.34, 19.87)

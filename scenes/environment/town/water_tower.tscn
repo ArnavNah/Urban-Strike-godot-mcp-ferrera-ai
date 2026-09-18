@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dls5gqs0wucop"]
 
-[ext_resource type="PackedScene" uid="uid://e2a3u2js4vdh" path="res://assets/Models/GLB format/water-tower.glb" id="1_gfsx0"]
+[ext_resource type="PackedScene" uid="uid://e2a3u2js4vdh" path="res://assets/environment/industrial/water_tower.glb" id="1_gfsx0"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_p54hs"]
 size = Vector3(2.9827552, 7.495829, 2.9112985)

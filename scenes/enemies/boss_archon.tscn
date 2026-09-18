@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://b7n2v8k4m1rar"]
 
 [ext_resource type="Script" uid="uid://bo52ept1j4g12" path="res://scripts/enemies/boss_archon.gd" id="1_archon"]
-[ext_resource type="PackedScene" uid="uid://ckn2vv40x2gsb" path="res://assets/Enemies/Boss enemy/Propeller.glb" id="2_k0mpc"]
-[ext_resource type="PackedScene" uid="uid://dcv1wotw7mu08" path="res://assets/Enemies/Boss enemy/Body color.glb" id="3_h10ul"]
+[ext_resource type="PackedScene" uid="uid://ckn2vv40x2gsb" path="res://assets/vehicles/enemies/bosses/archon_propeller.glb" id="2_k0mpc"]
+[ext_resource type="PackedScene" uid="uid://dcv1wotw7mu08" path="res://assets/vehicles/enemies/bosses/archon_body.glb" id="3_h10ul"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Boss"]
-size = Vector3(4.5, 3.2, 8.8)
+size = Vector3(9.5, 6.7, 18.5)
 
 [sub_resource type="StandardMaterial3D" id="Mat_Gun"]
 albedo_color = Color(0.12, 0.12, 0.14, 1)
@@ -38,10 +38,11 @@ collision_layer = 4
 script = ExtResource("1_archon")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1709206402]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 shape = SubResource("BoxShape3D_Boss")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=568607140]
+transform = Transform3D(2.1, 0, 0, 0, 2.1, 0, 0, 0, 2.1, 0, 0, 0)
 
 [node name="FrontRotor" type="Node3D" parent="Visuals" unique_id=1106737047]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 1.445)

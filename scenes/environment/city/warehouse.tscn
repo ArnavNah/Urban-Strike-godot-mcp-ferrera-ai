@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bsww1a65ibuij"]
 
-[ext_resource type="PackedScene" uid="uid://cypmgwb7s8fpm" path="res://assets/Models/GLB format/building-r.glb" id="1_6sl3h"]
-[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/Models/GLB format/solar-panel-landscape-group.glb" id="3_liwkt"]
+[ext_resource type="PackedScene" uid="uid://cypmgwb7s8fpm" path="res://assets/environment/buildings/building_warehouse_r.glb" id="1_6sl3h"]
+[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/environment/industrial/solar_panel_landscape.glb" id="3_liwkt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_v61ox"]
 size = Vector3(28.17, 12.26, 14.42)

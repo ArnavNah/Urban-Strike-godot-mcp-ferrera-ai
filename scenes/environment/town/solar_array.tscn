@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dnikottc7uupj"]
 
-[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/Models/GLB format/solar-panel-landscape-group.glb" id="1_0yffx"]
+[ext_resource type="PackedScene" uid="uid://cxr4rhsxelfi3" path="res://assets/environment/industrial/solar_panel_landscape.glb" id="1_0yffx"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jqmkq"]
 size = Vector3(5.2969027, 0.91826296, 3.1326754)

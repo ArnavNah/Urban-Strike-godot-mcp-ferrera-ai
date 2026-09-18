@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_llc8k"]
 [ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_qy12n"]
-[ext_resource type="PackedScene" uid="uid://l2chotjw2qaj" path="res://assets/Enemies/flying enemies/enemi3.glb" id="3_qy12n"]
+[ext_resource type="PackedScene" uid="uid://l2chotjw2qaj" path="res://assets/vehicles/enemies/air/enemy_jammer.glb" id="3_qy12n"]
 
 [sub_resource type="Resource" id="Resource_7pimg"]
 script = ExtResource("2_qy12n")
@@ -28,8 +28,8 @@ damage_per_shot = 1.5
 fire_rate = 3.0
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_7pimg"]
-radius = 1.0
-height = 3.9
+radius = 2.3
+height = 9.5
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oism3"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
@@ -37,7 +37,7 @@ metallic = 0.8
 
 [sub_resource type="BoxMesh" id="BoxMesh_141ta"]
 material = SubResource("StandardMaterial3D_oism3")
-size = Vector3(4.4, 0.04, 0.22)
+size = Vector3(9.2, 0.06, 0.38)
 
 [node name="AirJammerHelicopter" type="CharacterBody3D" unique_id=1485415646]
 collision_layer = 4
@@ -49,7 +49,7 @@ transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
 shape = SubResource("CapsuleShape3D_7pimg")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=763654124]
-transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
+transform = Transform3D(2.8, 0, 0, 0, 2.8, 0, 0, 0, 2.8, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=974771629]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)

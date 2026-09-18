@@ -185,7 +185,7 @@ static func _init_shared_prop_resources() -> void:
 	_truck_cab_mesh.material = cab_mat
 
 	# Cache Kenney suburban tree and planter meshes
-	var small_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/tree-small.glb") as PackedScene
+	var small_scene := load("res://assets/environment/vegetation/tree_small.glb") as PackedScene
 	if small_scene:
 		var temp_node := small_scene.instantiate() as Node3D
 		if temp_node:
@@ -194,7 +194,7 @@ static func _init_shared_prop_resources() -> void:
 				_kenney_tree_small_mesh = mi.mesh
 			temp_node.free()
 
-	var large_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/tree-large.glb") as PackedScene
+	var large_scene := load("res://assets/environment/vegetation/tree_large.glb") as PackedScene
 	if large_scene:
 		var temp_node := large_scene.instantiate() as Node3D
 		if temp_node:
@@ -203,7 +203,7 @@ static func _init_shared_prop_resources() -> void:
 				_kenney_tree_large_mesh = mi.mesh
 			temp_node.free()
 
-	var planter_scene := load("res://assets/kenney/City kit suburbann/Models/GLB format/planter.glb") as PackedScene
+	var planter_scene := load("res://assets/environment/street_props/planter.glb") as PackedScene
 	if planter_scene:
 		var temp_node := planter_scene.instantiate() as Node3D
 		if temp_node:

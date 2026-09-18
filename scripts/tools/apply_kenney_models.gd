@@ -45,19 +45,19 @@ func build_building_large() -> bool:
 	root.collision_mask = 0
 	
 	# Complex composed of main skyscraper tower, secondary tower, and connecting lobby
-	var tower_a := _instantiate_glb("res://assets/Models/GLB format/building-skyscraper-d.glb")
+	var tower_a := _instantiate_glb("res://assets/environment/buildings/skyscraper_d.glb")
 	tower_a.name = "TowerA"
 	tower_a.transform.origin = Vector3(-4.0, 0, 0)
 	tower_a.scale = Vector3(5.5, 4.5, 5.5)
 	root.add_child(tower_a)
 	
-	var tower_b := _instantiate_glb("res://assets/Models/GLB format/building-skyscraper-c.glb")
+	var tower_b := _instantiate_glb("res://assets/environment/buildings/skyscraper_c.glb")
 	tower_b.name = "TowerB"
 	tower_b.transform.origin = Vector3(4.0, 0, 0)
 	tower_b.scale = Vector3(5.0, 4.2, 5.0)
 	root.add_child(tower_b)
 	
-	var lobby := _instantiate_glb("res://assets/Models/GLB format/building-e.glb")
+	var lobby := _instantiate_glb("res://assets/environment/buildings/building_e.glb")
 	lobby.name = "Podium"
 	lobby.transform.origin = Vector3(0, 0, 0)
 	lobby.scale = Vector3(6.0, 3.5, 6.0)
@@ -111,7 +111,7 @@ func build_building_medium() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/building-l.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/building_l.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(5.5, 5.0, 5.5)
 	root.add_child(model)
@@ -145,7 +145,7 @@ func build_building_small() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/building-g.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/building_small_g.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(5.0, 5.0, 5.0)
 	root.add_child(model)
@@ -179,13 +179,13 @@ func build_warehouse() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/building-r.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/building_warehouse_r.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(7.0, 5.5, 7.0)
 	root.add_child(model)
 	
 	# Industrial Solar Panels on Roof
-	var solar := _instantiate_glb("res://assets/Models/GLB format/solar-panel-landscape-group.glb")
+	var solar := _instantiate_glb("res://assets/environment/industrial/solar_panel_landscape.glb")
 	solar.name = "SolarPanels"
 	solar.transform.origin = Vector3(0, 7.65, 0)
 	solar.scale = Vector3(2.5, 2.5, 2.5)
@@ -221,21 +221,21 @@ func build_container_stack() -> bool:
 	root.collision_mask = 0
 	
 	# Orange container
-	var c_a := _instantiate_glb("res://assets/Models/GLB format/shipping-container-a.glb")
+	var c_a := _instantiate_glb("res://assets/environment/industrial/shipping_container_a.glb")
 	c_a.name = "ContainerOrange"
 	c_a.transform.origin = Vector3(-1.5, 0, 0)
 	c_a.scale = Vector3(2.0, 2.0, 2.0)
 	root.add_child(c_a)
 	
 	# Blue container
-	var c_b := _instantiate_glb("res://assets/Models/GLB format/shipping-container-b.glb")
+	var c_b := _instantiate_glb("res://assets/environment/industrial/shipping_container_b.glb")
 	c_b.name = "ContainerBlue"
 	c_b.transform.origin = Vector3(1.5, 0, 0)
 	c_b.scale = Vector3(2.0, 2.0, 2.0)
 	root.add_child(c_b)
 	
 	# Green container stacked on top
-	var c_c := _instantiate_glb("res://assets/Models/GLB format/shipping-container-c.glb")
+	var c_c := _instantiate_glb("res://assets/environment/industrial/shipping_container_c.glb")
 	c_c.name = "ContainerGreen"
 	c_c.transform.origin = Vector3(0, 2.58, 0)
 	c_c.scale = Vector3(2.0, 2.0, 2.0)
@@ -282,19 +282,19 @@ func build_storage_tanks() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var tank1 := _instantiate_glb("res://assets/Models/GLB format/detail-tank-large.glb")
+	var tank1 := _instantiate_glb("res://assets/environment/industrial/storage_tank_large.glb")
 	tank1.name = "TankLargeA"
 	tank1.transform.origin = Vector3(-4.5, 0, 0)
 	tank1.scale = Vector3(4.5, 4.5, 4.5)
 	root.add_child(tank1)
 	
-	var tank2 := _instantiate_glb("res://assets/Models/GLB format/detail-tank-large.glb")
+	var tank2 := _instantiate_glb("res://assets/environment/industrial/storage_tank_large.glb")
 	tank2.name = "TankLargeB"
 	tank2.transform.origin = Vector3(4.5, 0, 0)
 	tank2.scale = Vector3(4.5, 4.5, 4.5)
 	root.add_child(tank2)
 	
-	var tank_h := _instantiate_glb("res://assets/Models/GLB format/detail-tank.glb")
+	var tank_h := _instantiate_glb("res://assets/environment/industrial/storage_tank.glb")
 	tank_h.name = "TankHorizontal"
 	tank_h.transform.origin = Vector3(0, 0, 4.0)
 	tank_h.scale = Vector3(4.0, 4.0, 4.0)
@@ -345,7 +345,7 @@ func build_fuel_tank() -> bool:
 	root.collision_mask = 1
 	
 	# Load large tank mesh
-	var glb_tank := _instantiate_glb("res://assets/Models/GLB format/detail-tank-large.glb")
+	var glb_tank := _instantiate_glb("res://assets/environment/industrial/storage_tank_large.glb")
 	var mesh_inst: MeshInstance3D = null
 	for c in glb_tank.get_children():
 		if c is MeshInstance3D:

@@ -31,9 +31,9 @@ extends Control
 @onready var bg_nav_port: MeshInstance3D = null
 @onready var bg_nav_starboard: MeshInstance3D = null
 
-const SOUND_FOCUS: AudioStream = preload("res://assets/audio/ui/ui_focus.wav")
-const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/ui/ui_confirm.wav")
-const SOUND_BACK: AudioStream = preload("res://assets/audio/ui/ui_back.wav")
+const SOUND_FOCUS: AudioStream = preload("res://assets/audio/sfx/ui/ui_focus.wav")
+const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/sfx/ui/ui_confirm.wav")
+const SOUND_BACK: AudioStream = preload("res://assets/audio/sfx/ui/ui_back.wav")
 
 const COLOR_ACCENT_AMBER := Color(0.961, 0.725, 0.106, 1.0)
 const HELI_CENTER: Vector3 = Vector3(3.9, 5.2, 14.2)

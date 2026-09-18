@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://c6solarport003"]
+
+[ext_resource type="PackedScene" uid="uid://fg8q8jvu4wvd" path="res://assets/environment/industrial/solar_panel_portrait.glb" id="1_solpt"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_solpt"]
+size = Vector3(0.92, 0.41, 1.25)
+
+[node name="SolarPanelPortrait" type="StaticBody3D"]
+collision_mask = 0
+
+[node name="Intact" type="Node3D" parent="."]
+
+[node name="SolarModel" parent="Intact" instance=ExtResource("1_solpt")]
+
+[node name="CollisionSolar" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.205, 0)
+shape = SubResource("BoxShape3D_solpt")

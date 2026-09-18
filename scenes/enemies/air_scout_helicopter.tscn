@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_u3l3o"]
 [ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_xt4kw"]
-[ext_resource type="PackedScene" uid="uid://c7hvr4ed6dmux" path="res://assets/Enemies/flying enemies/enemi1.glb" id="3_xt4kw"]
+[ext_resource type="PackedScene" uid="uid://c7hvr4ed6dmux" path="res://assets/vehicles/enemies/air/enemy_scout.glb" id="3_xt4kw"]
 
 [sub_resource type="Resource" id="Resource_uytkb"]
 script = ExtResource("2_xt4kw")
@@ -28,8 +28,8 @@ damage_per_shot = 2.0
 fire_rate = 9.0
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_uytkb"]
-radius = 0.85
-height = 3.4
+radius = 1.55
+height = 6.2
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ifcng"]
 albedo_color = Color(0.12, 0.12, 0.12, 1)
@@ -37,7 +37,7 @@ metallic = 0.8
 
 [sub_resource type="BoxMesh" id="BoxMesh_dfmdl"]
 material = SubResource("StandardMaterial3D_ifcng")
-size = Vector3(3.4, 0.03, 0.18)
+size = Vector3(6.2, 0.04, 0.28)
 
 [node name="AirScoutHelicopter" type="CharacterBody3D" unique_id=686393404]
 collision_layer = 4
@@ -49,7 +49,7 @@ transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
 shape = SubResource("CapsuleShape3D_uytkb")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=1249754934]
-transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
+transform = Transform3D(2.1, 0, 0, 0, 2.1, 0, 0, 0, 2.1, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=785295983]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)

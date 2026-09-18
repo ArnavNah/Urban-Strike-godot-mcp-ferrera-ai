@@ -990,6 +990,12 @@ func _release_slot() -> void:
 			dir.release_attack_permission(self)
 	_has_attack_slot = false
 
+func _get_damage_number_y_offset() -> float:
+	var col := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if col and col.shape and col.shape is BoxShape3D:
+		return col.position.y + (col.shape as BoxShape3D).size.y * 0.5 + 0.6
+	return 2.2
+
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if not is_alive:
 		return
@@ -997,7 +1003,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	_trigger_damage_flash()
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.2, 0), amount, false, {"target_id": get_instance_id()})
+		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, _get_damage_number_y_offset(), 0), amount, false, {"target_id": get_instance_id()})
 	if current_health <= 0.0:
 		_die()
 

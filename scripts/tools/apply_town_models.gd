@@ -43,7 +43,7 @@ func build_town_house() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/low-detail-building-wide-a.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/low_detail_wide_a.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(4.5, 4.5, 4.5)
 	root.add_child(model)
@@ -75,7 +75,7 @@ func build_town_workshop() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/low-detail-building-wide-b.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/low_detail_wide_b.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(4.5, 4.5, 4.5)
 	root.add_child(model)
@@ -107,7 +107,7 @@ func build_town_cabin() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/low-detail-building-c.glb")
+	var model := _instantiate_glb("res://assets/environment/buildings/low_detail_building_c.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(4.5, 4.5, 4.5)
 	root.add_child(model)
@@ -139,7 +139,7 @@ func build_water_tower() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/water-tower.glb")
+	var model := _instantiate_glb("res://assets/environment/industrial/water_tower.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(3.5, 3.5, 3.5)
 	root.add_child(model)
@@ -167,7 +167,7 @@ func build_wind_turbine() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/windmill.glb")
+	var model := _instantiate_glb("res://assets/environment/industrial/wind_turbine.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(4.0, 4.0, 4.0)
 	root.add_child(model)
@@ -195,7 +195,7 @@ func build_solar_array() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var model := _instantiate_glb("res://assets/Models/GLB format/solar-panel-landscape-group.glb")
+	var model := _instantiate_glb("res://assets/environment/industrial/solar_panel_landscape.glb")
 	model.name = "VisualModel"
 	model.scale = Vector3(3.5, 3.5, 3.5)
 	root.add_child(model)

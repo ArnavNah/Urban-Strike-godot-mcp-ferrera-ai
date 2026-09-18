@@ -46,6 +46,18 @@ This project incorporates third-party open source assets under the following lic
 - **Author**: Kenney (Kenney Vleugels - www.kenney.nl)
 - **Source**: https://kenney.nl/assets/3d-road-tiles
 - **License**: Creative Commons Zero v1.0 Universal (CC0 1.0)
-- **License File**: `res://assets/kenney/3d_road_tiles/License.txt` (and `res://assets/licenses/LICENSE-Kenney-Road-Tiles.txt`)
+- **License File**: `res://assets/licenses/LICENSE-Kenney-Road-Tiles.txt` (and `res://assets/licenses/LICENSE-Kenney-Road-Tiles.txt`)
 - **Notice**: You may use these models/textures in personal and commercial projects. Credit is appreciated but not mandatory.
 
+
+### Kenney City Kit Industrial
+- **Author**: Kenney (Kenney Vleugels - www.kenney.nl)
+- **Source**: https://kenney.nl/assets/city-kit-industrial
+- **License**: Creative Commons Zero v1.0 Universal (CC0 1.0)
+- **License File**: `res://assets/licenses/LICENSE-Kenney-City-Kit-Industrial.txt`
+
+### Kenney City Kit Suburban
+- **Author**: Kenney (Kenney Vleugels - www.kenney.nl)
+- **Source**: https://kenney.nl/assets/city-kit-suburban
+- **License**: Creative Commons Zero v1.0 Universal (CC0 1.0)
+- **License File**: `res://assets/licenses/LICENSE-Kenney-City-Kit-Suburban.txt`

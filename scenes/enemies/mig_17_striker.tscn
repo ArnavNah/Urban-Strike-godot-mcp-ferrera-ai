@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://c52kkwmdce4to"]
 
 [ext_resource type="Script" uid="uid://cn6wlwsdpd415" path="res://scripts/enemies/mig_17_striker.gd" id="1_r33ax"]
-[ext_resource type="PackedScene" uid="uid://db3nxq81egrmc" path="res://assets/Enemies/Straint flying airplane enemy/mig-17f.glb" id="2_wclmf"]
+[ext_resource type="PackedScene" uid="uid://db3nxq81egrmc" path="res://assets/vehicles/enemies/air/mig17_striker.glb" id="2_wclmf"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_am1jq"]
-size = Vector3(4.2, 1.8, 8)
+size = Vector3(5.5, 2.3, 10.4)
 
 [node name="Mig17Striker" type="CharacterBody3D" unique_id=220920452]
 collision_layer = 4
@@ -14,18 +14,19 @@ script = ExtResource("1_r33ax")
 shape = SubResource("BoxShape3D_am1jq")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=109439687]
+transform = Transform3D(1.3, 0, 0, 0, 1.3, 0, 0, 0, 1.3, 0, 0, 0)
 
 [node name="Model" parent="Visuals" unique_id=1387944895 instance=ExtResource("2_wclmf")]
 transform = Transform3D(-6.119594e-08, 0, 1.4, 0, 1.4, 0, -1.4, 0, -6.119594e-08, 0, 4.22, 0)
 
 [node name="MuzzleLeft" type="Marker3D" parent="Visuals" unique_id=1451673511]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0, -4.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -5.4)
 
 [node name="MuzzleRight" type="Marker3D" parent="Visuals" unique_id=89921832]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0, -4.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, -5.4)
 
 [node name="WarningLight" type="OmniLight3D" parent="Visuals" unique_id=566747915]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.8)
 visible = false
 light_color = Color(1, 0.3, 0.1, 1)
 light_energy = 4.0

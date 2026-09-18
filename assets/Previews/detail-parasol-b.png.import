@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b25imkkp3www7"
-path="res://.godot/imported/detail-parasol-b.png-8220056d2ed06d928ccc73e048d15fde.ctex"
+path="res://.godot/imported/detail-parasol-b.png-c4c874b2bb084438620d1f988ecadf99.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Previews/detail-parasol-b.png"
-dest_files=["res://.godot/imported/detail-parasol-b.png-8220056d2ed06d928ccc73e048d15fde.ctex"]
+source_file="res://assets/previews/detail-parasol-b.png"
+dest_files=["res://.godot/imported/detail-parasol-b.png-c4c874b2bb084438620d1f988ecadf99.ctex"]
 
 [params]
 

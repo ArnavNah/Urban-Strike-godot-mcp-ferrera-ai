@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://b1pkcmfrr8oti"]
 
-[ext_resource type="PackedScene" uid="uid://f046bijgad7i" path="res://assets/Models/GLB format/detail-tank-large.glb" id="1_6h8wr"]
-[ext_resource type="PackedScene" uid="uid://c8ju6vmbcjelx" path="res://assets/Models/GLB format/detail-tank.glb" id="3_gpotk"]
+[ext_resource type="PackedScene" uid="uid://f046bijgad7i" path="res://assets/environment/industrial/storage_tank_large.glb" id="1_6h8wr"]
+[ext_resource type="PackedScene" uid="uid://c8ju6vmbcjelx" path="res://assets/environment/industrial/storage_tank.glb" id="3_gpotk"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_5ptnt"]
 size = Vector3(6.7878723, 4.327227, 7.4178715)

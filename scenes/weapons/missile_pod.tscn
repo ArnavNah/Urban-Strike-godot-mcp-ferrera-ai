@@ -6,7 +6,7 @@
 script = ExtResource("1_pod")
 
 [node name="LeftMuzzle" type="Marker3D" parent="." unique_id=1787833671]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0, -0.55)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9432, 0, -1.2452)
 
 [node name="RightMuzzle" type="Marker3D" parent="." unique_id=1707657508]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0, -0.55)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.9432, 0, -1.2452)

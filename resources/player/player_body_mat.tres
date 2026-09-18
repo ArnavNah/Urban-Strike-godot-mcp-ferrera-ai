@@ -1,6 +1,6 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://ck3alw50coce6"]
 
-[ext_resource type="Texture2D" uid="uid://cfd3obebowyaq" path="res://Player model/body_Baked_BaseColor.png" id="1_6l8he"]
+[ext_resource type="Texture2D" uid="uid://cfd3obebowyaq" path="res://assets/vehicles/player/textures/body_base_color.png" id="1_6l8he"]
 
 [resource]
 resource_name = "PlayerBodyMat"

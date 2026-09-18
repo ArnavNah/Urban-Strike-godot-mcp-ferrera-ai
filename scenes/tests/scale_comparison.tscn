@@ -1,0 +1,272 @@
+[gd_scene format=3 uid="uid://ta1xug2p00vp"]
+
+[ext_resource type="PackedScene" uid="uid://cerjq4bw0ykkv" path="res://scenes/player/player_helicopter.tscn" id="1_5222t"]
+[ext_resource type="PackedScene" uid="uid://blw4iavaiqdy1" path="res://scenes/enemies/air_scout_helicopter.tscn" id="2_3n855"]
+[ext_resource type="PackedScene" uid="uid://d2ajrb4a80s3p" path="res://scenes/enemies/air_attack_gunship.tscn" id="3_drlbc"]
+[ext_resource type="PackedScene" uid="uid://mm4m0fxke08v" path="res://scenes/enemies/air_heavy_gunship.tscn" id="4_4st1b"]
+[ext_resource type="PackedScene" uid="uid://ngfr7djgd3re" path="res://scenes/enemies/ground_scout_buggy.tscn" id="5_ssa3b"]
+[ext_resource type="PackedScene" uid="uid://dc0ujsa0qhnag" path="res://scenes/enemies/ground_assault_ifv.tscn" id="6_et85c"]
+[ext_resource type="PackedScene" uid="uid://cuve5cme7mhsq" path="res://scenes/environment/props/parked_vehicle.tscn" id="7_ejwge"]
+[ext_resource type="PackedScene" uid="uid://dcg68b3fc75bj" path="res://scenes/environment/props/streetlight.tscn" id="8_7ssgg"]
+[ext_resource type="PackedScene" uid="uid://c3fmnwrt2gb5v" path="res://scenes/environment/props/tree_cluster.tscn" id="9_8h6vx"]
+[ext_resource type="PackedScene" uid="uid://cf8rppn38y0ws" path="res://scenes/environment/city/building_small.tscn" id="10_n8x1l"]
+[ext_resource type="PackedScene" uid="uid://cgsoxyl21fjio" path="res://scenes/environment/city/building_medium.tscn" id="11_h76f0"]
+
+[sub_resource type="Environment" id="Environment_60wv1"]
+background_mode = 1
+background_color = Color(0.55, 0.65, 0.75, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.6, 0.65, 0.7, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1f8sa"]
+albedo_color = Color(0.22, 0.24, 0.26, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_q7nsv"]
+material = SubResource("StandardMaterial3D_1f8sa")
+size = Vector2(160, 100)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hm68p"]
+shading_mode = 0
+albedo_color = Color(0.45, 0.5, 0.55, 0.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gwf10"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dkpno"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_n5fhd"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cbwse"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_21tl5"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bc3mw"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mrhei"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2mdsg"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_r3png"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_qf1ay"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_0dxj5"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_x1ijd"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7f0pr"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bbw83"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5wqhc"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(0.12, 0.02, 100)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ndvor"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_j6eq0"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_5kotr"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_pc5y5"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hqs27"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_enufc"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_g3ijr"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gqnm3"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_i2gxl"]
+material = SubResource("StandardMaterial3D_hm68p")
+size = Vector3(160, 0.02, 0.12)
+
+[node name="ScaleComparison" type="Node3D" unique_id=175877315]
+
+[node name="SunLight" type="DirectionalLight3D" parent="." unique_id=1203980768]
+transform = Transform3D(0.81915206, -0.43938506, 0.36868784, 0, 0.64278764, 0.76604444, -0.57357645, -0.62750685, 0.5265408, 0, 0, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=148850226]
+environment = SubResource("Environment_60wv1")
+
+[node name="MetricGridGround" type="MeshInstance3D" parent="." unique_id=1417132372]
+mesh = SubResource("PlaneMesh_q7nsv")
+
+[node name="MetricGridLines" type="Node3D" parent="." unique_id=1633715689]
+
+[node name="LineX_-70" type="MeshInstance3D" parent="MetricGridLines" unique_id=400124554]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 0.01, 0)
+mesh = SubResource("BoxMesh_gwf10")
+
+[node name="LineX_-60" type="MeshInstance3D" parent="MetricGridLines" unique_id=295391416]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 0.01, 0)
+mesh = SubResource("BoxMesh_dkpno")
+
+[node name="LineX_-50" type="MeshInstance3D" parent="MetricGridLines" unique_id=35263832]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0.01, 0)
+mesh = SubResource("BoxMesh_n5fhd")
+
+[node name="LineX_-40" type="MeshInstance3D" parent="MetricGridLines" unique_id=498363589]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0.01, 0)
+mesh = SubResource("BoxMesh_cbwse")
+
+[node name="LineX_-30" type="MeshInstance3D" parent="MetricGridLines" unique_id=1229978119]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0.01, 0)
+mesh = SubResource("BoxMesh_21tl5")
+
+[node name="LineX_-20" type="MeshInstance3D" parent="MetricGridLines" unique_id=550829847]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0.01, 0)
+mesh = SubResource("BoxMesh_bc3mw")
+
+[node name="LineX_-10" type="MeshInstance3D" parent="MetricGridLines" unique_id=2141399533]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.01, 0)
+mesh = SubResource("BoxMesh_mrhei")
+
+[node name="LineX_0" type="MeshInstance3D" parent="MetricGridLines" unique_id=1394081246]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("BoxMesh_2mdsg")
+
+[node name="LineX_10" type="MeshInstance3D" parent="MetricGridLines" unique_id=1079914875]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.01, 0)
+mesh = SubResource("BoxMesh_r3png")
+
+[node name="LineX_20" type="MeshInstance3D" parent="MetricGridLines" unique_id=375359222]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0.01, 0)
+mesh = SubResource("BoxMesh_qf1ay")
+
+[node name="LineX_30" type="MeshInstance3D" parent="MetricGridLines" unique_id=35207619]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0.01, 0)
+mesh = SubResource("BoxMesh_0dxj5")
+
+[node name="LineX_40" type="MeshInstance3D" parent="MetricGridLines" unique_id=154712061]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 0.01, 0)
+mesh = SubResource("BoxMesh_x1ijd")
+
+[node name="LineX_50" type="MeshInstance3D" parent="MetricGridLines" unique_id=1869364959]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0.01, 0)
+mesh = SubResource("BoxMesh_7f0pr")
+
+[node name="LineX_60" type="MeshInstance3D" parent="MetricGridLines" unique_id=1454594514]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0.01, 0)
+mesh = SubResource("BoxMesh_bbw83")
+
+[node name="LineX_70" type="MeshInstance3D" parent="MetricGridLines" unique_id=735653928]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 70, 0.01, 0)
+mesh = SubResource("BoxMesh_5wqhc")
+
+[node name="LineZ_-40" type="MeshInstance3D" parent="MetricGridLines" unique_id=211560277]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -40)
+mesh = SubResource("BoxMesh_ndvor")
+
+[node name="LineZ_-30" type="MeshInstance3D" parent="MetricGridLines" unique_id=1408363837]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -30)
+mesh = SubResource("BoxMesh_j6eq0")
+
+[node name="LineZ_-20" type="MeshInstance3D" parent="MetricGridLines" unique_id=2090753785]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -20)
+mesh = SubResource("BoxMesh_5kotr")
+
+[node name="LineZ_-10" type="MeshInstance3D" parent="MetricGridLines" unique_id=49391073]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -10)
+mesh = SubResource("BoxMesh_pc5y5")
+
+[node name="LineZ_0" type="MeshInstance3D" parent="MetricGridLines" unique_id=1343543211]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+mesh = SubResource("BoxMesh_hqs27")
+
+[node name="LineZ_10" type="MeshInstance3D" parent="MetricGridLines" unique_id=2110047466]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 10)
+mesh = SubResource("BoxMesh_enufc")
+
+[node name="LineZ_20" type="MeshInstance3D" parent="MetricGridLines" unique_id=2124551806]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 20)
+mesh = SubResource("BoxMesh_g3ijr")
+
+[node name="LineZ_30" type="MeshInstance3D" parent="MetricGridLines" unique_id=187790474]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 30)
+mesh = SubResource("BoxMesh_gqnm3")
+
+[node name="LineZ_40" type="MeshInstance3D" parent="MetricGridLines" unique_id=1362557125]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 40)
+mesh = SubResource("BoxMesh_i2gxl")
+
+[node name="PlayerHelicopter" parent="." unique_id=2123481052 instance=ExtResource("1_5222t")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0, -10)
+
+[node name="AirScout" parent="." unique_id=686393404 instance=ExtResource("2_3n855")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0, -10)
+
+[node name="AttackGunship" parent="." unique_id=1072788237 instance=ExtResource("3_drlbc")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, -10)
+
+[node name="HeavyGunship" parent="." unique_id=1107369816 instance=ExtResource("4_4st1b")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, -10)
+
+[node name="GroundScout" parent="." unique_id=798224009 instance=ExtResource("5_ssa3b")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55, 0, 15)
+
+[node name="IFV" parent="." unique_id=552694868 instance=ExtResource("6_et85c")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, 15)
+
+[node name="ParkedCar" parent="." unique_id=1841633813 instance=ExtResource("7_ejwge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -34, 0, 15)
+
+[node name="Streetlight" parent="." unique_id=1425482352 instance=ExtResource("8_7ssgg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -26, 0, 15)
+
+[node name="LargeTree" parent="." unique_id=1750774211 instance=ExtResource("9_8h6vx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, 15)
+
+[node name="SmallBuilding" parent="." unique_id=548557024 instance=ExtResource("10_n8x1l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 20)
+
+[node name="MediumBuilding" parent="." unique_id=23366177 instance=ExtResource("11_h76f0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, 25)

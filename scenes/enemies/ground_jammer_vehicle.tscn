@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://crce8ribxgcrl" path="res://scripts/enemies/tank.gd" id="1_duphv"]
 [ext_resource type="Script" uid="uid://mu6bykq1xcym" path="res://scripts/resources/ground_enemy_archetype.gd" id="2_n7w75"]
-[ext_resource type="Texture2D" uid="uid://ddt4sojb0ppco" path="res://assets/Enemies/Ground tanks/Tank A - Textured_Tank-A-Texture.png" id="3_n7w75"]
+[ext_resource type="Texture2D" uid="uid://duiaun2tgejon" path="res://assets/vehicles/enemies/ground/textures/tank_a_texture.png" id="3_n7w75"]
 
 [sub_resource type="Resource" id="Resource_dj66w"]
 script = ExtResource("2_n7w75")
@@ -24,7 +24,7 @@ weapon_type = 5
 damage_per_shot = 1.5
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_n7w75"]
-size = Vector3(3, 1.9, 4.2)
+size = Vector3(4.85, 3.08, 6.8)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mb185"]
 resource_name = "Color_G05"
@@ -360,10 +360,11 @@ script = ExtResource("1_duphv")
 archetype = SubResource("Resource_dj66w")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=891072261]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.54, 0)
 shape = SubResource("BoxShape3D_n7w75")
 
 [node name="Body" type="Node3D" parent="." unique_id=598654150]
+transform = Transform3D(1.62, 0, 0, 0, 1.62, 0, 0, 0, 1.62, 0, 0, 0)
 
 [node name="ChassisMesh" type="MeshInstance3D" parent="Body" unique_id=2014943489]
 transform = Transform3D(0, 0, -0.033, 0, 0.033, 0, 0.033, 0, 0, 0, 0.38976398, 0)

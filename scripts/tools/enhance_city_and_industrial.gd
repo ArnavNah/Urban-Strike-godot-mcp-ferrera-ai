@@ -34,13 +34,13 @@ func build_skyscraper_variant_b() -> bool:
 	root.collision_layer = 1
 	root.collision_mask = 0
 	
-	var tower := _instantiate_glb("res://assets/Models/GLB format/building-skyscraper-b.glb")
+	var tower := _instantiate_glb("res://assets/environment/buildings/skyscraper_b.glb")
 	tower.name = "TowerMain"
 	tower.transform.origin = Vector3(-2.5, 0, 0)
 	tower.scale = Vector3(5.5, 4.8, 5.5)
 	root.add_child(tower)
 	
-	var annex := _instantiate_glb("res://assets/Models/GLB format/building-skyscraper-e.glb")
+	var annex := _instantiate_glb("res://assets/environment/buildings/skyscraper_e.glb")
 	annex.name = "TowerAnnex"
 	annex.transform.origin = Vector3(3.5, 0, 0)
 	annex.scale = Vector3(4.8, 4.2, 4.8)
@@ -97,7 +97,7 @@ func update_central_urban() -> bool:
 		var comms := root.find_child("CommunicationsBlock", true, false)
 		if comms:
 			# Add rooftop antenna detail near tower
-			var ant := _instantiate_glb("res://assets/Models/GLB format/chimney-small.glb")
+			var ant := _instantiate_glb("res://assets/environment/industrial/chimney_small.glb")
 			if ant:
 				ant.name = "RoofAntenna"
 				ant.transform.origin = Vector3(31, 24.8, -96)
@@ -120,7 +120,7 @@ func update_industrial() -> bool:
 	
 	var depot := root.find_child("FuelDepot", true, false)
 	if depot:
-		var chimney := _instantiate_glb("res://assets/Models/GLB format/chimney-large.glb")
+		var chimney := _instantiate_glb("res://assets/environment/industrial/chimney_large.glb")
 		if chimney:
 			chimney.name = "RefineryChimney"
 			chimney.transform.origin = Vector3(88, 0, 32)
@@ -129,7 +129,7 @@ func update_industrial() -> bool:
 			
 	var terminal := root.find_child("FreightTerminal", true, false)
 	if terminal:
-		var solars := _instantiate_glb("res://assets/Models/GLB format/solar-panel-portrait-group.glb")
+		var solars := _instantiate_glb("res://assets/environment/industrial/solar_panel_portrait.glb")
 		if solars:
 			solars.name = "TerminalSolarArray"
 			solars.transform.origin = Vector3(46, 0.1, 24)

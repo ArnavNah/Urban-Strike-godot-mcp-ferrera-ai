@@ -25,9 +25,9 @@ extends Control
 @onready var bg_nav_starboard: MeshInstance3D = null
 
 const SettingsMenuClass = preload("res://scripts/ui/settings_menu.gd")
-const SOUND_FOCUS: AudioStream = preload("res://assets/audio/ui/ui_focus.wav")
-const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/ui/ui_confirm.wav")
-const SOUND_BACK: AudioStream = preload("res://assets/audio/ui/ui_back.wav")
+const SOUND_FOCUS: AudioStream = preload("res://assets/audio/sfx/ui/ui_focus.wav")
+const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/sfx/ui/ui_confirm.wav")
+const SOUND_BACK: AudioStream = preload("res://assets/audio/sfx/ui/ui_back.wav")
 
 # Helicopter showcase placement: center-right, framed by buildings, 25-30% larger
 const HELI_CENTER: Vector3 = Vector3(3.6, 5.0, 14.5)

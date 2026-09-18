@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://blj883lmk2xuw"
-path="res://.godot/imported/detail-awning-wide.png-5af05fd6f177980f0df3e6638e546e6c.ctex"
+path="res://.godot/imported/detail-awning-wide.png-bff4a49056994e7a503f9cf6fe8f251a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Previews/detail-awning-wide.png"
-dest_files=["res://.godot/imported/detail-awning-wide.png-5af05fd6f177980f0df3e6638e546e6c.ctex"]
+source_file="res://assets/previews/detail-awning-wide.png"
+dest_files=["res://.godot/imported/detail-awning-wide.png-bff4a49056994e7a503f9cf6fe8f251a.ctex"]
 
 [params]
 

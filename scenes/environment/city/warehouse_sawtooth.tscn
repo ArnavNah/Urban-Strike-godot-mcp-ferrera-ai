@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dx7napa1shieq"]
 
-[ext_resource type="PackedScene" uid="uid://b4anvwa44s8vc" path="res://assets/Models/GLB format/building-c.glb" id="1_8mj6i"]
-[ext_resource type="PackedScene" uid="uid://sewgj6775l54" path="res://assets/Models/GLB format/chimney-medium.glb" id="2_7ekhl"]
+[ext_resource type="PackedScene" uid="uid://b4anvwa44s8vc" path="res://assets/environment/buildings/building_sawtooth.glb" id="1_8mj6i"]
+[ext_resource type="PackedScene" uid="uid://sewgj6775l54" path="res://assets/environment/industrial/chimney_medium.glb" id="2_7ekhl"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_0mj4p"]
 size = Vector3(26.26, 12, 29.52)

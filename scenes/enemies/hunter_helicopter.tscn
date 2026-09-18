@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://cm3w8k2r5wap1"]
 
 [ext_resource type="Script" uid="uid://bj86yo65rbhtg" path="res://scripts/enemies/hunter_helicopter.gd" id="1_hunter"]
-[ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/Enemies/flying enemies/enemi4.glb" id="2_4rah2"]
+[ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/vehicles/enemies/air/enemy_gunship.glb" id="2_4rah2"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_Hunter"]
-radius = 1.0
-height = 3.8
+radius = 2.05
+height = 8.2
 
 [sub_resource type="StandardMaterial3D" id="Mat_Black"]
 albedo_color = Color(0.12, 0.12, 0.12, 1)
@@ -13,7 +13,7 @@ metallic = 0.8
 
 [sub_resource type="BoxMesh" id="Mesh_RotorBlade"]
 material = SubResource("Mat_Black")
-size = Vector3(4.4, 0.04, 0.22)
+size = Vector3(8.2, 0.06, 0.36)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4rah2"]
 shading_mode = 0
@@ -32,7 +32,7 @@ transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 
 shape = SubResource("CapsuleShape3D_Hunter")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=718449696]
-transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
+transform = Transform3D(2.25, 0, 0, 0, 2.25, 0, 0, 0, 2.25, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=334904063]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)

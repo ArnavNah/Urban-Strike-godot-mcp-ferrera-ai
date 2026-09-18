@@ -3,8 +3,8 @@
 [ext_resource type="Script" uid="uid://bwmk5nu4knjdf" path="res://scripts/enemies/ground_turret.gd" id="1_turret"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_1"]
-height = 1.9
-radius = 1.7
+height = 2.4
+radius = 2.1
 
 [sub_resource type="StandardMaterial3D" id="Mat_Base"]
 albedo_color = Color(0.25, 0.25, 0.28, 1)
@@ -13,9 +13,9 @@ roughness = 0.4
 
 [sub_resource type="CylinderMesh" id="Mesh_Base"]
 material = SubResource("Mat_Base")
-top_radius = 1.43
-bottom_radius = 1.69
-height = 0.91
+top_radius = 1.78
+bottom_radius = 2.11
+height = 1.14
 
 [sub_resource type="StandardMaterial3D" id="Mat_Head"]
 albedo_color = Color(0.85, 0.25, 0.15, 1)
@@ -24,7 +24,7 @@ roughness = 0.3
 
 [sub_resource type="BoxMesh" id="Mesh_Head"]
 material = SubResource("Mat_Head")
-size = Vector3(1.56, 0.91, 1.56)
+size = Vector3(1.95, 1.14, 1.95)
 
 [sub_resource type="StandardMaterial3D" id="Mat_Barrel"]
 albedo_color = Color(0.15, 0.15, 0.15, 1)
@@ -33,38 +33,38 @@ roughness = 0.2
 
 [sub_resource type="CylinderMesh" id="Mesh_Barrel"]
 material = SubResource("Mat_Barrel")
-top_radius = 0.13
-bottom_radius = 0.13
-height = 1.82
+top_radius = 0.16
+bottom_radius = 0.16
+height = 2.28
 
 [node name="GroundTurret" type="StaticBody3D" unique_id=1549210611 groups=["enemies"]]
 collision_layer = 4
 script = ExtResource("1_turret")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=201851255]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 shape = SubResource("CylinderShape3D_1")
 
 [node name="BaseMesh" type="MeshInstance3D" parent="." unique_id=1348041568]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.455, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.57, 0)
 mesh = SubResource("Mesh_Base")
 
 [node name="TurretHead" type="Node3D" parent="." unique_id=248217258]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.91, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.14, 0)
 
 [node name="HeadMesh" type="MeshInstance3D" parent="TurretHead" unique_id=1092327500]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.455, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.57, 0)
 mesh = SubResource("Mesh_Head")
 
 [node name="Barrel" type="Node3D" parent="TurretHead" unique_id=270390373]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.455, -0.91)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.57, -1.14)
 
 [node name="BarrelMesh" type="MeshInstance3D" parent="TurretHead/Barrel" unique_id=863309138]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, -0.91)
 mesh = SubResource("Mesh_Barrel")
 
 [node name="Muzzle" type="Marker3D" parent="TurretHead/Barrel" unique_id=1452705920]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.82)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.14)
 
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=977494175]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)

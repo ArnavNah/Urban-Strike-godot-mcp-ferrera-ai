@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b5ncw01t5bei5"]
 
-[ext_resource type="PackedScene" uid="uid://cjc438708xejo" path="res://assets/Models/GLB format/building-skyscraper-a.glb" id="1_1u2qn"]
+[ext_resource type="PackedScene" uid="uid://cjc438708xejo" path="res://assets/environment/buildings/skyscraper_a.glb" id="1_1u2qn"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_lfcv3"]
 size = Vector3(13.6, 51.84, 13.6)

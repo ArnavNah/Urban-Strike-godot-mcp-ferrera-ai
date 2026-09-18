@@ -11,7 +11,6 @@ threat_score = 0.7
 formation_tags = Array[String](["transports"])
 max_health = 75.0
 salvage_reward = 60
-xp_reward = 12
 cruise_speed = 22.0
 attack_speed = 20.0
 turn_speed = 2.8
@@ -28,8 +27,8 @@ weapon_type = 2
 damage_per_shot = 1.5
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_kwing"]
-radius = 1.3
-height = 5.2
+radius = 2.8
+height = 12.0
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tcf42"]
 albedo_color = Color(0.25, 0.35, 0.22, 1)
@@ -46,7 +45,7 @@ metallic = 0.8
 
 [sub_resource type="BoxMesh" id="BoxMesh_g26c1"]
 material = SubResource("StandardMaterial3D_85x86")
-size = Vector3(4.6, 0.04, 0.24)
+size = Vector3(9.8, 0.06, 0.38)
 
 [node name="AirTransportHelicopter" type="CharacterBody3D" unique_id=338967523]
 collision_layer = 4
@@ -58,7 +57,7 @@ transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0
 shape = SubResource("CapsuleShape3D_kwing")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=1136466168]
-transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
+transform = Transform3D(2.65, 0, 0, 0, 2.65, 0, 0, 0, 2.65, 0, 0, 0)
 
 [node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1447105239]
 mesh = SubResource("BoxMesh_jq0xl")

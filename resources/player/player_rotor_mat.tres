@@ -1,6 +1,6 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://dm3qy1e166wpx"]
 
-[ext_resource type="Texture2D" uid="uid://b2cfgmqxlwjbp" path="res://Player model/top propeller_base_color.jpg" id="1_niire"]
+[ext_resource type="Texture2D" uid="uid://b2cfgmqxlwjbp" path="res://assets/vehicles/player/textures/rotor_base_color.jpg" id="1_niire"]
 
 [resource]
 resource_name = "PlayerRotorMat"

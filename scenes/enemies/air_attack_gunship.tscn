@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_dy54l"]
 [ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_aik34"]
-[ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/Enemies/flying enemies/enemi4.glb" id="3_aik34"]
+[ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/vehicles/enemies/air/enemy_gunship.glb" id="3_aik34"]
 
 [sub_resource type="Resource" id="Resource_w6yup"]
 script = ExtResource("2_aik34")
@@ -26,8 +26,8 @@ weapon_type = 3
 damage_per_shot = 3.5
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_w6yup"]
-radius = 1.05
-height = 4.2
+radius = 2.1
+height = 8.4
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5jam3"]
 albedo_color = Color(0.1, 0.1, 0.1, 1)
@@ -35,7 +35,7 @@ metallic = 0.8
 
 [sub_resource type="BoxMesh" id="BoxMesh_xde68"]
 material = SubResource("StandardMaterial3D_5jam3")
-size = Vector3(4.8, 0.04, 0.25)
+size = Vector3(8.4, 0.06, 0.36)
 
 [node name="AirAttackGunship" type="CharacterBody3D" unique_id=1072788237]
 collision_layer = 4
@@ -47,7 +47,7 @@ transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, 0)
 shape = SubResource("CapsuleShape3D_w6yup")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=1352196511]
-transform = Transform3D(1.15, 0, 0, 0, 1.15, 0, 0, 0, 1.15, 0, 0, 0)
+transform = Transform3D(2.3, 0, 0, 0, 2.3, 0, 0, 0, 2.3, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="Visuals" unique_id=1901561529]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)

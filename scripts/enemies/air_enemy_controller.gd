@@ -85,11 +85,16 @@ var _avoidance_timer: float = 0.0
 @onready var guided_missile_scene: PackedScene = preload("res://scenes/weapons/guided_missile.tscn")
 @onready var unguided_rocket_scene: PackedScene = preload("res://scenes/weapons/unguided_rocket.tscn")
 
+var _base_visual_scale: Vector3 = Vector3.ONE
+
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group("air_enemies")
 
 	_apply_archetype_config()
+
+	if visuals:
+		_base_visual_scale = visuals.scale
 
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, true)
@@ -815,11 +820,32 @@ func _check_los() -> bool:
 	var hit := space.intersect_ray(query)
 	return hit.is_empty()
 
+func _get_forward_hull_reach() -> float:
+	var col := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if col and col.shape:
+		if col.shape is CapsuleShape3D:
+			return (col.shape as CapsuleShape3D).height * 0.5 + 0.35
+		elif col.shape is BoxShape3D:
+			return (col.shape as BoxShape3D).size.z * 0.5 + 0.35
+	return 2.8
+
+func _get_damage_number_y_offset() -> float:
+	if main_rotor:
+		return main_rotor.position.y * (visuals.scale.y if visuals else 1.0) + 0.6
+	var col := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if col and col.shape:
+		if col.shape is CapsuleShape3D:
+			return (col.shape as CapsuleShape3D).radius + 0.6
+		elif col.shape is BoxShape3D:
+			return (col.shape as BoxShape3D).size.y * 0.5 + 0.6
+	return 1.4
+
 func _fire_bullet(damage_mult: float = 1.0) -> void:
 	if not is_instance_valid(_player) or not _check_los():
 		return
 
-	var muzzle_pos := global_position + (-global_transform.basis.z * 1.8) + Vector3(0.0, -0.3, 0.0)
+	var reach := _get_forward_hull_reach()
+	var muzzle_pos := global_position + (-global_transform.basis.z * reach) + Vector3(0.0, -0.3, 0.0)
 	var to_player := (_player.global_position - muzzle_pos).normalized()
 	var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
 	var fire_dir := (to_player + spread).normalized()
@@ -850,7 +876,8 @@ func _fire_rocket() -> void:
 	if not is_instance_valid(_player) or not unguided_rocket_scene:
 		return
 
-	var muzzle_pos := global_position + (-global_transform.basis.z * 1.6) + Vector3(randf_range(-0.6, 0.6), -0.2, 0.0)
+	var reach := _get_forward_hull_reach()
+	var muzzle_pos := global_position + (-global_transform.basis.z * (reach * 0.85)) + Vector3(randf_range(-0.6, 0.6), -0.2, 0.0)
 	var fire_dir := (_player.global_position - muzzle_pos).normalized()
 	var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
 	fire_dir = (fire_dir + spread).normalized()
@@ -867,7 +894,8 @@ func _fire_missile_at_player() -> void:
 	if not is_alive or not is_instance_valid(_player) or not guided_missile_scene:
 		return
 
-	var muzzle_pos := global_position + Vector3(0.0, -0.4, -1.0)
+	var reach := _get_forward_hull_reach()
+	var muzzle_pos := global_position + (-global_transform.basis.z * (reach * 0.6)) + Vector3(0.0, -0.4, 0.0)
 	var fire_dir := (muzzle_pos.direction_to(_player.global_position) + Vector3.UP * 0.25).normalized()
 
 	var missile: GuidedMissile = guided_missile_scene.instantiate() as GuidedMissile
@@ -960,12 +988,13 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.5, 0), amount, false, {"target_id": get_instance_id()})
+		var dmg_y := _get_damage_number_y_offset()
+		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, dmg_y, 0), amount, false, {"target_id": get_instance_id()})
 
 	if visuals:
 		var tw := create_tween()
-		tw.tween_property(visuals, "scale", Vector3(1.18, 1.18, 1.18), 0.05)
-		tw.tween_property(visuals, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
+		tw.tween_property(visuals, "scale", _base_visual_scale * 1.08, 0.05)
+		tw.tween_property(visuals, "scale", _base_visual_scale, 0.05)
 
 	if current_health <= 0.0:
 		_die()
@@ -1004,7 +1033,16 @@ func _die() -> void:
 
 	_spawn_rewards()
 
-	var expl_scale: float = 2.0 if is_major_target else 1.1
+	var expl_scale: float = 1.4
+	if is_major_target:
+		expl_scale = 2.4
+	elif archetype:
+		if archetype.threat_cost >= 10:
+			expl_scale = 3.0
+		elif archetype.threat_cost >= 8:
+			expl_scale = 2.2
+		elif archetype.threat_cost >= 6:
+			expl_scale = 1.8
 	if VfxPool.instance:
 		VfxPool.instance.spawn_explosion(global_position, expl_scale)
 	else:
