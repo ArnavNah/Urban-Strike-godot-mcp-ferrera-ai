@@ -168,27 +168,31 @@ func test_player_flight_and_nodes(logs: Array[String]) -> bool:
 		return false
 
 	# Verify chin-gun yaw and pitch pivots
-	if not player.get_node_or_null("GunMount/GunYawPivot") or not player.get_node_or_null("GunMount/GunYawPivot/GunPitchPivot"):
+	var gun_yaw := player.find_child("GunYawPivot", true, false)
+	var gun_pitch := player.find_child("GunPitchPivot", true, false)
+	if not gun_yaw or not gun_pitch:
 		logs.append("FAIL: Missing decoupled GunYawPivot or GunPitchPivot")
 		player.queue_free()
 		return false
 
 	# Verify modular subcomponents
-	var main_r: Node = player.get_node_or_null("FlightTiltPivot/Visuals/MainRotor")
+	var main_r: Node = player.find_child("MainRotorPivot", true, false)
 	if not main_r:
-		main_r = player.get_node_or_null("Visuals/MainRotor")
-	var tail_r: Node = player.get_node_or_null("FlightTiltPivot/Visuals/TailRotor")
+		main_r = player.find_child("MainRotor", true, false)
+	var tail_r: Node = player.find_child("TailRotorPivot", true, false)
 	if not tail_r:
-		tail_r = player.get_node_or_null("Visuals/TailRotor")
+		tail_r = player.find_child("TailRotor", true, false)
 	if not main_r or not tail_r:
 		logs.append("FAIL: Missing modular animated rotor nodes")
 		player.queue_free()
 		return false
-	if not player.get_node_or_null("StubWings/MissilePod"):
+	var pod: Node = player.find_child("MissilePod", true, false)
+	if not pod:
 		logs.append("FAIL: Missing StubWings/MissilePod")
 		player.queue_free()
 		return false
-	if not player.get_node_or_null("FlareDispenser"):
+	var flare: Node = player.find_child("FlareDispenser", true, false)
+	if not flare:
 		logs.append("FAIL: Missing FlareDispenser")
 		player.queue_free()
 		return false
@@ -1171,7 +1175,7 @@ func test_jammer_targeting_interference_and_cleanup(logs: Array[String]) -> bool
 	add_child(player)
 
 	var targeting := player.get_node_or_null("TargetingSystem") as TargetingSystem
-	var pod := player.get_node_or_null("StubWings/MissilePod") as MissilePod
+	var pod: MissilePod = (player.get("missile_pod") as MissilePod) if ("missile_pod" in player and player.missile_pod) else (player.find_child("MissilePod", true, false) as MissilePod)
 	if not targeting or not pod:
 		logs.append("FAIL: Missing TargetingSystem or MissilePod on Player")
 		player.queue_free()
@@ -3836,7 +3840,7 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 	# 3. Test Mission 2: Destroy Jammer Convoy & Targeting Disruption
 	# -------------------------------------------------------------
 	var targeting := player.get_node_or_null("TargetingSystem") as TargetingSystem
-	var pod := player.get_node_or_null("StubWings/MissilePod") as MissilePod
+	var pod: MissilePod = (player.get("missile_pod") as MissilePod) if ("missile_pod" in player and player.missile_pod) else (player.find_child("MissilePod", true, false) as MissilePod)
 
 	var m2: StrikeMission = mission_director.start_mission_by_id("destroy_jammer")
 	if not m2 or mission_director.current_state != MissionDirector.State.ACTIVE:
@@ -5514,7 +5518,7 @@ func test_city_world_streamer_and_scale_contract(logs: Array[String]) -> bool:
 		return false
 	var player := player_scene.instantiate() as PlayerHelicopter
 	add_child(player)
-	var rotor_blur: MeshInstance3D = player.get_node_or_null("FlightTiltPivot/Visuals/MainRotor/RotorBlurDisc") as MeshInstance3D
+	var rotor_blur: MeshInstance3D = (player.find_child("RotorBlurDisc", true, false) as MeshInstance3D) if player.find_child("RotorBlurDisc", true, false) else (player.get_node_or_null("FlightTiltPivot/Visuals/MainRotor/RotorBlurDisc") as MeshInstance3D)
 	var rotor_diam: float = 0.0
 	if rotor_blur and rotor_blur.mesh is CylinderMesh:
 		rotor_diam = (rotor_blur.mesh as CylinderMesh).top_radius * 2.0

@@ -1,7 +1,7 @@
 [gd_scene format=4 uid="uid://b1lnpix71e6yb"]
 
 [ext_resource type="Script" uid="uid://7kfsiermsqv4" path="res://scripts/environment/fuel_tank.gd" id="1_52auj"]
-[ext_resource type="Texture2D" uid="uid://c13gw8mjyf57d" path="res://assets/environment/textures/colormap.png" id="2_54lvf"]
+[ext_resource type="Texture2D" uid="uid://bsyd5hlhkgrx6" path="res://assets/environment/textures/colormap.png" id="2_54lvf"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_874b5"]
 direction = Vector3(0, 1, 0)

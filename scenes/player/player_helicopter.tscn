@@ -104,60 +104,62 @@ shape = SubResource("CapsuleShape3D_savs3")
 
 [node name="FlightTiltPivot" type="Node3D" parent="." unique_id=1129995288]
 
-[node name="Visuals" type="Node3D" parent="FlightTiltPivot" unique_id=165425412]
+[node name="VisualRig" type="Node3D" parent="FlightTiltPivot" unique_id=165425412]
 
-[node name="MainRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1314457934]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2452, -1.40368)
+[node name="MainRotorPivot" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1314457934]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.363, -1.414)
 
-[node name="TopProp" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=1641788905 instance=ExtResource("2_savs3")]
+[node name="TopProp" parent="FlightTiltPivot/VisualRig/MainRotorPivot" unique_id=1641788905 instance=ExtResource("2_savs3")]
 transform = Transform3D(6.3392, 0, 0, 0, 6.3392, 0, 0, 0, 6.3392, 0, 0, 0)
 
-[node name="RotorBlurDisc" type="MeshInstance3D" parent="FlightTiltPivot/Visuals/MainRotor" unique_id=609163453]
+[node name="RotorBlurDisc" type="MeshInstance3D" parent="FlightTiltPivot/VisualRig/MainRotorPivot" unique_id=609163453]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
 mesh = SubResource("CylinderMesh_savs3")
 
-[node name="TailRotor" type="Node3D" parent="FlightTiltPivot/Visuals" unique_id=1244027535]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.27168, 1.53952, 5.7732)
+[node name="TailRotorPivot" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1244027535]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0.93, 5.7)
 
-[node name="BackProp" parent="FlightTiltPivot/Visuals/TailRotor" unique_id=175918836 instance=ExtResource("3_g1dng")]
-transform = Transform3D(-6.432e-08, 0, -1.4716, 0, 1.4716, 0, 1.4716, 0, -6.432e-08, 0, 0, 0)
+[node name="BackProp" parent="FlightTiltPivot/VisualRig/TailRotorPivot" unique_id=175918836 instance=ExtResource("3_g1dng")]
+transform = Transform3D(-6.432568e-08, 0, -1.4716, 0, 1.4716, 0, 1.4716, 0, -6.432568e-08, 0, 0, 0)
 
-[node name="Body" parent="FlightTiltPivot/Visuals" unique_id=1461646268 instance=ExtResource("4_vxykv")]
-transform = Transform3D(-2.7709e-07, 0, 6.3392, 0, 6.3392, 0, -6.3392, 0, -2.7709e-07, 0, 0, 0)
-
-[node name="NavLightPort" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=2092899897]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.1884, -0.3396, -1.3584)
+[node name="NavLightPort" type="MeshInstance3D" parent="FlightTiltPivot/VisualRig" unique_id=2092899897]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.26, -0.34, -1.7)
 mesh = SubResource("SphereMesh_8pd81")
 
-[node name="NavLightStarboard" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=266054811]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1884, -0.3396, -1.3584)
+[node name="NavLightStarboard" type="MeshInstance3D" parent="FlightTiltPivot/VisualRig" unique_id=266054811]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.28, -0.34, -1.7)
 mesh = SubResource("SphereMesh_xrd4b")
 
-[node name="NavLightTail" type="MeshInstance3D" parent="FlightTiltPivot/Visuals" unique_id=281827416]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9244, 6.1128)
+[node name="NavLightTail" type="MeshInstance3D" parent="FlightTiltPivot/VisualRig" unique_id=281827416]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.72, 6.02)
 mesh = SubResource("SphereMesh_wctr3")
 
-[node name="StubWings" type="Node3D" parent="." unique_id=1441639570]
+[node name="ModelOrientation" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1415577370]
+transform = Transform3D(-2.7709524e-07, 0, -6.3392, 0, 6.3392, 0, 6.3392, 0, -2.7709524e-07, 0, 0, 0)
+
+[node name="Body" parent="FlightTiltPivot/VisualRig/ModelOrientation" unique_id=1461646268 instance=ExtResource("4_vxykv")]
+
+[node name="StubWings" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1441639570]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4, 0)
 
-[node name="MissilePod" parent="StubWings" unique_id=1661510436 instance=ExtResource("4_pod")]
+[node name="MissilePod" parent="FlightTiltPivot/VisualRig/StubWings" unique_id=1661510436 instance=ExtResource("4_pod")]
+
+[node name="GunMount" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1971080532]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.25, -2.6)
+
+[node name="GunYawPivot" type="Node3D" parent="FlightTiltPivot/VisualRig/GunMount" unique_id=1938765534]
+
+[node name="GunPitchPivot" type="Node3D" parent="FlightTiltPivot/VisualRig/GunMount/GunYawPivot" unique_id=766902800]
+
+[node name="Chaingun" parent="FlightTiltPivot/VisualRig/GunMount/GunYawPivot/GunPitchPivot" unique_id=928366294 instance=ExtResource("3_gun")]
+transform = Transform3D(2.264, 0, 0, 0, 2.264, 0, 0, 0, 2.264, 0, 0, 0)
+
+[node name="FlareDispenser" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1954595563]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 3.5)
+script = ExtResource("5_flare")
 
 [node name="StableTrackingPoint" type="Marker3D" parent="." unique_id=418993551]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
-
-[node name="GunMount" type="Node3D" parent="." unique_id=1971080532]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.25, -2.6)
-
-[node name="GunYawPivot" type="Node3D" parent="GunMount" unique_id=1938765534]
-
-[node name="GunPitchPivot" type="Node3D" parent="GunMount/GunYawPivot" unique_id=766902800]
-
-[node name="Chaingun" parent="GunMount/GunYawPivot/GunPitchPivot" unique_id=928366294 instance=ExtResource("3_gun")]
-transform = Transform3D(2.264, 0, 0, 0, 2.264, 0, 0, 0, 2.264, 0, 0, 0)
-
-[node name="FlareDispenser" type="Node3D" parent="." unique_id=1954595563]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 3.5)
-script = ExtResource("5_flare")
 
 [node name="TargetingSystem" type="Node3D" parent="." unique_id=286974321]
 script = ExtResource("2_targ")

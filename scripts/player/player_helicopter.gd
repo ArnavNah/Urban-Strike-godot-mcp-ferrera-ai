@@ -106,16 +106,16 @@ func _exit_tree() -> void:
 		instance = null
 
 @onready var flight_tilt_pivot: Node3D = $FlightTiltPivot
-@onready var visuals: Node3D = $FlightTiltPivot/Visuals
-@onready var main_rotor: Node3D = $FlightTiltPivot/Visuals/MainRotor
-@onready var tail_rotor: Node3D = $FlightTiltPivot/Visuals/TailRotor
+@onready var visuals: Node3D = $FlightTiltPivot/VisualRig
+@onready var main_rotor: Node3D = $FlightTiltPivot/VisualRig/MainRotorPivot
+@onready var tail_rotor: Node3D = $FlightTiltPivot/VisualRig/TailRotorPivot
 @onready var stable_tracking_point: Marker3D = $StableTrackingPoint
-@onready var gun_mount: Node3D = $GunMount
-@onready var gun_yaw_pivot: Node3D = $GunMount/GunYawPivot
-@onready var gun_pitch_pivot: Node3D = $GunMount/GunYawPivot/GunPitchPivot
-@onready var chaingun: Node3D = $GunMount/GunYawPivot/GunPitchPivot/Chaingun
-@onready var missile_pod: Node3D = $StubWings/MissilePod
-@onready var flare_dispenser: Node3D = $FlareDispenser
+@onready var gun_mount: Node3D = $FlightTiltPivot/VisualRig/GunMount
+@onready var gun_yaw_pivot: Node3D = $FlightTiltPivot/VisualRig/GunMount/GunYawPivot
+@onready var gun_pitch_pivot: Node3D = $FlightTiltPivot/VisualRig/GunMount/GunYawPivot/GunPitchPivot
+@onready var chaingun: Node3D = $FlightTiltPivot/VisualRig/GunMount/GunYawPivot/GunPitchPivot/Chaingun
+@onready var missile_pod: Node3D = $FlightTiltPivot/VisualRig/StubWings/MissilePod
+@onready var flare_dispenser: Node3D = $FlightTiltPivot/VisualRig/FlareDispenser
 @onready var targeting_system: TargetingSystem = $TargetingSystem
 @onready var ground_ray: RayCast3D = $GroundRayCast
 @onready var ground_shadow: MeshInstance3D = $GroundShadow
@@ -232,7 +232,7 @@ func exp_response(rate: float, delta: float) -> float:
 
 func _process(delta: float) -> void:
 	_handle_rotor_animations(delta)
-	var tail_light := get_node_or_null("FlightTiltPivot/Visuals/NavLightTail") as MeshInstance3D
+	var tail_light := get_node_or_null("FlightTiltPivot/VisualRig/NavLightTail") as MeshInstance3D
 	if tail_light:
 		tail_light.visible = fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.15
 
@@ -719,7 +719,8 @@ func _flash_hit() -> void:
 		var tween := create_tween()
 		tween.tween_property(target_vis, "scale", Vector3(1.10, 1.10, 1.10), 0.05)
 		tween.tween_property(target_vis, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
-	var body_mesh := get_node_or_null("FlightTiltPivot/Visuals/Body/Mesh0") as MeshInstance3D
+	var body_node: Node = find_child("Body", true, false)
+	var body_mesh: MeshInstance3D = body_node.get_node_or_null("Mesh0") as MeshInstance3D if body_node else null
 	if body_mesh and is_inside_tree():
 		var flash_enabled := bool(SaveSystem.get_setting("damage_flash_enabled", true))
 		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))

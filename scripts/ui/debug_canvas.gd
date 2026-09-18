@@ -194,7 +194,7 @@ func _update_telemetry() -> void:
 			else:
 				missile_ammo_val.text = "ONLINE"
 		if heat_val:
-			var cg := player.get_node_or_null("GunMount/GunYawPivot/GunPitchPivot/Chaingun")
+			var cg: Node = player.chaingun if ("chaingun" in player and is_instance_valid(player.chaingun)) else (player.get_node_or_null("GunMount/GunYawPivot/GunPitchPivot/Chaingun") if player.has_node("GunMount/GunYawPivot/GunPitchPivot/Chaingun") else player.find_child("Chaingun", true, false))
 			if cg and "current_heat" in cg:
 				heat_val.text = "%2.0f%%" % (float(cg.current_heat) * 100.0)
 			else:

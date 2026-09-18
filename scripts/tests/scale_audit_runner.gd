@@ -123,9 +123,9 @@ func _ready() -> void:
 				if col_shape and col_shape.shape is CapsuleShape3D:
 					var cs: CapsuleShape3D = col_shape.shape as CapsuleShape3D
 					out.append("    Collision Capsule: Radius=%.2f m, Height=%.2f m" % [cs.radius, cs.height])
-				var visuals_node := inst.find_child("Visuals", true, false) as Node3D
+				var visuals_node := (inst.find_child("VisualRig", true, false) as Node3D) if inst.find_child("VisualRig", true, false) else (inst.find_child("Visuals", true, false) as Node3D)
 				if visuals_node:
-					out.append("    FlightTiltPivot/Visuals Scale: %s" % str(visuals_node.scale))
+					out.append("    FlightTiltPivot/%s Scale: %s" % [visuals_node.name, str(visuals_node.scale)])
 
 			# Extra inspection for collision shape
 			var col := inst.find_child("*Collision*", true, false) as CollisionShape3D
