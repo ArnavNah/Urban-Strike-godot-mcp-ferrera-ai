@@ -52,6 +52,7 @@ var _flash_timer: float = 0.0
 var _target_stick_timer: float = 0.0
 var _bob_phase: float = 0.0
 var _visual_meshes: Array[MeshInstance3D] = []
+var _tail_rotor: Node3D = null
 
 @onready var visual_root: Node3D = get_node_or_null("VisualRoot")
 @onready var plane_model: Node3D = get_node_or_null("VisualRoot/PlaneModel")
@@ -107,8 +108,21 @@ func _ready() -> void:
 		if fire_timer.is_inside_tree() and not fire_timer.is_stopped():
 			fire_timer.start()
 
+	_setup_model_rotors()
 	_collect_visual_meshes(self)
 	_update_health_display()
+
+func _setup_model_rotors() -> void:
+	if not main_rotor:
+		main_rotor = get_node_or_null("VisualRoot/PlaneModel/MainRotor") as Node3D
+	
+	if main_rotor and main_rotor.get_child_count() == 0:
+		for blade_name: String in ["Cube_125", "Cube_126", "Cube_127"]:
+			var blade: Node3D = find_child(blade_name, true, false) as Node3D
+			if blade:
+				blade.reparent(main_rotor, true)
+	
+	_tail_rotor = find_child("Cube_130", true, false) as Node3D
 
 func set_formation_slot(offset: Vector3, slot_name: String = "") -> void:
 	formation_offset = offset
@@ -261,6 +275,8 @@ func _handle_movement_and_banking(delta: float) -> void:
 func _handle_rotors(delta: float) -> void:
 	if main_rotor:
 		main_rotor.rotate_y(rotor_speed * delta)
+	if _tail_rotor:
+		_tail_rotor.rotate_x(rotor_speed * 1.5 * delta)
 
 	if _flash_timer > 0.0:
 		_flash_timer -= delta

@@ -3,10 +3,11 @@ extends Control
 
 ## Polished asynchronous tactical loading screen for Heli-Strike.
 ## Manages threaded loading of the battlefield scene with real progress polling,
-## indeterminate radar animation, error recovery (retry/return), and clean scene transition.
+## indeterminate radar animation, smooth cinematic transitions, error recovery (retry/return),
+## and seamless curtain handoff into combat.
 
 @export var target_scene_path: String = "res://scenes/battlefield/battlefield.tscn"
-@export var min_display_time: float = 0.35
+@export var min_display_time: float = 0.85
 
 @onready var title_label: Label = %TitleLabel
 @onready var subtitle_label: Label = %SubtitleLabel
@@ -19,6 +20,7 @@ extends Control
 @onready var error_message_label: Label = %ErrorMessageLabel
 @onready var retry_button: Button = %RetryButton
 @onready var menu_button: Button = %MenuButton
+@onready var fade_curtain: ColorRect = %FadeCurtain if has_node("%FadeCurtain") else null
 
 const TACTICAL_STATUSES: Array[String] = [
 	"INITIALIZING TACTICAL AIRSPACE...",
@@ -47,6 +49,8 @@ var _status_index: int = 0
 var _progress_smooth: float = 0.0
 var _loaded_scene: PackedScene = null
 var _transition_tween: Tween = null
+var _status_tween: Tween = null
+var _hold_timer: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -73,8 +77,19 @@ func _ready() -> void:
 	var user_args: PackedStringArray = OS.get_cmdline_user_args()
 	if "--hold-loading" in user_args:
 		min_display_time = 999.0
+	elif "--fast-loading" in user_args:
+		min_display_time = 0.25
+
+	# Smooth entrance fade-in
+	_play_entrance_transition()
 
 	start_load(target_scene_path)
+
+func _play_entrance_transition() -> void:
+	if fade_curtain:
+		fade_curtain.modulate.a = 1.0
+		var tw: Tween = create_tween()
+		tw.tween_property(fade_curtain, "modulate:a", 0.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _pick_random_hint() -> void:
 	if hint_label and not TACTICAL_HINTS.is_empty():
@@ -86,9 +101,14 @@ func start_load(path: String) -> void:
 
 	if _transition_tween and _transition_tween.is_valid():
 		_transition_tween.kill()
+	if _status_tween and _status_tween.is_valid():
+		_status_tween.kill()
 
 	modulate.a = 1.0
 	mouse_filter = Control.MOUSE_FILTER_PASS
+
+	if fade_curtain and not _load_failed:
+		fade_curtain.modulate.a = 0.0
 
 	target_scene_path = path
 	_is_loading = true
@@ -97,6 +117,7 @@ func start_load(path: String) -> void:
 	_elapsed_display_time = 0.0
 	_progress_smooth = 0.0
 	_loaded_scene = null
+	_hold_timer = 0.0
 
 	if error_container:
 		error_container.visible = false
@@ -108,6 +129,7 @@ func start_load(path: String) -> void:
 		progress_label.visible = true
 	if status_label:
 		status_label.text = TACTICAL_STATUSES[0]
+		status_label.modulate.a = 1.0
 		status_label.visible = true
 
 	var err: Error = ResourceLoader.load_threaded_request(target_scene_path)
@@ -123,62 +145,78 @@ func _process(delta: float) -> void:
 	if not _is_loading or _load_failed or _is_transitioning:
 		return
 
-	# Cycle tactical status message periodically
+	# Smoothly cycle tactical status messages with gentle cross-fade
 	_status_timer += delta
-	if _status_timer >= 0.75:
+	if _status_timer >= 0.85 and _loaded_scene == null:
 		_status_timer = 0.0
 		_status_index = (_status_index + 1) % TACTICAL_STATUSES.size()
-		if status_label:
-			status_label.text = TACTICAL_STATUSES[_status_index]
+		_fade_status_text(TACTICAL_STATUSES[_status_index])
 
-	# If scene is already loaded and acquired, maintain 100% and await min_display_time
-	if _loaded_scene != null:
-		_progress_smooth = 100.0
-		if progress_bar:
-			progress_bar.value = 100.0
-		if progress_label:
-			progress_label.text = "100%"
-		if _elapsed_display_time >= min_display_time:
-			_finalize_transition()
-		return
-
-	# Poll threaded load status
-	var progress_arr: Array = []
-	var status: ResourceLoader.ThreadLoadStatus = ResourceLoader.load_threaded_get_status(target_scene_path, progress_arr)
-
+	# Poll threaded load status only while scene has not been retrieved
 	var target_pct: float = 0.0
-	if not progress_arr.is_empty() and progress_arr[0] != null:
-		target_pct = float(progress_arr[0]) * 100.0
+	if _loaded_scene != null:
+		target_pct = 100.0
+	else:
+		var progress_arr: Array = []
+		var status: ResourceLoader.ThreadLoadStatus = ResourceLoader.load_threaded_get_status(target_scene_path, progress_arr)
+		match status:
+			ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				if not progress_arr.is_empty() and progress_arr[0] != null:
+					target_pct = float(progress_arr[0]) * 100.0
+			ResourceLoader.THREAD_LOAD_LOADED:
+				target_pct = 100.0
+				_loaded_scene = ResourceLoader.load_threaded_get(target_scene_path) as PackedScene
+				if _loaded_scene == null or not _loaded_scene.can_instantiate():
+					_handle_load_failure("LOAD FAILED: Resource is not a valid instantiable scene '%s'" % target_scene_path)
+					return
+			ResourceLoader.THREAD_LOAD_FAILED:
+				_handle_load_failure("LOAD FAILED: Unable to load '%s'" % target_scene_path)
+				return
+			ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+				_handle_load_failure("LOAD FAILED: Invalid resource '%s'" % target_scene_path)
+				return
 
-	# Smoothly interpolate progress bar
-	_progress_smooth = move_toward(_progress_smooth, maxf(_progress_smooth, target_pct), delta * 140.0)
+	# Smoothly interpolate progress bar without snapping or freezing
+	var progress_speed: float = 120.0
+	if _loaded_scene != null:
+		# When loaded, pace the progress smoothly to 100% across the remaining display time
+		var remaining_time: float = maxf(0.04, min_display_time - _elapsed_display_time)
+		var needed_speed: float = (100.0 - _progress_smooth) / remaining_time
+		progress_speed = maxf(progress_speed, needed_speed)
+
+	_progress_smooth = move_toward(_progress_smooth, target_pct, delta * progress_speed)
 	if progress_bar:
 		progress_bar.value = _progress_smooth
 	if progress_label:
 		progress_label.text = "%d%%" % int(_progress_smooth)
 
-	match status:
-		ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			pass
-		ResourceLoader.THREAD_LOAD_LOADED:
-			_loaded_scene = ResourceLoader.load_threaded_get(target_scene_path) as PackedScene
-			_progress_smooth = 100.0
-			if progress_bar:
-				progress_bar.value = 100.0
-			if progress_label:
-				progress_label.text = "100%"
+	# When 100% is reached and scene is loaded
+	if _loaded_scene != null and _progress_smooth >= 99.9 and _elapsed_display_time >= min_display_time:
+		if progress_bar:
+			progress_bar.value = 100.0
+		if progress_label:
+			progress_label.text = "100%"
+		if status_label and status_label.text != "AIRSPACE READY // ENGAGING":
+			_fade_status_text("AIRSPACE READY // ENGAGING")
 
-			if _loaded_scene == null or not _loaded_scene.can_instantiate():
-				_handle_load_failure("LOAD FAILED: Resource is not a valid instantiable scene '%s'" % target_scene_path)
-				return
+		# Brief tactical engagement hold (0.18s) before engaging smooth exit
+		_hold_timer += delta
+		if _hold_timer >= 0.18:
+			_finalize_transition()
+		return
 
-			# Wait for minimum display time and valid scene
-			if _elapsed_display_time >= min_display_time:
-				_finalize_transition()
-		ResourceLoader.THREAD_LOAD_FAILED:
-			_handle_load_failure("LOAD FAILED: Unable to load '%s'" % target_scene_path)
-		ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-			_handle_load_failure("LOAD FAILED: Invalid resource '%s'" % target_scene_path)
+func _fade_status_text(new_text: String) -> void:
+	if not status_label:
+		return
+	if _status_tween and _status_tween.is_valid():
+		_status_tween.kill()
+
+	_status_tween = create_tween()
+	_status_tween.tween_property(status_label, "modulate:a", 0.2, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_status_tween.tween_callback(func() -> void:
+		status_label.text = new_text
+	)
+	_status_tween.tween_property(status_label, "modulate:a", 1.0, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func _finalize_transition() -> void:
 	if _is_transitioning or _loaded_scene == null:
@@ -198,21 +236,73 @@ func _finalize_transition() -> void:
 	if _transition_tween and _transition_tween.is_valid():
 		_transition_tween.kill()
 
-	_transition_tween = create_tween()
-	_transition_tween.tween_property(self, "modulate:a", 0.0, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_transition_tween.tween_callback(func() -> void:
-		var err: Error = get_tree().change_scene_to_packed(_loaded_scene)
+	# Seamless exit transition:
+	# Fade screen to dark tactical curtain, then handoff cleanly to target scene with entry curtain
+	if fade_curtain:
+		_transition_tween = create_tween()
+		_transition_tween.tween_property(fade_curtain, "modulate:a", 1.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+		_transition_tween.tween_callback(_execute_seamless_scene_swap)
+	else:
+		_transition_tween = create_tween()
+		_transition_tween.tween_property(self, "modulate:a", 0.0, 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_transition_tween.tween_callback(_execute_seamless_scene_swap)
+
+func _execute_seamless_scene_swap() -> void:
+	var tree: SceneTree = get_tree()
+	if not tree:
+		return
+
+	var new_scene: Node = _loaded_scene.instantiate()
+	if not new_scene:
+		modulate.a = 1.0
+		if fade_curtain:
+			fade_curtain.modulate.a = 0.0
+		mouse_filter = Control.MOUSE_FILTER_PASS
+		_handle_load_failure("SCENE ACTIVATION FAILED: Instantiation returned null")
+		return
+
+	# Add temporary smooth entry curtain to new scene so it fades in seamlessly
+	var entry_curtain := CanvasLayer.new()
+	entry_curtain.name = "SceneEntryCurtain"
+	entry_curtain.layer = 128
+	var rect := ColorRect.new()
+	rect.name = "CurtainRect"
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	rect.grow_vertical = Control.GROW_DIRECTION_BOTH
+	rect.color = Color(0.02, 0.03, 0.06, 1.0)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry_curtain.add_child(rect)
+	new_scene.add_child(entry_curtain)
+
+	if get_parent() == tree.root:
+		tree.root.add_child(new_scene)
+		tree.current_scene = new_scene
+
+		var fade_tw: Tween = entry_curtain.create_tween()
+		fade_tw.tween_property(rect, "modulate:a", 0.0, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		fade_tw.tween_callback(entry_curtain.queue_free)
+
+		queue_free()
+	else:
+		# Fallback for nested or test runner nodes
+		var err: Error = tree.change_scene_to_packed(_loaded_scene)
 		if err != OK:
 			modulate.a = 1.0
+			if fade_curtain:
+				fade_curtain.modulate.a = 0.0
 			mouse_filter = Control.MOUSE_FILTER_PASS
 			_handle_load_failure("SCENE ACTIVATION FAILED: Code %d" % err)
-	)
 
 func _handle_load_failure(msg: String) -> void:
 	if _transition_tween and _transition_tween.is_valid():
 		_transition_tween.kill()
+	if _status_tween and _status_tween.is_valid():
+		_status_tween.kill()
 
 	modulate.a = 1.0
+	if fade_curtain:
+		fade_curtain.modulate.a = 0.0
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	_is_loading = false
 	_load_failed = true
@@ -228,6 +318,7 @@ func _handle_load_failure(msg: String) -> void:
 		progress_label.visible = false
 	if status_label:
 		status_label.text = "DEPLOYMENT ABORTED"
+		status_label.modulate.a = 1.0
 	if retry_button:
 		retry_button.grab_focus()
 
@@ -235,7 +326,17 @@ func _on_retry_pressed() -> void:
 	start_load(target_scene_path)
 
 func _on_menu_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
+	if _is_transitioning:
+		return
+	_is_transitioning = true
+	if fade_curtain:
+		var tw: Tween = create_tween()
+		tw.tween_property(fade_curtain, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(func() -> void:
+			get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
+		)
+	else:
+		get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
 
 func _on_radar_reticle_draw() -> void:
 	if not radar_reticle:

@@ -22,7 +22,9 @@ extends Control
 @onready var prompt_label: Label = find_child("PromptLabel", true, false) as Label
 
 # 3D Showcase nodes
+@onready var bg_cam: Camera3D = find_child("Camera3D", true, false) as Camera3D
 @onready var bg_heli: Node3D = find_child("HeliModel", true, false) as Node3D
+@onready var bg_skyline: Node3D = find_child("Skyline", true, false) as Node3D
 @onready var bg_rotor: Node3D = null
 @onready var bg_tail_rotor: Node3D = null
 @onready var bg_nav_tail: MeshInstance3D = null
@@ -34,6 +36,7 @@ const SOUND_CONFIRM: AudioStream = preload("res://assets/audio/ui/ui_confirm.wav
 const SOUND_BACK: AudioStream = preload("res://assets/audio/ui/ui_back.wav")
 
 const COLOR_ACCENT_AMBER := Color(0.961, 0.725, 0.106, 1.0)
+const HELI_CENTER: Vector3 = Vector3(3.9, 5.2, 14.2)
 
 var _save_data: Dictionary = {}
 var _audio_player: AudioStreamPlayer = null
@@ -45,6 +48,8 @@ var _using_gamepad: bool = false
 func _ready() -> void:
 	_setup_audio()
 	_resolve_3d_nodes()
+	_disable_menu_background_physics()
+	_init_static_camera()
 	_save_data = SaveSystem.load_data()
 	_connect_signals()
 	_update_ui()
@@ -75,6 +80,10 @@ func _play_focus_sound() -> void:
 	_play_ui_audio(SOUND_FOCUS, -16.0)
 
 func _resolve_3d_nodes() -> void:
+	if not bg_cam:
+		bg_cam = find_child("Camera3D", true, false) as Camera3D
+	if not bg_skyline:
+		bg_skyline = find_child("Skyline", true, false) as Node3D
 	if not bg_heli:
 		bg_heli = find_child("HeliModel", true, false) as Node3D
 	if bg_heli:
@@ -83,6 +92,38 @@ func _resolve_3d_nodes() -> void:
 		bg_nav_port = bg_heli.find_child("NavLightPort", true, false) as MeshInstance3D
 		bg_nav_starboard = bg_heli.find_child("NavLightStarboard", true, false) as MeshInstance3D
 		bg_nav_tail = bg_heli.find_child("NavLightTail", true, false) as MeshInstance3D
+
+func _disable_menu_background_physics() -> void:
+	if not bg_skyline:
+		return
+
+	var stack: Array[Node] = [bg_skyline]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is CollisionShape3D:
+			(n as CollisionShape3D).disabled = true
+
+		if n is CollisionObject3D:
+			var co: CollisionObject3D = n as CollisionObject3D
+			co.collision_layer = 0
+			co.collision_mask = 0
+
+		if n is MeshInstance3D:
+			var mi: MeshInstance3D = n as MeshInstance3D
+			if mi.material_override and not mi.name.begins_with("NavLight") and mi.name != "GroundPlane":
+				mi.material_override = null
+
+		for child: Node in n.get_children():
+			stack.append(child)
+
+func _init_static_camera() -> void:
+	if bg_cam:
+		bg_cam.position = Vector3(-0.8, 6.8, 23.5)
+		bg_cam.rotation_degrees = Vector3(-3.0, 10.5, 0.0)
+
+	if bg_heli:
+		bg_heli.position = HELI_CENTER
+		bg_heli.rotation = Vector3(-deg_to_rad(2.0), deg_to_rad(116.0), -deg_to_rad(1.0))
 
 func _connect_signals() -> void:
 	if scavenger_btn:
@@ -138,16 +179,27 @@ func _physics_process(delta: float) -> void:
 
 	# Rotors spin smoothly in the hangar
 	if bg_rotor:
-		bg_rotor.rotate_y(22.0 * delta)
+		bg_rotor.rotate_y(26.0 * delta)
 	if bg_tail_rotor:
-		bg_tail_rotor.rotate_x(32.0 * delta)
+		bg_tail_rotor.rotate_x(36.0 * delta)
 
-	# Subtle parked idle sway
+	# Subtle tactical idle hover animation with clean clearance
 	if bg_heli:
-		var bob_y: float = sin(_anim_time * 1.4) * 0.025
-		var sway_x: float = sin(_anim_time * 0.6) * 0.03
-		bg_heli.position.y = 4.2 + bob_y
-		bg_heli.position.x = 3.8 + sway_x
+		var bob_y: float = sin(_anim_time * 1.6) * 0.03
+		var sway_x: float = sin(_anim_time * 0.7) * 0.04
+		var sway_z: float = cos(_anim_time * 0.6) * 0.03
+		bg_heli.position = HELI_CENTER + Vector3(sway_x, bob_y, sway_z)
+
+		var pitch: float = -deg_to_rad(2.0) + sin(_anim_time * 0.9) * deg_to_rad(0.3)
+		var yaw: float = deg_to_rad(116.0) + sin(_anim_time * 0.5) * deg_to_rad(0.4)
+		var roll: float = -deg_to_rad(1.0) + cos(_anim_time * 1.2) * deg_to_rad(0.3)
+		bg_heli.rotation = Vector3(pitch, yaw, roll)
+
+	# Subtle slow camera drift
+	if bg_cam:
+		var cam_drift_x: float = sin(_anim_time * 0.25) * 0.10
+		var cam_drift_y: float = cos(_anim_time * 0.35) * 0.06
+		bg_cam.position = Vector3(-0.8 + cam_drift_x, 6.8 + cam_drift_y, 23.5)
 
 	# Navigation lights
 	if bg_nav_tail:
@@ -362,8 +414,20 @@ func _on_deploy_pressed() -> void:
 		return
 	_is_transitioning = true
 	_play_ui_audio(SOUND_CONFIRM, -10.0)
-	var timer: SceneTreeTimer = get_tree().create_timer(0.2)
-	timer.timeout.connect(func() -> void:
+
+	var curtain := ColorRect.new()
+	curtain.name = "DeployTransitionCurtain"
+	curtain.set_anchors_preset(Control.PRESET_FULL_RECT)
+	curtain.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	curtain.grow_vertical = Control.GROW_DIRECTION_BOTH
+	curtain.color = Color(0.02, 0.03, 0.06, 1.0)
+	curtain.modulate.a = 0.0
+	curtain.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(curtain)
+
+	var tw: Tween = create_tween()
+	tw.tween_property(curtain, "modulate:a", 1.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 	)
 
@@ -372,7 +436,19 @@ func _on_menu_pressed() -> void:
 		return
 	_is_transitioning = true
 	_play_ui_audio(SOUND_BACK, -12.0)
-	var timer: SceneTreeTimer = get_tree().create_timer(0.18)
-	timer.timeout.connect(func() -> void:
+
+	var curtain := ColorRect.new()
+	curtain.name = "MenuReturnTransitionCurtain"
+	curtain.set_anchors_preset(Control.PRESET_FULL_RECT)
+	curtain.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	curtain.grow_vertical = Control.GROW_DIRECTION_BOTH
+	curtain.color = Color(0.02, 0.03, 0.06, 1.0)
+	curtain.modulate.a = 0.0
+	curtain.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(curtain)
+
+	var tw: Tween = create_tween()
+	tw.tween_property(curtain, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
 	)

@@ -7844,4 +7844,3 @@ func test_ordinary_hit_feedback_and_damage_flash(logs: Array[String]) -> bool:
 
 	append_log("  -> Test 49 PASSED: Ordinary hit feedback (flash, sparks, audio rate-limiting) fully validated.", logs)
 	return true
-

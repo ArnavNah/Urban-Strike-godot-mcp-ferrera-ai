@@ -1,0 +1,189 @@
+
+======================================================
+SCENE: air_scout_helicopter.tscn
+Root: AirScoutHelicopter (CharacterBody3D)
+Collision: Capsule(r=0.85, h=3.40), pos=(0.0, 0.0, 0.0), rot=(-90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=13.96m, H=13.29m, L=30.96m), center=(-2.161674, -3.697859, -3.942097)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_rocket_raider.tscn
+Root: AirRocketRaider (CharacterBody3D)
+Collision: Capsule(r=0.95, h=3.80), pos=(0.0, 0.0, 0.0), rot=(-90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=9.41m, H=7.26m, L=12.36m), center=(-2.005818, -0.813186, -1.942179)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_attack_gunship.tscn
+Root: AirAttackGunship (CharacterBody3D)
+Collision: Capsule(r=1.05, h=4.20), pos=(0.0, 0.0, 0.0), rot=(-90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=7.37m, H=4.00m, L=12.45m), center=(1.078548, 0.792047, -2.04428)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_jammer_helicopter.tscn
+Root: AirJammerHelicopter (CharacterBody3D)
+Collision: Capsule(r=1.00, h=3.90), pos=(0.0, 0.0, 0.0), rot=(-90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=8.82m, H=3.94m, L=22.52m), center=(-0.781991, 0.517904, -4.58355)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_transport_helicopter.tscn
+Root: AirTransportHelicopter (CharacterBody3D)
+Collision: Capsule(r=1.30, h=5.20), pos=(0.0, 0.0, 0.0), rot=(90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=4.60m, H=1.40m, L=4.80m), center=(0.0, 0.0, 0.0)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_heavy_gunship.tscn
+Root: AirHeavyGunship (CharacterBody3D)
+Collision: Box(x=3.80, y=2.20, z=7.80), pos=(0.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=12.52m, H=3.35m, L=13.44m), center=(0.0, 1.173614, -0.459601)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: air_ace_gunship.tscn
+Root: AirAceGunship (CharacterBody3D)
+Collision: Capsule(r=1.20, h=4.60), pos=(0.0, 0.0, 0.0), rot=(90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=5.20m, H=1.15m, L=4.40m), center=(0.0, 0.0, 0.0)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: boss_archon.tscn
+Root: BossArchon (CharacterBody3D)
+Collision: Box(x=4.50, y=3.20, z=8.80), pos=(0.0, 0.8, 0.0)
+Visual Container: 'Visuals' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=16.00m, H=16.00m, L=16.00m), center=(0.0, 0.0, 0.0)
+Key Nodes: Muzzle (path=Visuals/ChinCannon/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: hunter_helicopter.tscn
+Root: HunterHelicopter (CharacterBody3D)
+Collision: Capsule(r=1.00, h=3.80), pos=(0.0, 0.0, 0.0), rot=(90.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.15, 1.15, 1.15) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=7.37m, H=4.00m, L=12.45m), center=(1.078548, 0.792047, -2.04428)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), MainRotor (path=Visuals/MainRotor, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: mig_17_striker.tscn
+Root: Mig17Striker (CharacterBody3D)
+Collision: Box(x=4.20, y=1.80, z=8.00), pos=(0.0, 0.0, 0.0)
+Visual Container: 'Visuals' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=24.00m, H=38.86m, L=61.83m), center=(1.999007, -9.430426, -20.91495)
+Key Nodes: MuzzleRight (path=Visuals/MuzzleRight, pos=(0.0, 0.0, 0.0)), MuzzleLeft (path=Visuals/MuzzleLeft, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_scout_buggy.tscn
+Root: GroundScoutBuggy (CharacterBody3D)
+Collision: Box(x=2.40, y=1.50, z=3.40), pos=(0.0, 0.75, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=124.88m, H=74.72m, L=68.90m), center=(-0.00071, 29.48492, 4.921259)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0)), BarrelMesh (path=Body/Turret/Barrel/BarrelMesh, pos=(0.0, 0.0, 0.0)), TurretMesh (path=Body/Turret/TurretMesh, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_rocket_technical.tscn
+Root: GroundRocketTechnical (CharacterBody3D)
+Collision: Box(x=2.60, y=1.80, z=4.20), pos=(0.0, 0.9, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=126.02m, H=59.55m, L=59.06m), center=(-0.476849, 21.90052, 0.0)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), MuzzleLeft (path=Body/Turret/Barrel/MuzzleLeft, pos=(0.0, 0.0, 0.0)), MuzzleRight (path=Body/Turret/Barrel/MuzzleRight, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_mortar_carrier.tscn
+Root: GroundMortarCarrier (CharacterBody3D)
+Collision: Box(x=3.00, y=2.10, z=4.60), pos=(0.0, 1.05, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=126.02m, H=59.55m, L=59.06m), center=(-0.476849, 21.90052, 0.0)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), MuzzleLeft (path=Body/Turret/Barrel/MuzzleLeft, pos=(0.0, 0.0, 0.0)), MuzzleRight (path=Body/Turret/Barrel/MuzzleRight, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_troop_carrier_apc.tscn
+Root: GroundTroopCarrierAPC (CharacterBody3D)
+Collision: Box(x=2.90, y=2.00, z=4.50), pos=(0.0, 1.0, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=126.02m, H=59.55m, L=59.06m), center=(-0.476849, 21.90052, 0.0)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), MuzzleLeft (path=Body/Turret/Barrel/MuzzleLeft, pos=(0.0, 0.0, 0.0)), MuzzleRight (path=Body/Turret/Barrel/MuzzleRight, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_assault_ifv.tscn
+Root: GroundAssaultIFV (CharacterBody3D)
+Collision: Box(x=2.60, y=1.60, z=3.60), pos=(0.0, 0.8, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=126.02m, H=59.55m, L=59.06m), center=(-0.476849, 21.90052, 0.0)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), MuzzleRight (path=Body/Turret/Barrel/MuzzleRight, pos=(0.0, 0.0, 0.0)), MuzzleLeft (path=Body/Turret/Barrel/MuzzleLeft, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: tank.tscn
+Root: Tank (CharacterBody3D)
+Collision: Box(x=3.20, y=2.00, z=4.40), pos=(0.0, 1.0, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=124.88m, H=74.72m, L=68.90m), center=(-0.00071, 29.48492, 4.921259)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0)), BarrelMesh (path=Body/Turret/Barrel/BarrelMesh, pos=(0.0, 0.0, 0.0)), TurretMesh (path=Body/Turret/TurretMesh, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_jammer_vehicle.tscn
+Root: GroundJammerVehicle (CharacterBody3D)
+Collision: Box(x=3.00, y=1.90, z=4.20), pos=(0.0, 0.95, 0.0)
+Visual Container: 'Body' scale=(1.0, 1.0, 1.0) pos=(0.0, 0.0, 0.0)
+Visual AABB: size=(W=124.88m, H=74.84m, L=68.90m), center=(-0.00071, 29.42193, 4.921259)
+Key Nodes: Turret (path=Body/Turret, pos=(0.0, 0.0, 0.0)), Barrel (path=Body/Turret/Barrel, pos=(0.0, 0.0, 0.0)), Muzzle (path=Body/Turret/Barrel/Muzzle, pos=(0.0, 0.0, 0.0)), BarrelMesh (path=Body/Turret/Barrel/BarrelMesh, pos=(0.0, 0.0, 0.0)), TurretMesh (path=Body/Turret/TurretMesh, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: ground_turret.tscn
+Root: GroundTurret (StaticBody3D)
+Collision: Cylinder(r=1.70, h=1.90), pos=(0.0, 0.95, 0.0)
+Visual Container: NO 'Visuals' or 'Body' node!
+Visual AABB: size=(W=3.38m, H=1.82m, L=3.38m), center=(0.0, 0.0, 0.0)
+Key Nodes: GroundTurret (path=., pos=(0.0, 0.0, 0.0)), LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), TurretHead (path=TurretHead, pos=(0.0, 0.0, 0.0)), Barrel (path=TurretHead/Barrel, pos=(0.0, 0.0, 0.0)), Muzzle (path=TurretHead/Barrel/Muzzle, pos=(0.0, 0.0, 0.0)), BarrelMesh (path=TurretHead/Barrel/BarrelMesh, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: sam_site.tscn
+Root: SAMSite (StaticBody3D)
+Collision: Cylinder(r=2.08, h=3.12), pos=(0.0, 1.56, 0.0)
+Visual Container: NO 'Visuals' or 'Body' node!
+Visual AABB: size=(W=3.90m, H=1.04m, L=3.90m), center=(0.0, 0.0, 0.0)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0)), TurretMount (path=TurretMount, pos=(0.0, 0.0, 0.0)), Muzzle (path=TurretMount/Launcher/Muzzle, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: infantry_cluster.tscn
+Root: InfantryCluster (CharacterBody3D)
+Collision: Box(x=2.80, y=1.90, z=2.80), pos=(0.0, 0.95, 0.0)
+Visual Container: NO 'Visuals' or 'Body' node!
+Visual AABB: size=(W=0.63m, H=1.75m, L=0.63m), center=(0.0, 0.0, 0.0)
+Key Nodes: LOSRayCast (path=LOSRayCast, pos=(0.0, 0.0, 0.0))
+
+
+======================================================
+SCENE: target_dummy.tscn
+Root: TargetDummy (StaticBody3D)
+Collision: Cylinder(r=0.80, h=2.20), pos=(0.0, 1.1, 0.0)
+Visual Container: NO 'Visuals' or 'Body' node!
+Visual AABB: size=(W=1.40m, H=2.00m, L=1.40m), center=(0.0, 0.0, 0.0)
+Key Nodes: None
+

@@ -301,13 +301,24 @@ func _on_play_pressed() -> void:
 	if play_button:
 		play_button.release_focus()
 
-	var tw: Tween = create_tween().set_parallel(true)
-	if menu_column:
-		tw.tween_property(menu_column, "modulate:a", 0.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_property(menu_column, "position:y", menu_column.position.y + 12.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Create a full-screen fade curtain so the 3D scene and UI fade to dark together
+	var curtain := ColorRect.new()
+	curtain.name = "PlayTransitionCurtain"
+	curtain.set_anchors_preset(Control.PRESET_FULL_RECT)
+	curtain.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	curtain.grow_vertical = Control.GROW_DIRECTION_BOTH
+	curtain.color = Color(0.02, 0.03, 0.06, 1.0)
+	curtain.modulate.a = 0.0
+	curtain.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(curtain)
 
-	var timer: SceneTreeTimer = get_tree().create_timer(0.22)
-	timer.timeout.connect(func() -> void:
+	var tw: Tween = create_tween().set_parallel(true)
+	tw.tween_property(curtain, "modulate:a", 1.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if menu_column:
+		tw.tween_property(menu_column, "modulate:a", 0.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(menu_column, "position:y", menu_column.position.y + 12.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	tw.chain().tween_callback(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 	)
 

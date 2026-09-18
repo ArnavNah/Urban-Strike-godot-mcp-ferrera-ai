@@ -238,13 +238,14 @@ material_override = SubResource("StandardMaterial3D_6bwlo")
 mesh = SubResource("PlaneMesh_o8q61")
 
 [node name="HeliModel" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=740192051]
-transform = Transform3D(-0.4377569, -0.017441772, -0.8989242, -0.039013308, 0.99923855, -0.00038951816, 0.89824647, 0.03489949, -0.43810406, 3.6, 5, 14.5)
+physics_interpolation_mode = 2
+transform = Transform3D(-0.4377569, -0.039013308, 0.8982465, -0.017441772, 0.9992386, 0.034899496, -0.8989242, -0.0003895182, -0.4381041, 3.9, 5.2, 14.2)
 
 [node name="Visuals" type="Node3D" parent="SubViewportContainer/SubViewport/HeliModel" unique_id=1937866161]
 transform = Transform3D(1.3, 0, 0, 0, 1.3, 0, 0, 0, 1.3, 0, 0, 0)
 
 [node name="Body" parent="SubViewportContainer/SubViewport/HeliModel/Visuals" unique_id=1051467578 instance=ExtResource("3_pd5lb")]
-transform = Transform3D(0, 0, 2.8, 0, 2.8, 0, -2.8, 0, 0, 0, 0, 0)
+transform = Transform3D(0, 0, -2.8, 0, 2.8, 0, 2.8, 0, 0, 0, 0, 0)
 
 [node name="Rotor" type="Node3D" parent="SubViewportContainer/SubViewport/HeliModel/Visuals" unique_id=1075864972]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -0.62)
@@ -260,7 +261,7 @@ mesh = SubResource("CylinderMesh_fsijr")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.68, 2.55)
 
 [node name="BackProp" parent="SubViewportContainer/SubViewport/HeliModel/Visuals/TailRotor" unique_id=2026785757 instance=ExtResource("5_3piad")]
-transform = Transform3D(0, 0, -0.65, 0, 0.65, 0, 0.65, 0, 0, 0, 0, 0)
+transform = Transform3D(0, 0, 0.65, 0, 0.65, 0, -0.65, 0, 0, 0, 0, 0)
 
 [node name="NavLightPort" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/HeliModel/Visuals" unique_id=1562985331]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.95, 0.08, -0.4)
@@ -290,7 +291,8 @@ transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.1,
 mesh = SubResource("CylinderMesh_1c0xa")
 
 [node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport" unique_id=51085291]
-transform = Transform3D(0.9832548, 0, -0.18223551, -0.009537471, 0.9986296, -0.051459596, 0.18198581, 0.05233597, 0.9819076, -0.8, 6.8, 23.5)
+physics_interpolation_mode = 2
+transform = Transform3D(0.9832548, -0.009537471, 0.18198581, 0, 0.9986296, 0.05233597, -0.18223551, -0.051459596, 0.9819076, -0.8, 6.8, 23.5)
 current = true
 fov = 65.0
 

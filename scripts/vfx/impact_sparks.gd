@@ -69,4 +69,3 @@ func _on_pooled_finish() -> void:
 	set_process(false)
 	set_physics_process(false)
 	process_mode = Node.PROCESS_MODE_DISABLED
-
