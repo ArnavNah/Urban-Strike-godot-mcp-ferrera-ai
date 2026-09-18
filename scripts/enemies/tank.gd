@@ -62,7 +62,6 @@ var _stuck_sample_timer: float = 0.0
 var debug_last_blocked_reason: String = ""
 var debug_shots_fired: int = 0
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 @onready var turret: Node3D = get_node_or_null("Body/Turret") if has_node("Body/Turret") else get_node_or_null(NodePath("Turret"))
 @onready var barrel: Node3D = (turret.get_node_or_null("Barrel") if turret else null)
@@ -1011,25 +1010,14 @@ func _collect_visual_meshes(node: Node) -> void:
 func _trigger_damage_flash() -> void:
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
 	if charge_light:
@@ -1059,6 +1047,8 @@ func _die() -> void:
 					t.scatter(global_position)
 
 	if is_command_unit:
+		if eb and eb.has_signal("camera_shake_requested"):
+			eb.emit_signal("camera_shake_requested", 0.35)
 		var um := get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
 		if um:
 			um.award_requisition(1)
@@ -1072,15 +1062,16 @@ func _die() -> void:
 
 	_spawn_xp()
 
+	var expl_scale: float = 2.0 if is_command_unit else 1.4
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 1.2, 0), 1.6)
+		VfxPool.instance.spawn_explosion(global_position + Vector3(0, 1.2, 0), expl_scale)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:
 			var expl := expl_scene.instantiate() as Node3D
 			if expl:
 				expl.transform.origin = global_position + Vector3(0, 1.2, 0)
-				expl.scale = Vector3(2.2, 2.2, 2.2)
+				expl.scale = Vector3(expl_scale, expl_scale, expl_scale)
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(expl)
 	queue_free()

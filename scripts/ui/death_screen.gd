@@ -196,7 +196,12 @@ func _populate_telemetry() -> void:
 		time_value_label.text = "%02d:%02d" % [mins, rem_sec]
 
 	# 2. Stage Reached
-	var current_stage: int = wm.current_wave if wm else 1
+	var current_stage: int = 1
+	if wm:
+		if "current_wave_index" in wm:
+			current_stage = int(wm.current_wave_index) + 1
+		elif "current_wave" in wm:
+			current_stage = int(wm.current_wave)
 	if wave_value_label:
 		wave_value_label.text = "STAGE %d / 10" % current_stage
 

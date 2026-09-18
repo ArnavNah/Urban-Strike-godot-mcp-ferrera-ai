@@ -45,6 +45,8 @@ func _destroy_radar() -> void:
 	if EventBus:
 		EventBus.radar_status_changed.emit(false)
 		EventBus.enemy_destroyed.emit(self, 250)
+		if EventBus.has_signal("camera_shake_requested"):
+			EventBus.camera_shake_requested.emit(0.35)
 
 	# Award bonus Salvage for objective
 	var gm := get_tree().get_first_node_in_group("game_manager")
@@ -85,14 +87,14 @@ func _destroy_radar() -> void:
 	# Destruction explosion
 	var expl_pos := global_position + Vector3(0, 2.0, 0)
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(expl_pos, 3.0)
+		VfxPool.instance.spawn_explosion(expl_pos, 2.4)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:
 			var expl := expl_scene.instantiate() as Node3D
 			if expl:
 				expl.transform.origin = expl_pos
-				expl.scale = Vector3(3.0, 3.0, 3.0)
+				expl.scale = Vector3(2.4, 2.4, 2.4)
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(expl)
 

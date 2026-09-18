@@ -321,7 +321,6 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
@@ -336,25 +335,14 @@ func _flash_hit() -> void:
 		tween.tween_property(head, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
 	_set_telegraph(false)

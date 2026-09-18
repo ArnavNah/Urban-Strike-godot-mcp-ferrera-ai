@@ -289,6 +289,23 @@ func _update_cinematic_bank(delta: float) -> void:
 	var roll_weight := exp_response(roll_response, delta)
 	camera_roll_pivot.rotation.z = lerp_angle(camera_roll_pivot.rotation.z, target_roll, roll_weight)
 
+func get_effective_shake_multiplier() -> float:
+	if not camera_shake_enabled or not bool(SaveSystem.get_setting("screen_shake_enabled", true)):
+		return 0.0
+	var cshake: Variant = SaveSystem.get_setting("camera_shake", 1.0)
+	var mult: float = 1.0
+	if cshake is String:
+		match cshake.to_lower():
+			"off": mult = 0.0
+			"low": mult = 0.5
+			"normal", "high": mult = 1.0
+			_: mult = 1.0
+	elif cshake is bool:
+		mult = 1.0 if cshake else 0.0
+	elif cshake is float or cshake is int:
+		mult = clampf(float(cshake), 0.0, 1.0)
+	return mult * screen_shake_intensity
+
 func _on_setting_changed(key: String, val: Variant) -> void:
 	if key == "screen_shake_enabled":
 		camera_shake_enabled = bool(val)
@@ -298,26 +315,33 @@ func _on_setting_changed(key: String, val: Variant) -> void:
 				camera.transform.origin = Vector3.ZERO
 	elif key == "screen_shake_intensity":
 		screen_shake_intensity = float(val)
+	elif key == "camera_shake":
+		if get_effective_shake_multiplier() <= 0.0:
+			_shake_trauma = 0.0
+			if camera:
+				camera.transform.origin = Vector3.ZERO
 	elif key == "camera_mode":
 		var target_mode: CameraMode = CameraMode.CLASSIC if str(val).to_lower() == "classic" else CameraMode.CHASE
 		if target_mode != camera_mode:
 			set_camera_mode(target_mode)
 
 func _on_shake_requested(trauma_amount: float) -> void:
-	if not camera_shake_enabled or screen_shake_intensity <= 0.0:
+	var mult := get_effective_shake_multiplier()
+	if mult <= 0.0:
 		_shake_trauma = 0.0
 		return
-	_shake_trauma = clampf(_shake_trauma + trauma_amount * screen_shake_intensity, 0.0, 1.0)
+	_shake_trauma = clampf(_shake_trauma + trauma_amount * mult, 0.0, 1.0)
 
 func _apply_camera_shake(delta: float) -> void:
 	if not camera:
 		return
-	if not camera_shake_enabled or screen_shake_intensity <= 0.0:
+	var mult := get_effective_shake_multiplier()
+	if mult <= 0.0:
 		camera.transform.origin = Vector3.ZERO
 		_shake_trauma = 0.0
 		return
 	if _shake_trauma > 0.0:
-		var shake_amount := _shake_trauma * _shake_trauma * screen_shake_intensity
+		var shake_amount := _shake_trauma * _shake_trauma * mult
 		var offset_x := (randf() * 2.0 - 1.0) * shake_amount * 0.3
 		var offset_y := (randf() * 2.0 - 1.0) * shake_amount * 0.3
 		camera.transform.origin = Vector3(offset_x, offset_y, 0.0)

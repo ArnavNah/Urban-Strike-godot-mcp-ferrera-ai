@@ -254,7 +254,6 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
@@ -265,25 +264,14 @@ func _collect_visual_meshes(node: Node) -> void:
 func _trigger_damage_flash() -> void:
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 
@@ -293,6 +281,8 @@ func _die() -> void:
 			eb.emit_signal("boss_defeated")
 		if eb.has_signal("enemy_destroyed"):
 			eb.emit_signal("enemy_destroyed", self, 1500)
+		if eb.has_signal("camera_shake_requested"):
+			eb.emit_signal("camera_shake_requested", 0.45)
 
 	# Award large salvage
 	var gm := get_tree().get_first_node_in_group("game_manager")
@@ -332,20 +322,17 @@ func _die() -> void:
 						var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 						p.add_child.call_deferred(gem)
 
-	# Multi-explosion sequence using VfxPool
-	for i in range(8):
-		var offset := Vector3(randf_range(-3, 3), randf_range(-1, 2), randf_range(-4, 4))
-		var expl_pos := global_position + offset
-		if VfxPool.instance:
-			VfxPool.instance.spawn_explosion(expl_pos, 2.2)
-		else:
-			var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-			if expl_scene:
-				var expl := expl_scene.instantiate() as Node3D
-				if expl:
-					expl.transform.origin = expl_pos
-					expl.scale = Vector3(2.8, 2.8, 2.8)
-					var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-					p.add_child.call_deferred(expl)
+	# Prominent single explosion using VfxPool (avoids pool exhaustion)
+	if VfxPool.instance:
+		VfxPool.instance.spawn_explosion(global_position, 2.5)
+	else:
+		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
+		if expl_scene:
+			var expl := expl_scene.instantiate() as Node3D
+			if expl:
+				expl.transform.origin = global_position
+				expl.scale = Vector3(2.5, 2.5, 2.5)
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(expl)
 
 	queue_free()

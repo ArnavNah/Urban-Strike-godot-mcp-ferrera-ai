@@ -609,7 +609,6 @@ func _fire_shot() -> void:
 			EventBus.enemy_fired_weapon.emit(self, origin, aim_dir, false)
 
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
@@ -620,19 +619,7 @@ func _collect_visual_meshes(node: Node) -> void:
 func _trigger_damage_flash() -> void:
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if not is_alive:
@@ -650,6 +637,7 @@ func _die() -> void:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
 	_release_slot()

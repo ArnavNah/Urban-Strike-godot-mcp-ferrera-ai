@@ -33,6 +33,12 @@ func _ready() -> void:
 		gem_pool.name = "XpGemPool"
 		add_child(gem_pool)
 
+	# 5. Initialize DamageFlashManager for zero-allocation enemy hit feedback
+	if not DamageFlashManager.instance:
+		var flash_mgr := DamageFlashManager.new()
+		flash_mgr.name = "DamageFlashManager"
+		add_child(flash_mgr)
+
 	SaveSystem.apply_graphics_preset(str(SaveSystem.get_setting("graphics_preset", "medium")), get_tree())
 
 	# 5. Initialize tactical SpawnDirector / SpawnSystem

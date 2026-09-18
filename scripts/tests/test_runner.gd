@@ -114,6 +114,10 @@ func _ready() -> void:
 	success = test_damage_number_categories_and_player_damage(log_lines) and success
 	append_log("Running test 47 (Damage aggregation, clutter reduction & death flush)...", log_lines)
 	success = test_damage_number_aggregation_and_clutter_reduction(log_lines) and success
+	append_log("Running test 48 (Combat feedback hierarchy, slot reservation & anti-stacking)...", log_lines)
+	success = test_combat_feedback_hierarchy_and_slot_reservation(log_lines) and success
+	append_log("Running test 49 (Ordinary hit feedback: enemy damage flash, sparks, audio rate-limiting)...", log_lines)
+	success = test_ordinary_hit_feedback_and_damage_flash(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -7437,3 +7441,407 @@ func test_damage_number_aggregation_and_clutter_reduction(logs: Array[String]) -
 	vp.queue_free()
 	append_log("  -> Test 47 PASSED: Damage number aggregation, clutter reduction & death flush fully validated.", logs)
 	return true
+
+func test_combat_feedback_hierarchy_and_slot_reservation(logs: Array[String]) -> bool:
+	append_log("[TEST 48] Combat Feedback Hierarchy, Slot Reservation & Anti-Stacking...", logs)
+
+	# --- Sub-step 1: Camera Shake Hierarchy & Accessibility Settings ---
+	var camera_rig_scene := load("res://scenes/camera/camera_rig.tscn") as PackedScene
+	if not camera_rig_scene:
+		append_log("FAIL: camera_rig.tscn not found", logs)
+		return false
+
+	var camera_rig: CameraRig = camera_rig_scene.instantiate() as CameraRig
+	add_child(camera_rig)
+
+	# Test camera_shake setting: "off"
+	SaveSystem.set_setting("camera_shake", "off")
+	EventBus.setting_changed.emit("camera_shake", "off")
+	if camera_rig.get_effective_shake_multiplier() > 0.001:
+		append_log("FAIL: camera_shake 'off' should produce 0.0 multiplier, got %.2f" % camera_rig.get_effective_shake_multiplier(), logs)
+		camera_rig.queue_free()
+		return false
+
+	camera_rig._on_shake_requested(0.5)
+	if camera_rig._shake_trauma > 0.001:
+		append_log("FAIL: camera_shake 'off' should not accumulate trauma", logs)
+		camera_rig.queue_free()
+		return false
+
+	# Test camera_shake setting: "low"
+	SaveSystem.set_setting("camera_shake", "low")
+	EventBus.setting_changed.emit("camera_shake", "low")
+	if absf(camera_rig.get_effective_shake_multiplier() - 0.5) > 0.05:
+		append_log("FAIL: camera_shake 'low' should produce 0.5 multiplier, got %.2f" % camera_rig.get_effective_shake_multiplier(), logs)
+		camera_rig.queue_free()
+		return false
+
+	# Test camera_shake setting: "normal"
+	SaveSystem.set_setting("camera_shake", "normal")
+	EventBus.setting_changed.emit("camera_shake", "normal")
+	if absf(camera_rig.get_effective_shake_multiplier() - 1.0) > 0.05:
+		append_log("FAIL: camera_shake 'normal' should produce 1.0 multiplier, got %.2f" % camera_rig.get_effective_shake_multiplier(), logs)
+		camera_rig.queue_free()
+		return false
+
+	# Verify visual offset only (camera.transform.origin modified, rig global_position unaffected)
+	var initial_rig_pos := camera_rig.global_position
+	camera_rig._on_shake_requested(0.4)
+	camera_rig._apply_camera_shake(0.016)
+	if camera_rig.global_position != initial_rig_pos:
+		append_log("FAIL: Camera shake altered CameraRig global_position (must only offset visual camera leaf)", logs)
+		camera_rig.queue_free()
+		return false
+
+	# Clean reset
+	SaveSystem.set_setting("camera_shake", 1.0)
+	EventBus.setting_changed.emit("camera_shake", 1.0)
+	camera_rig.queue_free()
+	append_log("  -> Sub-step 1: Camera shake settings ('off', 'low', 'normal') and visual-offset-only isolation verified.", logs)
+
+	# --- Sub-step 2: Damage Number Priority Slot Reservation ---
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	add_child(vp)
+
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 10.0, 15.0)
+	cam.look_at_from_position(cam.position, Vector3.ZERO, Vector3.UP)
+	cam.current = true
+	vp.add_child(cam)
+
+	var manager := DamageNumberManager.new()
+	vp.add_child(manager)
+	manager.max_active_numbers = 4 # Small cap to rigorously test preemption
+	manager.set_camera(cam)
+
+	var visible_pos := Vector3(0.0, 0.0, 0.0)
+
+	# Flood with 4 NORMAL numbers (untargeted so immediate display)
+	for i in range(4):
+		EventBus.damage_number_spawned.emit(visible_pos, 10.0 + float(i), false, {})
+		manager._process(0.02) # Give each a slight age separation
+
+	if manager.get_active_count() != 4:
+		append_log("FAIL: Expected 4 active labels after initial flood, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	# Attempt to spawn 5th NORMAL number: should be dropped because cap is 4 and it's low priority
+	EventBus.damage_number_spawned.emit(visible_pos, 99.0, false, {})
+	if manager.get_active_count() != 4:
+		append_log("FAIL: 5th normal hit should be dropped at cap 4, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	# Spawn high-priority CRITICAL number: should preempt the oldest low-priority label
+	EventBus.damage_number_spawned.emit(visible_pos, 77.0, true, {"is_critical": true})
+	if manager.get_active_count() != 4:
+		append_log("FAIL: Cap must remain 4 after critical preemption, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	var has_crit := false
+	for lbl in manager._active_labels:
+		if lbl.category == DamageNumber.DamageCategory.CRITICAL and lbl.text.contains("77"):
+			has_crit = true
+			break
+	if not has_crit:
+		append_log("FAIL: Critical number did not preempt low-priority label into active slots", logs)
+		vp.queue_free()
+		return false
+
+	# Spawn high-priority PLAYER number: should preempt another low-priority label
+	EventBus.player_damaged_directional.emit(25.0, visible_pos, Vector3.ZERO, false, {"target_id": 0})
+	if manager.get_active_count() != 4:
+		append_log("FAIL: Cap must remain 4 after player preemption, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	var has_player := false
+	for lbl in manager._active_labels:
+		if lbl.category == DamageNumber.DamageCategory.PLAYER and lbl.text.contains("-25"):
+			has_player = true
+			break
+	if not has_player:
+		append_log("FAIL: Player damage did not preempt low-priority label into active slots", logs)
+		vp.queue_free()
+		return false
+
+	# Spawn high-priority LETHAL number
+	EventBus.damage_number_spawned.emit(visible_pos, 50.0, false, {"is_lethal": true})
+	if manager.get_active_count() != 4:
+		append_log("FAIL: Cap must remain 4 after lethal preemption, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	# Spawn high-priority OBJECTIVE number (fills 4th slot with high-priority)
+	EventBus.damage_number_spawned.emit(visible_pos, 150.0, false, {"is_objective": true})
+	if manager.get_active_count() != 4:
+		append_log("FAIL: Cap must remain 4 after objective preemption, got %d" % manager.get_active_count(), logs)
+		vp.queue_free()
+		return false
+
+	# Now all 4 slots are high priority. A 5th high-priority number must NOT exceed the cap.
+	EventBus.damage_number_spawned.emit(visible_pos, 200.0, true, {"is_critical": true})
+	if manager.get_active_count() > 4:
+		append_log("FAIL: Active count exceeded cap (%d > 4) when pool filled with high priority", logs)
+		vp.queue_free()
+		return false
+
+	manager._disconnect_events()
+	manager.queue_free()
+	cam.queue_free()
+	vp.queue_free()
+	append_log("  -> Sub-step 2: Damage number priority slot reservation and hard pool cap adherence verified.", logs)
+
+	# --- Sub-step 3: Anti-Stacking & Single Destruction Trigger ---
+	var dummy := TargetDummy.new()
+	add_child(dummy)
+	dummy.max_health = 100.0
+	dummy.current_health = 100.0
+	dummy.is_alive = true
+
+	var death_data := {"count": 0}
+	var enemy_destroyed_cb := func(_enemy: Node3D, _pts: int):
+		death_data["count"] += 1
+	EventBus.enemy_destroyed.connect(enemy_destroyed_cb)
+
+	# Trigger destruction twice
+	dummy.take_damage(100.0)
+	dummy.take_damage(100.0)
+
+	EventBus.enemy_destroyed.disconnect(enemy_destroyed_cb)
+	if is_instance_valid(dummy) and not dummy.is_queued_for_deletion():
+		dummy.queue_free()
+
+	if int(death_data["count"]) != 1:
+		append_log("FAIL: Destruction triggered %d times on repeated lethal damage (expected exactly 1)" % int(death_data["count"]), logs)
+		return false
+	append_log("  -> Sub-step 3: Single destruction effect trigger (anti-stacking) verified.", logs)
+
+	append_log("  -> Test 48 PASSED: Combat feedback hierarchy, slot reservation & anti-stacking verified.", logs)
+	return true
+
+func test_ordinary_hit_feedback_and_damage_flash(logs: Array[String]) -> bool:
+	append_log("[TEST 49] Ordinary Hit Feedback: Enemy Flash, Sparks & Audio Rate-Limiting...", logs)
+
+	# --- Sub-step 1: DamageFlashManager Initialization & Shared Materials ---
+	var flash_mgr := DamageFlashManager.ensure_instance(get_tree())
+	if not flash_mgr:
+		append_log("FAIL: DamageFlashManager could not be instantiated", logs)
+		return false
+
+	var norm_mat: StandardMaterial3D = DamageFlashManager.get_normal_material()
+	var red_mat: StandardMaterial3D = DamageFlashManager.get_reduced_material()
+
+	if not norm_mat or norm_mat.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+		append_log("FAIL: Normal flash material is invalid or not unshaded", logs)
+		return false
+	if not red_mat or red_mat.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+		append_log("FAIL: Reduced flash material is invalid or not unshaded", logs)
+		return false
+	if red_mat.albedo_color.v >= norm_mat.albedo_color.v:
+		append_log("FAIL: Reduced flash material must be dimmer than normal flash", logs)
+		return false
+	append_log("  -> Sub-step 1: Zero-allocation shared unshaded flash materials verified.", logs)
+
+	# --- Sub-step 2: Standard Flash Timing (40-70 ms) & Clean Material Restoration ---
+	var dummy_scene := load("res://scenes/enemies/target_dummy.tscn") as PackedScene
+	var dummy: TargetDummy = dummy_scene.instantiate() as TargetDummy
+	add_child(dummy)
+	var mesh_inst: MeshInstance3D = dummy.get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if not mesh_inst:
+		append_log("FAIL: TargetDummy missing MeshInstance3D", logs)
+		dummy.queue_free()
+		return false
+
+	var orig_mesh_mat := mesh_inst.mesh.surface_get_material(0)
+
+	# Initial state
+	if mesh_inst.material_override != null:
+		append_log("FAIL: Initial material_override must be null", logs)
+		dummy.queue_free()
+		return false
+
+	# Single confirmed hit
+	DamageFlashManager.flash_target(dummy)
+	if mesh_inst.material_override != norm_mat:
+		append_log("FAIL: Target dummy mesh was not assigned normal flash material override", logs)
+		dummy.queue_free()
+		return false
+
+	# Check duration constant is strictly within 40-70 ms
+	var dur_ms := DamageFlashManager.FLASH_DURATION_NORMAL * 1000.0
+	if dur_ms < 40.0 or dur_ms > 70.0:
+		append_log("FAIL: Flash duration %.1f ms is outside 40-70 ms requirement" % dur_ms, logs)
+		dummy.queue_free()
+		return false
+
+	# Tick halfway (25 ms) -> must still be flashing
+	flash_mgr._process(0.025)
+	if mesh_inst.material_override != norm_mat:
+		append_log("FAIL: Flash cleared prematurely after 25 ms", logs)
+		dummy.queue_free()
+		return false
+
+	# Tick past completion (35 ms more -> total 60 ms) -> must be restored
+	flash_mgr._process(0.035)
+	if mesh_inst.material_override != null:
+		append_log("FAIL: Flash material override was not restored to null after 60 ms", logs)
+		dummy.queue_free()
+		return false
+
+	# Verify original underlying mesh material was NOT mutated
+	if mesh_inst.mesh.surface_get_material(0) != orig_mesh_mat:
+		append_log("FAIL: Underlying mesh surface material was mutated by damage flash", logs)
+		dummy.queue_free()
+		return false
+	append_log("  -> Sub-step 2: Standard 55 ms flash duration & clean material restoration verified.", logs)
+
+	# --- Sub-step 3: Sustained Chaingun Fire & Refresh Rate-Limiting ---
+	# Simulate 10 chaingun hits on the same target at 10 ms intervals
+	for i in range(10):
+		DamageFlashManager.flash_target(dummy)
+		flash_mgr._process(0.010)
+
+	# After rapid succession, target must still be flashing without leaking state
+	if mesh_inst.material_override != norm_mat:
+		append_log("FAIL: Sustained fire cut off flash prematurely", logs)
+		dummy.queue_free()
+		return false
+
+	# Once firing stops, flash expires cleanly
+	flash_mgr._process(0.060)
+	if mesh_inst.material_override != null:
+		append_log("FAIL: Flash not restored to null after sustained chaingun burst", logs)
+		dummy.queue_free()
+		return false
+	append_log("  -> Sub-step 3: Sustained chaingun fire and flash refresh rate-limiting verified.", logs)
+
+	# --- Sub-step 4: Simultaneous Hits on Distinct Enemies ---
+	var dummy2: TargetDummy = dummy_scene.instantiate() as TargetDummy
+	add_child(dummy2)
+	var mesh2: MeshInstance3D = dummy2.get_node_or_null("MeshInstance3D") as MeshInstance3D
+
+	# Hit both simultaneously
+	DamageFlashManager.flash_target(dummy)
+	DamageFlashManager.flash_target(dummy2)
+
+	if mesh_inst.material_override != norm_mat or mesh2.material_override != norm_mat:
+		append_log("FAIL: Simultaneous hits did not both trigger flash overrides", logs)
+		dummy.queue_free()
+		dummy2.queue_free()
+		return false
+
+	flash_mgr._process(0.060)
+	if mesh_inst.material_override != null or mesh2.material_override != null:
+		append_log("FAIL: Simultaneous hit meshes not cleanly restored", logs)
+		dummy.queue_free()
+		dummy2.queue_free()
+		return false
+	dummy2.queue_free()
+	append_log("  -> Sub-step 4: Simultaneous hits on distinct enemies flash and restore independently.", logs)
+
+	# --- Sub-step 5: Settings Respect (Suppression & Reduced Flashing) ---
+	# Disable flash
+	SaveSystem.set_setting("damage_flash_enabled", false)
+	flash_mgr.refresh_settings()
+	DamageFlashManager.flash_target(dummy)
+	if mesh_inst.material_override != null:
+		append_log("FAIL: Flash triggered when damage_flash_enabled is false", logs)
+		dummy.queue_free()
+		return false
+
+	# Reduced flashing
+	SaveSystem.set_setting("damage_flash_enabled", true)
+	SaveSystem.set_setting("reduced_flashing", true)
+	flash_mgr.refresh_settings()
+	DamageFlashManager.flash_target(dummy)
+	if mesh_inst.material_override != red_mat:
+		append_log("FAIL: Reduced flashing did not apply reduced flash material", logs)
+		dummy.queue_free()
+		return false
+
+	var red_dur_ms := DamageFlashManager.FLASH_DURATION_REDUCED * 1000.0
+	if red_dur_ms < 35.0 or red_dur_ms > 50.0:
+		append_log("FAIL: Reduced flash duration %.1f ms outside 35-50 ms", logs)
+		dummy.queue_free()
+		return false
+
+	flash_mgr._process(0.045)
+	if mesh_inst.material_override != null:
+		append_log("FAIL: Reduced flash not cleared after 45 ms", logs)
+		dummy.queue_free()
+		return false
+
+	# Restore settings
+	SaveSystem.set_setting("damage_flash_enabled", true)
+	SaveSystem.set_setting("reduced_flashing", false)
+	SaveSystem.set_setting("damage_flash_intensity", 1.0)
+	flash_mgr.refresh_settings()
+	append_log("  -> Sub-step 5: Settings integration (suppression & reduced flashing) verified.", logs)
+
+	# --- Sub-step 6: Death Flush (Immediate Cleanup on Destruction) ---
+	DamageFlashManager.flash_target(dummy)
+	if mesh_inst.material_override == null:
+		append_log("FAIL: Dummy not flashing before death", logs)
+		dummy.queue_free()
+		return false
+
+	DamageFlashManager.clear_target(dummy)
+	if mesh_inst.material_override != null:
+		append_log("FAIL: clear_target did not immediately restore material_override = null", logs)
+		dummy.queue_free()
+		return false
+	dummy.queue_free()
+	append_log("  -> Sub-step 6: Death flush immediately clears overrides with zero lingering state.", logs)
+
+	# --- Sub-step 7: Audio Synthesis Rate-Limiting & Pitch Variation ---
+	var sound_scene := load("res://scenes/audio/sound_manager.tscn") as PackedScene
+	var sound_mgr: SoundManager = sound_scene.instantiate() as SoundManager
+	add_child(sound_mgr)
+
+	# Reset impact cooldown
+	sound_mgr._last_impact_armor_time = 0.0
+	EventBus.combat_impact_occurred.emit(Vector3.ZERO, Vector3.UP, true, false)
+	var first_time := sound_mgr._last_impact_armor_time
+	if first_time <= 0.0:
+		append_log("FAIL: SoundManager did not record armor impact time", logs)
+		sound_mgr.queue_free()
+		return false
+
+	# Immediate second hit in same frame (< 0.04s) must be dropped by rate limit
+	EventBus.combat_impact_occurred.emit(Vector3.ZERO, Vector3.UP, true, false)
+	if sound_mgr._last_impact_armor_time != first_time:
+		append_log("FAIL: SoundManager played second impact within 40 ms (rate limit breached)", logs)
+		sound_mgr.queue_free()
+		return false
+
+	sound_mgr.queue_free()
+	append_log("  -> Sub-step 7: Audio synthesis rate-limiting (40 ms cooldown) verified.", logs)
+
+	# --- Sub-step 8: Zero Camera Shake & Hit-Stop on Bullet Hits ---
+	var shake_data := {"requested": false}
+	var shake_cb := func(_amt: float):
+		shake_data["requested"] = true
+	EventBus.camera_shake_requested.connect(shake_cb)
+
+	# Simulate ordinary bullet impact
+	EventBus.combat_impact_occurred.emit(Vector3(1, 0, 1), Vector3.UP, true, false)
+	if bool(shake_data["requested"]):
+		append_log("FAIL: Camera shake was triggered by ordinary bullet impact (shake must be 0)", logs)
+		EventBus.camera_shake_requested.disconnect(shake_cb)
+		return false
+
+	if Engine.time_scale != 1.0:
+		append_log("FAIL: Global hit-stop active during ordinary combat hit", logs)
+		EventBus.camera_shake_requested.disconnect(shake_cb)
+		return false
+
+	EventBus.camera_shake_requested.disconnect(shake_cb)
+	append_log("  -> Sub-step 8: Zero camera shake and zero hit-stop on ordinary bullet hits verified.", logs)
+
+	append_log("  -> Test 49 PASSED: Ordinary hit feedback (flash, sparks, audio rate-limiting) fully validated.", logs)
+	return true
+

@@ -13,6 +13,7 @@ var velocity_2d: Vector2 = Vector2.ZERO
 var lifetime: float = 0.65
 var _age: float = 0.0
 var is_active: bool = false
+var is_high_priority: bool = false
 var manager: DamageNumberManager = null
 var _tween: Tween = null
 var category: int = DamageCategory.NORMAL
@@ -51,6 +52,7 @@ func reset_state() -> void:
 	world_position = Vector3.ZERO
 	lifetime = 0.65
 	category = DamageCategory.NORMAL
+	is_high_priority = false
 
 	remove_theme_font_size_override("font_size")
 	remove_theme_color_override("font_color")
@@ -69,6 +71,13 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 		category = DamageCategory.CRITICAL
 	else:
 		category = DamageCategory.NORMAL
+
+	is_high_priority = (
+		category == DamageCategory.CRITICAL
+		or category == DamageCategory.PLAYER
+		or bool(metadata.get("is_lethal", false))
+		or bool(metadata.get("is_objective", false))
+	)
 
 	var rand_angle := randf_range(-PI * 0.75, -PI * 0.25)
 	velocity_2d = Vector2(cos(rand_angle), sin(rand_angle)) * randf_range(40.0, 75.0)

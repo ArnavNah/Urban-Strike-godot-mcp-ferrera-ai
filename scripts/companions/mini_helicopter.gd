@@ -52,7 +52,6 @@ var _flash_timer: float = 0.0
 var _target_stick_timer: float = 0.0
 var _bob_phase: float = 0.0
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 @onready var visual_root: Node3D = get_node_or_null("VisualRoot")
 @onready var plane_model: Node3D = get_node_or_null("VisualRoot/PlaneModel")
@@ -387,21 +386,7 @@ func _collect_visual_meshes(node: Node) -> void:
 func _trigger_damage_flash() -> void:
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		var tween := create_tween()
-		tween.tween_interval(0.08)
-		tween.tween_callback(func() -> void:
-			for m in _visual_meshes:
-				if is_instance_valid(m):
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _update_health_display() -> void:
 	if not is_instance_valid(health_bar_fill):
@@ -423,6 +408,7 @@ func _die() -> void:
 		return
 	is_alive = false
 	is_active = false
+	DamageFlashManager.clear_target(self)
 	collision_layer = 0 # Immediately stop intercepting any further shots
 	set_physics_process(false)
 

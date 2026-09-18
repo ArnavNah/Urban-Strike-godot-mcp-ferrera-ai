@@ -166,6 +166,10 @@ func _ready() -> void:
 			eb.player_damaged_directional.connect(_on_player_damaged_directional)
 		if eb.has_signal("upgrade_applied"):
 			eb.upgrade_applied.connect(_on_upgrade_applied)
+		if eb.has_signal("command_unit_destroyed"):
+			eb.command_unit_destroyed.connect(_on_command_unit_destroyed)
+		if eb.has_signal("radar_status_changed"):
+			eb.radar_status_changed.connect(_on_radar_status_changed)
 		if eb.has_signal("setting_changed"):
 			eb.setting_changed.connect(_on_setting_changed)
 
@@ -805,3 +809,26 @@ func _on_upgrade_applied(upgrade_id: String) -> void:
 		upgrade_banner.visible = true
 		upgrade_banner.modulate.a = 1.0
 	_upgrade_banner_timer = 2.2
+
+func _on_command_unit_destroyed(_pos: Vector3) -> void:
+	if not upgrade_banner:
+		_setup_upgrade_banner()
+	if upgrade_banner_label:
+		upgrade_banner_label.text = "★ COMMAND UNIT DESTROYED // +1 REQUISITION"
+		upgrade_banner_label.modulate = Color(1.0, 0.85, 0.2)
+	if upgrade_banner:
+		upgrade_banner.visible = true
+		upgrade_banner.modulate.a = 1.0
+	_upgrade_banner_timer = 2.4
+
+func _on_radar_status_changed(is_active: bool) -> void:
+	if not is_active:
+		if not upgrade_banner:
+			_setup_upgrade_banner()
+		if upgrade_banner_label:
+			upgrade_banner_label.text = "★ RADAR STATION DESTROYED // RECON RESTORED"
+			upgrade_banner_label.modulate = Color(0.3, 1.0, 0.85)
+		if upgrade_banner:
+			upgrade_banner.visible = true
+			upgrade_banner.modulate.a = 1.0
+		_upgrade_banner_timer = 2.4

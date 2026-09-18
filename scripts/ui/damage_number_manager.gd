@@ -306,11 +306,35 @@ func _display_damage_number(
 	if not vp_rect.grow(SCREEN_CULL_MARGIN).has_point(screen_pos):
 		return
 
-	# 2. Immediate Active Budget Enforcement (including same-frame bursts)
-	if _active_labels.size() >= max_active_numbers:
-		return
+	# 2. Priority Slot Reservation & Active Budget Enforcement
+	var is_high_priority: bool = (
+		category == DamageCategory.CRITICAL
+		or category == DamageCategory.PLAYER
+		or bool(metadata.get("is_lethal", false))
+		or bool(metadata.get("is_objective", false))
+	)
 
-	if _free_labels.is_empty():
+	if _active_labels.size() >= max_active_numbers or _free_labels.is_empty():
+		if is_high_priority:
+			# High priority event: try to preempt the oldest low-priority active label
+			var candidate_to_replace: DamageNumber = null
+			var oldest_low_age: float = -1.0
+			for active_lbl in _active_labels:
+				if is_instance_valid(active_lbl) and not active_lbl.is_high_priority:
+					if active_lbl._age > oldest_low_age:
+						oldest_low_age = active_lbl._age
+						candidate_to_replace = active_lbl
+
+			if candidate_to_replace != null:
+				candidate_to_replace.deactivate()
+			else:
+				# All active labels are already high priority: preserve hard cap
+				return
+		else:
+			# Low priority event and budget/pool is exhausted: drop visual
+			return
+
+	if _free_labels.is_empty() or _active_labels.size() >= max_active_numbers:
 		return
 
 	# 3. Label Allocation & Setup

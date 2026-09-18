@@ -44,6 +44,8 @@ signal missile_pickup_collected(amount: int)
 signal flares_updated(charges_left: int, max_charges: int, is_ready: bool)
 @warning_ignore("unused_signal")
 signal incoming_missile_warning(source_pos: Vector3, is_active: bool)
+@warning_ignore("unused_signal")
+signal missile_impact_occurred(impact_pos: Vector3, is_player: bool)
 
 # --- Progression & Director ---
 @warning_ignore("unused_signal")

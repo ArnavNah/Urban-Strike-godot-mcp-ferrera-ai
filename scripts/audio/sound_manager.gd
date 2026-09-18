@@ -23,6 +23,7 @@ var _last_enemy_shot_time: float = 0.0
 var _last_impact_armor_time: float = 0.0
 var _last_impact_terrain_time: float = 0.0
 var _last_player_hit_time: float = 0.0
+var _last_missile_impact_time: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -52,6 +53,8 @@ func _ready() -> void:
 			EventBus.enemy_fired_weapon.connect(_on_enemy_fired_weapon)
 		if EventBus.has_signal("combat_impact_occurred"):
 			EventBus.combat_impact_occurred.connect(_on_combat_impact)
+		if EventBus.has_signal("missile_impact_occurred"):
+			EventBus.missile_impact_occurred.connect(_on_missile_impact)
 		if EventBus.has_signal("player_damaged_directional"):
 			EventBus.player_damaged_directional.connect(_on_player_damaged_directional)
 		if EventBus.has_signal("upgrade_applied"):
@@ -139,17 +142,25 @@ func _on_enemy_fired_weapon(_enemy: Node3D, _muzzle_pos: Vector3, _dir: Vector3,
 		_play_sweep(135.0, 62.0, 0.06, 0.30)
 
 func _on_combat_impact(_hit_pos: Vector3, _normal: Vector3, is_armored: bool, _is_lethal: bool) -> void:
+	# Distance culling if camera is present and hit is beyond 140m
+	if _hit_pos != Vector3.ZERO and is_inside_tree() and get_viewport():
+		var camera := get_viewport().get_camera_3d()
+		if camera and camera.global_position.distance_squared_to(_hit_pos) > 140.0 * 140.0:
+			return
+
 	var now := Time.get_ticks_msec() / 1000.0
 	if is_armored:
 		if now - _last_impact_armor_time < 0.04:
 			return
 		_last_impact_armor_time = now
-		_play_sweep(1500.0, 950.0, 0.035, 0.22)
+		var pitch_var := randf_range(0.95, 1.05)
+		_play_sweep(1500.0 * pitch_var, 950.0 * pitch_var, 0.035, 0.22)
 	else:
 		if now - _last_impact_terrain_time < 0.05:
 			return
 		_last_impact_terrain_time = now
-		_play_sweep(105.0, 45.0, 0.04, 0.18, true)
+		var pitch_var := randf_range(0.93, 1.07)
+		_play_sweep(105.0 * pitch_var, 45.0 * pitch_var, 0.04, 0.18, true)
 
 func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, _source_pos: Vector3, is_shield_hit: bool, _metadata: Dictionary = {}) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
@@ -174,11 +185,22 @@ func _on_health_changed(current_health: float, _max_health: float) -> void:
 		_play_tone(alert_player, 240.0, 0.12)
 	_prev_player_health = current_health
 
+func _on_missile_impact(_impact_pos: Vector3, _is_player: bool) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_missile_impact_time < 0.05:
+		return
+	_last_missile_impact_time = now
+	_play_sweep(145.0, 42.0, 0.26, 0.40)
+
 func _on_enemy_destroyed(_enemy: Node3D, points: int) -> void:
-	if points >= 25:
-		_play_tone(explosion_player, 75.0, 0.6)
+	if points >= 150:
+		# Major destruction (command unit, boss, radar, high-threat elite)
+		_play_tone(explosion_player, 55.0, 0.75)
+		_play_sweep(85.0, 32.0, 0.42, 0.45, true)
+	elif points >= 25:
+		_play_tone(explosion_player, 75.0, 0.5)
 	else:
-		_play_tone(explosion_player, 110.0, 0.4)
+		_play_tone(explosion_player, 110.0, 0.35)
 
 func _on_missile_lock(_progress: float, _target: Node3D, is_locked: bool) -> void:
 	if is_locked and not _was_missile_locked:

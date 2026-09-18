@@ -160,9 +160,10 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 			_hit_target_ids.append(target_obj.get_instance_id())
 		target_obj.take_damage(_damage_for_target(target_obj), source_node, hit_pos)
 
-	_spawn_spark(hit_pos, hit_norm, is_armored_surface)
-	if EventBus:
-		EventBus.combat_impact_occurred.emit(hit_pos, hit_norm, is_armored_surface, is_lethal)
+	if not (siege_round and already_hit):
+		_spawn_spark(hit_pos, hit_norm, is_armored_surface)
+		if EventBus:
+			EventBus.combat_impact_occurred.emit(hit_pos, hit_norm, is_armored_surface, is_lethal)
 
 	if siege_round:
 		# Siege hits at most two distinct enemies and always stops at world/objectives.

@@ -15,10 +15,12 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	if not is_alive:
 		return
 	current_health = maxf(0.0, current_health - amount)
+	DamageFlashManager.flash_target(self)
 	if EventBus:
 		EventBus.damage_number_spawned.emit(global_position + Vector3(0, 1.2, 0), amount, false, {"target_id": get_instance_id()})
 	if current_health <= 0.0:
 		is_alive = false
+		DamageFlashManager.clear_target(self)
 		if EventBus:
 			EventBus.enemy_destroyed.emit(self, 50)
 		queue_free()

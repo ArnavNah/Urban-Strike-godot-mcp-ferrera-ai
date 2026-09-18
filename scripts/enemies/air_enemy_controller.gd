@@ -971,7 +971,6 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 var _visual_meshes: Array[MeshInstance3D] = []
-static var _flash_mat: StandardMaterial3D = null
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
@@ -982,38 +981,30 @@ func _collect_visual_meshes(node: Node) -> void:
 func _trigger_damage_flash() -> void:
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	if not _flash_mat:
-		_flash_mat = StandardMaterial3D.new()
-		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_flash_mat.albedo_color = Color(1.8, 1.8, 1.8, 1.0)
-	for m in _visual_meshes:
-		if is_instance_valid(m):
-			m.material_override = _flash_mat
-	if is_inside_tree():
-		get_tree().create_timer(0.06, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
 	_release_air_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
-
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("enemy_destroyed"):
 		eb.emit_signal("enemy_destroyed", self, archetype.salvage_reward if archetype else 50)
 
+	var is_major_target: bool = archetype != null and (archetype.is_elite or "jammers" in archetype.formation_tags)
+	if is_major_target and eb and eb.has_signal("camera_shake_requested"):
+		eb.emit_signal("camera_shake_requested", 0.35)
+
 	_spawn_rewards()
 
-	var expl_scale: float = 1.6 if (archetype and archetype.is_elite) else 1.1
+	var expl_scale: float = 2.0 if is_major_target else 1.1
 	if VfxPool.instance:
 		VfxPool.instance.spawn_explosion(global_position, expl_scale)
 	else:

@@ -40,7 +40,6 @@ var _passes_completed: int = 0
 var _max_passes: int = 2
 
 var _visual_meshes: Array[MeshInstance3D] = []
-var _flash_mat: StandardMaterial3D = null
 
 @onready var visuals: Node3D = get_node_or_null("Visuals")
 @onready var muzzle_left: Marker3D = get_node_or_null("Visuals/MuzzleLeft")
@@ -58,18 +57,12 @@ func _ready() -> void:
 
 	_player = get_tree().get_first_node_in_group("player")
 	_collect_visual_meshes(self)
-	_setup_flash_mat()
 
 	if visuals and warning_light:
 		warning_light.visible = false
 
 	# Setup initial pass
 	_init_pass()
-
-func _setup_flash_mat() -> void:
-	_flash_mat = StandardMaterial3D.new()
-	_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_flash_mat.albedo_color = Color(1.0, 0.9, 0.8, 1.0)
 
 func _collect_visual_meshes(node: Node) -> void:
 	if node is MeshInstance3D:
@@ -253,21 +246,14 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_die()
 
 func _flash_hit() -> void:
-	if _flash_mat:
-		for m in _visual_meshes:
-			if is_instance_valid(m):
-				m.material_override = _flash_mat
-		get_tree().create_timer(0.05, false).timeout.connect(func():
-			for m in _visual_meshes:
-				if is_instance_valid(m) and m.material_override == _flash_mat:
-					m.material_override = null
-		)
+	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func _die() -> void:
 	if _is_dead or not is_alive:
 		return
 	_is_dead = true
 	is_alive = false
+	DamageFlashManager.clear_target(self)
 	_release_attack_token()
 
 	if EnemyRegistry.instance:
@@ -279,14 +265,17 @@ func _die() -> void:
 
 	_spawn_rewards()
 
-	var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-	if expl_scene:
-		var expl := expl_scene.instantiate() as Node3D
-		if expl:
-			expl.transform.origin = global_position
-			expl.scale = Vector3(2.2, 2.2, 2.2)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(expl)
+	if VfxPool.instance:
+		VfxPool.instance.spawn_explosion(global_position, 1.8)
+	else:
+		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
+		if expl_scene:
+			var expl := expl_scene.instantiate() as Node3D
+			if expl:
+				expl.transform.origin = global_position
+				expl.scale = Vector3(2.2, 2.2, 2.2)
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(expl)
 
 	queue_free()
 

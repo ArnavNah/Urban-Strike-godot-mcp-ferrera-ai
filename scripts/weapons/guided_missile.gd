@@ -98,9 +98,16 @@ func explode(impact_pos: Vector3) -> void:
 			var falloff := clampf(1.0 - (dist / splash_radius), 0.35, 1.0)
 			col.take_damage(damage * falloff, self, impact_pos)
 
+	# Restrained camera shake & audio event for missile impact
+	if EventBus:
+		if EventBus.has_signal("camera_shake_requested"):
+			EventBus.camera_shake_requested.emit(0.18)
+		if EventBus.has_signal("missile_impact_occurred"):
+			EventBus.missile_impact_occurred.emit(impact_pos, is_player_missile)
+
 	# Spawn explosion VFX (VfxPool with fallback)
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(impact_pos)
+		VfxPool.instance.spawn_explosion(impact_pos, 1.1)
 	else:
 		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
 		if expl_scene:

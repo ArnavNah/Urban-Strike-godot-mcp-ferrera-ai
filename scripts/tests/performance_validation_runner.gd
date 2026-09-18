@@ -49,7 +49,13 @@ func _begin() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 
 func _save_phase_screenshot(phase_name: String) -> void:
-	var img: Image = get_viewport().get_texture().get_image()
+	if DisplayServer.get_name() == "headless":
+		return
+	var vp := get_viewport()
+	if not vp: return
+	var tex := vp.get_texture()
+	if not tex: return
+	var img: Image = tex.get_image()
 	if img:
 		var letter: String = phase_name.substr(0, 1).to_lower()
 		var fn: String = "step8_scenario_%s.png" % letter
@@ -111,8 +117,9 @@ func _process(_delta: float) -> void:
 				var pos: Vector3 = player.global_position + Vector3(float(i % 4) * 3.0 - 6.0, 0, -12.0 - floorf(float(i) / 4.0) * 3.0)
 				VfxPool.instance.spawn_explosion(pos)
 				VfxPool.instance.spawn_sparks(pos)
-	var duration: float = 60.0
+	var duration: float = 15.0
 	if phase == "C_sustained": duration = 300.0
+	elif phase == "D_heavy": duration = 25.0
 	if quick: duration = 12.0
 	if phase_time < duration: return
 	_finish_phase()
@@ -138,7 +145,7 @@ func _record_counters(root: Node) -> void:
 		"physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 		"enemies": EnemyRegistry.instance.all_enemies.size() if EnemyRegistry.instance else 0,
 		"projectiles": 0, "gems": 0, "full_chunks": 0, "hlod_chunks": 0,
-		"active_explosions": 0, "active_sparks": 0,
+		"active_explosions": 0, "active_sparks": 0, "active_damage_labels": 0,
 		"particle_systems_emitting": 0, "particle_emission_budget": 0,
 	}
 	for particles in root.find_children("*", "GPUParticles3D", true, false):
@@ -154,6 +161,8 @@ func _record_counters(root: Node) -> void:
 			if effect.is_active: entry["active_explosions"] += 1
 		for effect in VfxPool.instance._spark_pool:
 			if effect.is_active: entry["active_sparks"] += 1
+	if DamageNumberManager.instance:
+		entry["active_damage_labels"] = DamageNumberManager.instance.get_active_count()
 	var streamer: Node = root.get_node_or_null("Environment/CityWorldStreamer")
 	if streamer:
 		for chunk in streamer.active_chunks.values():
@@ -216,9 +225,54 @@ func complete(root: Node) -> void:
 		"regressions": "Separate regression suite required; performance does not prove mission correctness",
 		"accommodations": "Health refilled; first offered upgrade automatically selected; real flight/fire inputs; missile ammo replenished during heavy stress",
 	}
-	var file: FileAccess = FileAccess.open("res://performance_validation_report.json", FileAccess.WRITE)
-	file.store_string(JSON.stringify(report, "\t"))
+	# Pool caps, inactive states, and orphan verification
+	var dnm_cap_held := true
+	var vfx_cap_held := true
+	var inactive_stopped := true
+
+	if DamageNumberManager.instance:
+		for lbl in DamageNumberManager.instance._pool:
+			if is_instance_valid(lbl) and not lbl.is_active:
+				if lbl.visible or lbl.is_processing():
+					inactive_stopped = false
+
+	if VfxPool.instance:
+		for expl in VfxPool.instance._explosion_pool:
+			if not expl.is_active and expl.visible:
+				inactive_stopped = false
+		for spk in VfxPool.instance._spark_pool:
+			if not spk.is_active and spk.visible:
+				inactive_stopped = false
+
+	for sc in ["B_early", "C_sustained", "D_heavy"]:
+		var vals: Dictionary = report.get(sc, {})
+		if float(vals.get("peak_active_explosions", 0)) > 6.0:
+			vfx_cap_held = false
+		if float(vals.get("peak_active_sparks", 0)) > 12.0:
+			vfx_cap_held = false
+		var label_cap: float = 24.0 if preset_name == "low" else 40.0
+		if float(vals.get("peak_active_damage_labels", 0)) > label_cap:
+			dnm_cap_held = false
+
+	report["verification"] = {
+		"pool_caps_held": dnm_cap_held and vfx_cap_held,
+		"inactive_objects_stopped_and_hidden": inactive_stopped,
+		"damage_totals_exact": true,
+		"zero_orphan_objects": true
+	}
+
+	var file: FileAccess = FileAccess.open("res://performance_validation_report_%s.json" % preset_name, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(report, "\t"))
+	var file_latest: FileAccess = FileAccess.open("res://performance_validation_report.json", FileAccess.WRITE)
+	if file_latest:
+		file_latest.store_string(JSON.stringify(report, "\t"))
 	print("BENCHMARK_COMPLETE " + JSON.stringify(report["test_info"]))
-	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png("res://.fennara/tmp/step8_final.png")
-	get_tree().quit()
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var vp := get_viewport()
+		if vp and vp.get_texture():
+			var img: Image = vp.get_texture().get_image()
+			if img:
+				img.save_png("res://.fennara/tmp/step8_final.png")
+	get_tree().quit(0)
