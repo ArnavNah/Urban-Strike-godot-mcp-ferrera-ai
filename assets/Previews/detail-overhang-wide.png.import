@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cho4gj6yjfai"
-path="res://.godot/imported/detail-overhang-wide.png-1e0d718474540fd03c91db4633c49b21.ctex"
+path="res://.godot/imported/detail-overhang-wide.png-4b88009fad6d4cfc0502043a91c17d3e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Previews/detail-overhang-wide.png"
-dest_files=["res://.godot/imported/detail-overhang-wide.png-1e0d718474540fd03c91db4633c49b21.ctex"]
+source_file="res://assets/previews/detail-overhang-wide.png"
+dest_files=["res://.godot/imported/detail-overhang-wide.png-4b88009fad6d4cfc0502043a91c17d3e.ctex"]
 
 [params]
 

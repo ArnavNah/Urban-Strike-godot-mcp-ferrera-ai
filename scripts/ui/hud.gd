@@ -190,6 +190,13 @@ func _ready() -> void:
 			_max_missiles = int(pod.max_missiles)
 	_update_missile_status_display()
 
+	if _player and "flare_dispenser" in _player and _player.flare_dispenser:
+		var fd: Node = _player.flare_dispenser
+		if "current_flares" in fd and "max_flares" in fd:
+			_on_flares_updated(int(fd.current_flares), int(fd.max_flares), true)
+	else:
+		_on_flares_updated(3, 3, true)
+
 func _process(delta: float) -> void:
 	if _upgrade_banner_timer > 0.0:
 		_upgrade_banner_timer -= delta
@@ -267,6 +274,11 @@ func _process(delta: float) -> void:
 	if border_warning_banner and border_warning_banner.visible:
 		var pulse: float = (sin(Time.get_ticks_msec() * 0.008) + 1.0) * 0.5
 		border_warning_banner.modulate = Color(1.0, 1.0, 1.0, lerpf(0.55, 1.0, pulse))
+
+	# Critical health pulse
+	if is_instance_valid(health_label) and _hull_full_timer <= 0.0 and _max_health > 0.0 and _current_health <= _max_health * 0.30:
+		var hp_pulse := lerpf(0.60, 1.0, (sin(Time.get_ticks_msec() * 0.010) + 1.0) * 0.5)
+		health_label.modulate = Color(1.0, 0.20, 0.20, hp_pulse)
 
 	queue_redraw()
 
@@ -533,6 +545,12 @@ func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> vo
 		heat_bar.max_value = maximum
 		heat_bar.value = current
 		heat_bar.visible = current > 0.05
+		if is_overheated:
+			heat_bar.modulate = Color(1.0, 0.25, 0.25)
+		elif maximum > 0.0 and current >= maximum * 0.80:
+			heat_bar.modulate = Color(1.0, 0.55, 0.15)
+		else:
+			heat_bar.modulate = Color(1.0, 1.0, 1.0)
 	if overheat_warning:
 		overheat_warning.visible = is_overheated
 
@@ -542,33 +560,33 @@ func _update_missile_status_display() -> void:
 
 	var pips := ""
 	for i in range(_max_missiles):
-		pips += "▲" if i < _missile_ammo else "△"
+		pips += "▮" if i < _missile_ammo else "▯"
 
 	if _missile_warning_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d  [%s]  NO MISSILES" % [_missile_ammo, _max_missiles, pips]
+		missile_status.text = "MISSILES  %d / %d   %s   NO MISSILES" % [_missile_ammo, _max_missiles, pips]
 		missile_status.modulate = Color(1.0, 0.25, 0.25)
 		return
 
 	if _ammo_full_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d  [%s]  AMMO FULL" % [_missile_ammo, _max_missiles, pips]
+		missile_status.text = "MISSILES  %d / %d   %s   FULL" % [_missile_ammo, _max_missiles, pips]
 		missile_status.modulate = Color(1.0, 0.75, 0.20)
 		return
 
 	if _missile_ammo <= 0:
-		missile_status.text = "MISSILES  0 / %d  [%s]  EMPTY" % [_max_missiles, pips]
+		missile_status.text = "MISSILES  0 / %d   %s   EMPTY" % [_max_missiles, pips]
 		missile_status.modulate = Color(0.85, 0.35, 0.35)
 		return
 
 	var jam_suffix := "  EW JAMMED" if _is_jammed else ""
 	if _is_missile_locked:
-		missile_status.text = "MISSILES  %d / %d  [%s]  LOCKED" % [_missile_ammo, _max_missiles, pips]
-		missile_status.modulate = Color(0.20, 0.85, 0.45)
+		missile_status.text = "MISSILES  %d / %d   %s   LOCKED" % [_missile_ammo, _max_missiles, pips]
+		missile_status.modulate = Color(0.25, 0.95, 0.55)
 	elif _last_lock_progress > 0.05:
-		missile_status.text = "MISSILES  %d / %d  [%s]  LOCKING %d%%%s" % [_missile_ammo, _max_missiles, pips, int(_last_lock_progress * 100.0), jam_suffix]
-		missile_status.modulate = Color(1.0, 0.50, 0.15) if _is_jammed else Color(1.0, 0.75, 0.20)
+		missile_status.text = "MISSILES  %d / %d   %s   LOCKING %d%%%s" % [_missile_ammo, _max_missiles, pips, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.modulate = Color(1.0, 0.50, 0.15) if _is_jammed else Color(1.0, 0.78, 0.22)
 	else:
-		missile_status.text = "MISSILES  %d / %d  [%s]  READY%s" % [_missile_ammo, _max_missiles, pips, jam_suffix]
-		missile_status.modulate = Color(1.0, 0.55, 0.15) if _is_jammed else Color(0.85, 0.90, 0.95)
+		missile_status.text = "MISSILES  %d / %d   %s   READY%s" % [_missile_ammo, _max_missiles, pips, jam_suffix]
+		missile_status.modulate = Color(1.0, 0.55, 0.15) if _is_jammed else Color(0.88, 0.94, 1.0)
 
 func _on_missile_ammo_changed(current: int, maximum: int) -> void:
 	_missile_ammo = current
@@ -590,23 +608,27 @@ func _on_missile_lock_updated(progress: float, _target: Node3D, is_locked: bool)
 	_is_missile_locked = is_locked
 	if missile_bar:
 		missile_bar.value = progress * 100.0
-		missile_bar.visible = progress > 0.05
+		missile_bar.visible = progress > 0.02
 	_update_missile_status_display()
 
 func _on_jammer_status_changed(is_jammed: bool, _count: int) -> void:
 	_is_jammed = is_jammed
 
 func _on_flares_updated(charges_left: int, max_charges: int, is_ready: bool) -> void:
-	if flares_label:
-		if not is_ready and charges_left < max_charges:
-			flares_label.text = "FLARES: %d/%d  CHARGING" % [charges_left, max_charges]
-			flares_label.modulate = Color(1.0, 0.65, 0.15)
-		elif charges_left <= 0:
-			flares_label.text = "FLARES: 0/%d  DEPLETED" % max_charges
-			flares_label.modulate = Color(0.85, 0.35, 0.35)
-		else:
-			flares_label.text = "FLARES: %d/%d  [X]" % [charges_left, max_charges]
-			flares_label.modulate = Color(0.85, 0.90, 0.95)
+	if not flares_label:
+		return
+	var pips := ""
+	for i in range(max_charges):
+		pips += "◆" if i < charges_left else "◇"
+	if not is_ready and charges_left < max_charges:
+		flares_label.text = "FLARES [X]  %d/%d   %s   RECHARGING" % [charges_left, max_charges, pips]
+		flares_label.modulate = Color(1.0, 0.65, 0.15)
+	elif charges_left <= 0:
+		flares_label.text = "FLARES [X]  0/%d   %s   DEPLETED" % [max_charges, pips]
+		flares_label.modulate = Color(0.85, 0.35, 0.35)
+	else:
+		flares_label.text = "FLARES [X]  %d/%d   %s   READY" % [charges_left, max_charges, pips]
+		flares_label.modulate = Color(0.30, 0.88, 0.95)
 
 func _on_missile_warning(_source_pos: Vector3, is_active: bool) -> void:
 	if missile_warning_panel:

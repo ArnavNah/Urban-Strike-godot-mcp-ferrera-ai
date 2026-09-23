@@ -838,6 +838,10 @@ func _die() -> void:
 	_is_dying = true
 	is_alive = false
 	_control_enabled = false
+	if ground_shadow:
+		ground_shadow.visible = false
+	if downwash_dust:
+		downwash_dust.emitting = false
 	emit_signal("died")
 	if EventBus:
 		EventBus.player_died.emit()
@@ -850,6 +854,10 @@ func hide_visuals() -> void:
 		visuals.visible = false
 	if flight_tilt_pivot:
 		flight_tilt_pivot.visible = false
+	if ground_shadow:
+		ground_shadow.visible = false
+	if downwash_dust:
+		downwash_dust.emitting = false
 
 func disable_collision() -> void:
 	collision_layer = 0

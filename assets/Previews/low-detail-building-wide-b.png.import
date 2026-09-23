@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bub87e7ecfxs6"
-path="res://.godot/imported/low-detail-building-wide-b.png-5bfe9214469ecedd18158053afb98c3f.ctex"
+path="res://.godot/imported/low-detail-building-wide-b.png-c67c0949522f50a8180a58c892463f99.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Previews/low-detail-building-wide-b.png"
-dest_files=["res://.godot/imported/low-detail-building-wide-b.png-5bfe9214469ecedd18158053afb98c3f.ctex"]
+source_file="res://assets/previews/low-detail-building-wide-b.png"
+dest_files=["res://.godot/imported/low-detail-building-wide-b.png-c67c0949522f50a8180a58c892463f99.ctex"]
 
 [params]
 

@@ -15,7 +15,7 @@ enum State {
 @export var magnet_accel: float = 250.0
 @export var collection_radius: float = 2.8
 @export var collection_radius_xz: float = 3.5
-@export var collection_height: float = 35.0
+@export var collection_height: float = 4.0
 
 var current_state: State = State.IDLE
 var _target_player: Node3D = null
@@ -271,16 +271,14 @@ func _physics_process(delta: float) -> void:
 			_bob_timer += delta * 3.5
 			position.y = _base_y + sin(_bob_timer) * 0.15
 
-		# Idle proximity collection: uses consistent cylinder check (flat XZ + bounded height)
+		# Direct 3D proximity check when idle (e.g. low-flying helicopter or gem placed on rooftop at player altitude)
 		var active_player: Node3D = _target_player
 		if not is_instance_valid(active_player) and is_inside_tree():
 			active_player = get_tree().get_first_node_in_group("player") as Node3D
 		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
 			var to_player := active_player.global_position - global_position
-			var flat_d := Vector2(to_player.x, to_player.z).length()
-			if to_player.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_player.y) <= collection_height):
-				if _is_line_of_sight_clear(active_player.global_position):
-					collect(active_player)
+			if to_player.length() <= collection_radius:
+				collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with full relative velocity feed-forward

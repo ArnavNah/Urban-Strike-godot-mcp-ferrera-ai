@@ -6,16 +6,19 @@
 [ext_resource type="FontFile" uid="uid://e80nhsmmnttd" path="res://assets/ui/fonts/Inter-SemiBold.ttf" id="3_136eg"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oj5la"]
-bg_color = Color(0.06, 0.1, 0.14, 0.85)
+bg_color = Color(0.035, 0.055, 0.082, 0.9)
 border_width_left = 1
-border_width_top = 1
+border_width_top = 2
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.2, 0.45, 0.6, 0.5)
+border_color = Color(0.22, 0.58, 0.72, 0.65)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 8
+shadow_offset = Vector2(0, 4)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gss2c"]
 bg_color = Color(0.04, 0.07, 0.1, 0.9)
@@ -379,9 +382,9 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -220.0
-offset_top = -80.0
-offset_right = 220.0
+offset_left = -270.0
+offset_top = -94.0
+offset_right = 270.0
 offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 0
@@ -395,13 +398,13 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -208.0
-offset_top = -76.0
-offset_right = 208.0
-offset_bottom = -16.0
+offset_left = -256.0
+offset_top = -88.0
+offset_right = 256.0
+offset_bottom = -18.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_constants/separation = 5
+theme_override_constants/separation = 4
 alignment = 2
 
 [node name="OverheatWarning" type="Label" parent="BottomCenter" unique_id=692757404]
@@ -426,28 +429,50 @@ layout_mode = 2
 theme_override_constants/separation = 14
 alignment = 1
 
-[node name="MissileStatusLabel" type="Label" parent="BottomCenter/WeaponsRow" unique_id=141282505]
+[node name="MissilePod" type="VBoxContainer" parent="BottomCenter/WeaponsRow" unique_id=383125432]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="MissileStatusLabel" type="Label" parent="BottomCenter/WeaponsRow/MissilePod" unique_id=141282505]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_136eg")
-theme_override_font_sizes/font_size = 13
-text = "MISSILE [ READY / UNLOCKED ]"
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 14
+text = "MISSILES  6 / 6  ▮▮▮▮▮▮  READY"
 
-[node name="FlaresLabel" type="Label" parent="BottomCenter/WeaponsRow" unique_id=1158119981]
+[node name="MissileLockBar" type="ProgressBar" parent="BottomCenter/WeaponsRow/MissilePod" unique_id=929076579]
 unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
-theme_override_fonts/font = ExtResource("3_136eg")
-theme_override_font_sizes/font_size = 13
-text = "FLARES [X]: [◆] [◆] [◆]"
-
-[node name="MissileLockBar" type="ProgressBar" parent="BottomCenter" unique_id=929076579]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 6)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_gss2c")
 theme_override_styles/fill = SubResource("StyleBoxFlat_kicr4")
 show_percentage = false
+
+[node name="TacticalVDivider" type="ColorRect" parent="BottomCenter/WeaponsRow" unique_id=634901436]
+custom_minimum_size = Vector2(1, 24)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.22, 0.55, 0.68, 0.35)
+
+[node name="FlaresPod" type="VBoxContainer" parent="BottomCenter/WeaponsRow" unique_id=36913769]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="FlaresLabel" type="Label" parent="BottomCenter/WeaponsRow/FlaresPod" unique_id=1158119981]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 14
+text = "FLARES [X]  3 / 3  ◆ ◆ ◆  READY"
+horizontal_alignment = 2
+
+[node name="TacticalHDivider" type="ColorRect" parent="BottomCenter" unique_id=1387502962]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(0.22, 0.55, 0.68, 0.25)
 
 [node name="XPRow" type="HBoxContainer" parent="BottomCenter" unique_id=184196922]
 layout_mode = 2

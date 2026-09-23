@@ -35,12 +35,16 @@ func _ready() -> void:
 	var initial_enemies := get_tree().get_nodes_in_group("enemies")
 	for node in initial_enemies:
 		var enemy := node as Node3D
-		if is_instance_valid(enemy):
+		if is_instance_valid(enemy) and not enemy.is_queued_for_deletion():
+			if "is_alive" in enemy and not enemy.is_alive:
+				continue
 			var is_air := bool(enemy.is_in_group("air_enemies"))
 			register_enemy(enemy, is_air)
 
 func register_enemy(enemy: Node3D, is_air: bool = false) -> void:
 	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+		return
+	if "is_alive" in enemy and not enemy.is_alive:
 		return
 	if all_enemies.has(enemy):
 		return

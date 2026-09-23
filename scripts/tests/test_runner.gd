@@ -574,9 +574,11 @@ func test_formations_and_mission_consequences(logs: Array[String]) -> bool:
 
 	if not is_scattered or scatter_timer <= 0.0:
 		logs.append("FAIL: Escort tank failed to scatter upon command unit destruction")
+		cmd_tank.queue_free()
 		escort_tank.queue_free()
 		return false
 
+	cmd_tank.queue_free()
 	escort_tank.queue_free()
 
 	# 3. Test battlefield formations in SpawnDirector
@@ -6434,7 +6436,7 @@ func test_loading_screen_and_xp_gem_pool(logs: Array[String]) -> bool:
 	# Test invalid resource load error handling
 	ls.start_load("res://scenes/nonexistent_scene.tscn")
 	# Allow threaded request to evaluate failure
-	for _i in range(8):
+	for _i in range(30):
 		if ls._load_failed:
 			break
 		OS.delay_msec(20)

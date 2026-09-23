@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bd1q38xm56xg2"
-path="res://.godot/imported/building-skyscraper-b.png-a1801f4c6b6f0170580ab05ec3296906.ctex"
+path="res://.godot/imported/building-skyscraper-b.png-6b42fa77ab69fe57e012318bf306f05f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/Previews/building-skyscraper-b.png"
-dest_files=["res://.godot/imported/building-skyscraper-b.png-a1801f4c6b6f0170580ab05ec3296906.ctex"]
+source_file="res://assets/previews/building-skyscraper-b.png"
+dest_files=["res://.godot/imported/building-skyscraper-b.png-6b42fa77ab69fe57e012318bf306f05f.ctex"]
 
 [params]
 

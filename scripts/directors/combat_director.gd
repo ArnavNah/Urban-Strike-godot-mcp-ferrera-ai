@@ -11,8 +11,8 @@ extends Node
 
 # Default capacities by wave
 const WAVE_TOKEN_CONFIG := {
-	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 6 },
-	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 7 },
+	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 6 },
+	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 7 },
 	3: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 8 },
 	4: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 3, "danger_cap": 9 },
 	5: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 10 },

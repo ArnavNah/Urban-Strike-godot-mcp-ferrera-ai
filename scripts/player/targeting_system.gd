@@ -113,7 +113,7 @@ func _set_manual_aim(manual: bool) -> void:
 			eb.emit_signal("manual_aim_state_changed", is_manual_aim)
 
 func is_jammed() -> bool:
-	return _is_jammed_cached
+	return _evaluate_is_jammed()
 
 func _evaluate_is_jammed() -> bool:
 	if not is_inside_tree():

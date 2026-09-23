@@ -14,6 +14,7 @@ const SFX_POOL_SIZE: int = 8
 var _prev_overheated: bool = false
 var _prev_player_health: float = 100.0
 var _was_missile_locked: bool = false
+var _last_lock_progress_step: int = 0
 var _last_xp_sound_time: float = 0.0
 var _xp_combo_step: int = 0
 
@@ -182,9 +183,12 @@ func _on_heat_changed(_current_heat: float, _max_heat: float, is_overheated: boo
 		_play_tone(alert_player, 880.0, 0.35)
 	_prev_overheated = is_overheated
 
-func _on_health_changed(current_health: float, _max_health: float) -> void:
+func _on_health_changed(current_health: float, max_health: float) -> void:
 	if current_health < _prev_player_health:
-		_play_tone(alert_player, 240.0, 0.12)
+		if max_health > 0.0 and current_health <= max_health * 0.25:
+			_play_sweep(480.0, 220.0, 0.16, 0.45)
+		else:
+			_play_tone(alert_player, 240.0, 0.12)
 	_prev_player_health = current_health
 
 func _on_missile_impact(_impact_pos: Vector3, _is_player: bool) -> void:
@@ -216,9 +220,19 @@ func _on_enemy_destroyed(enemy: Node3D, points: int) -> void:
 		# Light unit destruction
 		_play_tone(explosion_player, 95.0, 0.35)
 
-func _on_missile_lock(_progress: float, _target: Node3D, is_locked: bool) -> void:
+func _on_missile_lock(progress: float, _target: Node3D, is_locked: bool) -> void:
 	if is_locked and not _was_missile_locked:
 		_play_tone(alert_player, 1200.0, 0.2) # High tone lock-acquired beep
+		_last_lock_progress_step = 3
+	elif not is_locked:
+		if progress >= 0.66 and _last_lock_progress_step < 2:
+			_last_lock_progress_step = 2
+			_play_tone(alert_player, 920.0, 0.08)
+		elif progress >= 0.33 and _last_lock_progress_step < 1:
+			_last_lock_progress_step = 1
+			_play_tone(alert_player, 740.0, 0.08)
+		elif progress < 0.15:
+			_last_lock_progress_step = 0
 	_was_missile_locked = is_locked
 
 func _on_missile_fired() -> void:
