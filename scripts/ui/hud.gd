@@ -54,6 +54,10 @@ var _vignette_tween: Tween = null
 var _missile_ammo: int = 6
 var _max_missiles: int = 6
 var _missile_warning_timer: float = 0.0
+var _ammo_full_timer: float = 0.0
+var _hull_full_timer: float = 0.0
+var _current_health: float = 100.0
+var _max_health: float = 100.0
 var _last_lock_progress: float = 0.0
 var _is_missile_locked: bool = false
 var mission_card: PanelContainer = null
@@ -172,6 +176,10 @@ func _ready() -> void:
 			eb.radar_status_changed.connect(_on_radar_status_changed)
 		if eb.has_signal("setting_changed"):
 			eb.setting_changed.connect(_on_setting_changed)
+		if eb.has_signal("ammo_full_notified"):
+			eb.ammo_full_notified.connect(_on_ammo_full_notified)
+		if eb.has_signal("hull_full_notified"):
+			eb.hull_full_notified.connect(_on_hull_full_notified)
 
 	_setup_mission_card()
 
@@ -212,6 +220,16 @@ func _process(delta: float) -> void:
 		_missile_warning_timer -= delta
 		if _missile_warning_timer <= 0.0:
 			_update_missile_status_display()
+
+	if _ammo_full_timer > 0.0:
+		_ammo_full_timer -= delta
+		if _ammo_full_timer <= 0.0:
+			_update_missile_status_display()
+
+	if _hull_full_timer > 0.0:
+		_hull_full_timer -= delta
+		if _hull_full_timer <= 0.0:
+			_update_health_label_display()
 
 	# Speed and altitude telemetry (cached to avoid per-frame string allocations)
 	var speed_int: int = int(roundf(_player.velocity.length() * 3.6))
@@ -261,19 +279,68 @@ func _draw() -> void:
 	var vp_center := vp_rect.size * 0.5
 	var margin := 45.0
 
-	var threats: Array[Node3D] = []
+	# Priority 1: Approaching incoming enemy missiles (immediate danger)
+	var incoming_missiles := get_tree().get_nodes_in_group("incoming_enemy_missiles")
+	var drawn_indicators: int = 0
+	const MAX_CHEVRONS: int = 6
+
+	for m in incoming_missiles:
+		if drawn_indicators >= MAX_CHEVRONS:
+			break
+		var m3d := m as Node3D
+		if not is_instance_valid(m3d):
+			continue
+		var m_pos := m3d.global_position
+		var is_behind := cam.is_position_behind(m_pos)
+		var scr_pos := cam.unproject_position(m_pos)
+		var is_offscreen := is_behind or scr_pos.x < margin or scr_pos.x > (vp_rect.size.x - margin) or scr_pos.y < margin or scr_pos.y > (vp_rect.size.y - margin)
+		if is_offscreen:
+			var dir_2d: Vector2 = -(scr_pos - vp_center).normalized() if is_behind else (scr_pos - vp_center).normalized()
+			if dir_2d.length_squared() < 0.01:
+				dir_2d = Vector2.UP
+			var edge_pos: Vector2 = vp_center + dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
+
+			# Pulsing red diamond alert for incoming homing missiles
+			var pulse: float = 0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.016)
+			var m_col := Color(1.0, 0.1, 0.1, pulse)
+			var d_top := edge_pos + dir_2d * 14.0
+			var d_bot := edge_pos - dir_2d * 6.0
+			var d_l := edge_pos + Vector2(-dir_2d.y, dir_2d.x) * 8.0
+			var d_r := edge_pos - Vector2(-dir_2d.y, dir_2d.x) * 8.0
+			var d_pts := PackedVector2Array([d_top, d_r, d_bot, d_l])
+			if _high_contrast_indicators:
+				draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), Color(0.02, 0.04, 0.06, 0.95), 2.5)
+			draw_colored_polygon(d_pts, m_col)
+			drawn_indicators += 1
+
+	# Priority 2: Imminent enemy threats (bosses, SAM sites, telegraphing/committed attackers)
+	var raw_candidates: Array[Node3D] = []
 	if EnemyRegistry.instance:
-		threats = EnemyRegistry.instance.get_enemies_in_radius(_player.global_position, 85.0, 16)
+		raw_candidates = EnemyRegistry.instance.get_enemies_in_radius(_player.global_position, 85.0, 16)
 	else:
 		var raw_threats := get_tree().get_nodes_in_group("enemies")
 		for th in raw_threats:
 			var th3d := th as Node3D
 			if is_instance_valid(th3d) and th3d != _player:
-				threats.append(th3d)
-				if threats.size() >= 16:
+				raw_candidates.append(th3d)
+				if raw_candidates.size() >= 16:
 					break
 
-	for th3d in threats:
+	var prioritized_threats: Array[Node3D] = []
+	for candidate in raw_candidates:
+		if not is_instance_valid(candidate) or candidate == _player:
+			continue
+		var is_boss: bool = candidate.is_in_group("bosses")
+		var is_sam: bool = candidate.is_in_group("sam_sites")
+		var is_attacking: bool = (candidate.get("_has_attack_slot") == true) or (candidate.get("_has_air_slot") == true) or (candidate.get("_is_telegraphing") == true)
+		var is_close: bool = _player.global_position.distance_to(candidate.global_position) < 32.0
+
+		if is_boss or is_sam or is_attacking or is_close:
+			prioritized_threats.append(candidate)
+
+	for th3d in prioritized_threats:
+		if drawn_indicators >= MAX_CHEVRONS:
+			break
 		if not is_instance_valid(th3d) or th3d == _player:
 			continue
 
@@ -300,7 +367,7 @@ func _draw() -> void:
 			# Clamp to edge of screen with margin
 			var edge_pos: Vector2 = vp_center + dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
 
-			var col := Color(1.0, 0.3, 0.2, 0.85)
+			var col := Color(1.0, 0.35, 0.2, 0.85)
 			if th3d.is_in_group("bosses"):
 				col = Color(1.0, 0.1, 0.1, 1.0)
 			elif th3d.is_in_group("sam_sites"):
@@ -314,6 +381,7 @@ func _draw() -> void:
 				var outline := PackedVector2Array([tip, side_a, side_b, tip])
 				draw_polyline(outline, Color(0.02, 0.04, 0.06, 0.95), 2.5)
 			draw_colored_polygon(PackedVector2Array([tip, side_a, side_b]), col)
+			drawn_indicators += 1
 
 	# Draw active mission objective indicator
 	if _has_active_mission:
@@ -406,22 +474,15 @@ func _update_target_reticle(delta: float = 0.0) -> void:
 		target_reticle.position = target_reticle.position.lerp(target_screen_pos, smooth_weight)
 
 func _on_health_changed(current: float, maximum: float) -> void:
+	_current_health = current
+	_max_health = maximum
 	if health_bar:
 		health_bar.max_value = maximum
 		if _health_tween:
 			_health_tween.kill()
 		_health_tween = create_tween()
 		_health_tween.tween_property(health_bar, "value", current, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	if health_label:
-		if current <= maximum * 0.30:
-			health_label.text = "HULL: %d / %d  [!] CRITICAL" % [int(current), int(maximum)]
-			health_label.modulate = Color(1.0, 0.20, 0.20)
-		elif current <= maximum * 0.50:
-			health_label.text = "HULL: %d / %d" % [int(current), int(maximum)]
-			health_label.modulate = Color(1.0, 0.65, 0.15)
-		else:
-			health_label.text = "HULL: %d / %d" % [int(current), int(maximum)]
-			health_label.modulate = Color(0.20, 0.85, 0.45)
+	_update_health_label_display()
 
 	if current < _prev_health and damage_vignette:
 		if not _damage_flash_enabled or _damage_flash_intensity <= 0.0:
@@ -442,6 +503,31 @@ func _on_health_changed(current: float, maximum: float) -> void:
 
 	_prev_health = current
 
+func _update_health_label_display() -> void:
+	if not health_label:
+		return
+	if _hull_full_timer > 0.0:
+		health_label.text = "HULL: %d / %d  HULL FULL" % [int(_current_health), int(_max_health)]
+		health_label.modulate = Color(0.20, 0.85, 0.45)
+		return
+	if _current_health <= _max_health * 0.30:
+		health_label.text = "HULL: %d / %d  [!] CRITICAL" % [int(_current_health), int(_max_health)]
+		health_label.modulate = Color(1.0, 0.20, 0.20)
+	elif _current_health <= _max_health * 0.50:
+		health_label.text = "HULL: %d / %d" % [int(_current_health), int(_max_health)]
+		health_label.modulate = Color(1.0, 0.65, 0.15)
+	else:
+		health_label.text = "HULL: %d / %d" % [int(_current_health), int(_max_health)]
+		health_label.modulate = Color(0.20, 0.85, 0.45)
+
+func _on_hull_full_notified() -> void:
+	_hull_full_timer = 1.2
+	_update_health_label_display()
+
+func _on_ammo_full_notified() -> void:
+	_ammo_full_timer = 1.2
+	_update_missile_status_display()
+
 func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> void:
 	if heat_bar:
 		heat_bar.max_value = maximum
@@ -461,6 +547,11 @@ func _update_missile_status_display() -> void:
 	if _missile_warning_timer > 0.0:
 		missile_status.text = "MISSILES  %d / %d  [%s]  NO MISSILES" % [_missile_ammo, _max_missiles, pips]
 		missile_status.modulate = Color(1.0, 0.25, 0.25)
+		return
+
+	if _ammo_full_timer > 0.0:
+		missile_status.text = "MISSILES  %d / %d  [%s]  AMMO FULL" % [_missile_ammo, _max_missiles, pips]
+		missile_status.modulate = Color(1.0, 0.75, 0.20)
 		return
 
 	if _missile_ammo <= 0:

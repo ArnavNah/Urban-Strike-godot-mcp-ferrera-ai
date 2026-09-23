@@ -19,7 +19,17 @@ extends Control
 @onready var stat_salvage_label: Label = find_child("StatSalvageValue", true, false) as Label
 @onready var stat_magnet_label: Label = find_child("StatMagnetValue", true, false) as Label
 @onready var stat_insurance_label: Label = find_child("StatInsuranceValue", true, false) as Label
+@onready var stat_chassis_label: Label = find_child("StatChassisValue", true, false) as Label
+@onready var stat_armament_label: Label = find_child("StatArmamentValue", true, false) as Label
 @onready var prompt_label: Label = find_child("PromptLabel", true, false) as Label
+
+# Loadout selection UI
+@onready var loadout_prev_btn: Button = find_child("LoadoutPrevBtn", true, false) as Button
+@onready var loadout_current_btn: Button = find_child("LoadoutCurrentBtn", true, false) as Button
+@onready var loadout_next_btn: Button = find_child("LoadoutNextBtn", true, false) as Button
+@onready var loadout_desc_label: Label = find_child("LoadoutDescLabel", true, false) as Label
+
+var _selected_loadout_id: String = "balanced"
 
 # 3D Showcase nodes
 @onready var bg_cam: Camera3D = find_child("Camera3D", true, false) as Camera3D
@@ -51,6 +61,7 @@ func _ready() -> void:
 	_disable_menu_background_physics()
 	_init_static_camera()
 	_save_data = SaveSystem.load_data()
+	_selected_loadout_id = SaveSystem.get_selected_loadout()
 	_connect_signals()
 	_update_ui()
 	_setup_focus_navigation()
@@ -126,6 +137,19 @@ func _init_static_camera() -> void:
 		bg_heli.rotation = Vector3(-deg_to_rad(2.0), deg_to_rad(116.0), -deg_to_rad(1.0))
 
 func _connect_signals() -> void:
+	if loadout_prev_btn:
+		loadout_prev_btn.pressed.connect(func() -> void: _select_loadout_delta(-1))
+		loadout_prev_btn.focus_entered.connect(_play_focus_sound)
+		loadout_prev_btn.mouse_entered.connect(_play_focus_sound)
+	if loadout_current_btn:
+		loadout_current_btn.pressed.connect(func() -> void: _select_loadout_delta(1))
+		loadout_current_btn.focus_entered.connect(_play_focus_sound)
+		loadout_current_btn.mouse_entered.connect(_play_focus_sound)
+	if loadout_next_btn:
+		loadout_next_btn.pressed.connect(func() -> void: _select_loadout_delta(1))
+		loadout_next_btn.focus_entered.connect(_play_focus_sound)
+		loadout_next_btn.mouse_entered.connect(_play_focus_sound)
+
 	if scavenger_btn:
 		scavenger_btn.pressed.connect(_buy_scavenger)
 		scavenger_btn.focus_entered.connect(_play_focus_sound)
@@ -152,8 +176,19 @@ func _connect_signals() -> void:
 		menu_btn.focus_entered.connect(_play_focus_sound)
 		menu_btn.mouse_entered.connect(_play_focus_sound)
 
+func _select_loadout_delta(delta: int) -> void:
+	var ids := LoadoutDefinition.get_loadout_ids()
+	var idx := ids.find(_selected_loadout_id)
+	if idx == -1:
+		idx = 0
+	idx = (idx + delta + ids.size()) % ids.size()
+	_selected_loadout_id = ids[idx]
+	SaveSystem.set_selected_loadout(_selected_loadout_id)
+	_play_ui_audio(SOUND_CONFIRM, -14.0)
+	_update_ui()
+
 func _setup_focus_navigation() -> void:
-	var buttons: Array[Button] = [scavenger_btn, armor_btn, magnet_btn, insurance_btn, deploy_btn, menu_btn]
+	var buttons: Array[Button] = [loadout_current_btn, scavenger_btn, armor_btn, magnet_btn, insurance_btn, deploy_btn, menu_btn]
 	var active_buttons: Array[Button] = []
 	for btn: Button in buttons:
 		if btn and is_instance_valid(btn):
@@ -165,6 +200,12 @@ func _setup_focus_navigation() -> void:
 		var next: Button = active_buttons[(i + 1) % active_buttons.size()]
 		btn.focus_neighbor_top = btn.get_path_to(prev)
 		btn.focus_neighbor_bottom = btn.get_path_to(next)
+
+	if loadout_current_btn and loadout_prev_btn and loadout_next_btn:
+		loadout_current_btn.focus_neighbor_left = loadout_current_btn.get_path_to(loadout_prev_btn)
+		loadout_current_btn.focus_neighbor_right = loadout_current_btn.get_path_to(loadout_next_btn)
+		loadout_prev_btn.focus_neighbor_right = loadout_prev_btn.get_path_to(loadout_current_btn)
+		loadout_next_btn.focus_neighbor_left = loadout_next_btn.get_path_to(loadout_current_btn)
 
 func _update_input_hints() -> void:
 	if not prompt_label:
@@ -231,6 +272,13 @@ func _update_ui() -> void:
 
 	if salvage_label:
 		salvage_label.text = "BANKED SALVAGE: %d" % salvage
+
+	# 0. Operational Loadout
+	var loadout := LoadoutDefinition.get_loadout(_selected_loadout_id)
+	if loadout_current_btn:
+		loadout_current_btn.text = "%s // %s" % [loadout.display_name, loadout.designation]
+	if loadout_desc_label:
+		loadout_desc_label.text = loadout.role_summary
 
 	# 1. Scavenger Rig (Max Rank 4)
 	var scav_lvl: int = int(upgrades.get("scavenger_rig", 0))
@@ -344,8 +392,18 @@ func _format_upgrade_button(btn: Button, title: String, current_lvl: int, max_lv
 		btn.text = "%s  %s  (%s)  —  COST: %d" % [title, pips, effect_str, cost]
 
 func _update_telemetry(scav_lvl: int, armor_lvl: int, mag_lvl: int, has_ins: bool) -> void:
+	var loadout := LoadoutDefinition.get_loadout(_selected_loadout_id)
+	if stat_chassis_label:
+		stat_chassis_label.text = "%s [%s]" % [loadout.display_name, loadout.designation]
+	if stat_armament_label:
+		if _selected_loadout_id == "interceptor":
+			stat_armament_label.text = "RAPID STRIKE (45 m/s)"
+		elif _selected_loadout_id == "support":
+			stat_armament_label.text = "WINGMAN & REPAIR"
+		else:
+			stat_armament_label.text = "HEAVY COMBAT (38 m/s)"
 	if stat_hp_label:
-		stat_hp_label.text = "%d HP" % (100 + armor_lvl * 20)
+		stat_hp_label.text = "%d HP" % int(loadout.max_health + armor_lvl * 20)
 	if stat_salvage_label:
 		stat_salvage_label.text = "+%d%%" % (scav_lvl * 25)
 	if stat_magnet_label:

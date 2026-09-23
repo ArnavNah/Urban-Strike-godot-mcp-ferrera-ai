@@ -75,10 +75,43 @@ func _populate_stats(stats: Dictionary) -> void:
 		wave_value_label.text = "%d / 10" % wave_num
 
 	if kills_value_label:
-		kills_value_label.text = str(int(stats.get("enemies_destroyed", 0)))
+		kills_value_label.text = str(int(stats.get("enemies_destroyed", stats.get("enemies_killed", 0))))
 
 	if salvage_value_label:
-		salvage_value_label.text = "%d CR" % int(stats.get("salvage", 0))
+		salvage_value_label.text = "%d CR" % int(stats.get("salvage", stats.get("salvage_banked", 0)))
+
+	var breakdown_container: Node = find_child("EndScreenWeaponBreakdown", true, false)
+	if not breakdown_container and salvage_value_label and salvage_value_label.get_parent():
+		var parent_box: Node = salvage_value_label.get_parent().get_parent()
+		if parent_box:
+			var vbox := VBoxContainer.new()
+			vbox.name = "EndScreenWeaponBreakdown"
+			vbox.add_theme_constant_override("separation", 2)
+			parent_box.add_child(vbox)
+			breakdown_container = vbox
+
+	if breakdown_container:
+		for child in breakdown_container.get_children():
+			child.queue_free()
+
+		var dmg_by_src: Dictionary = stats.get("damage_by_source", {}) as Dictionary
+		var kills_by_src: Dictionary = stats.get("kills_by_source", {}) as Dictionary
+		var c_dmg: float = float(dmg_by_src.get("chaingun", 0.0))
+		var m_dmg: float = float(dmg_by_src.get("missiles", 0.0))
+		var w_dmg: float = float(dmg_by_src.get("wingmen", 0.0))
+		var c_k: int = int(kills_by_src.get("chaingun", 0))
+		var m_k: int = int(kills_by_src.get("missiles", 0))
+		var w_k: int = int(kills_by_src.get("wingmen", 0))
+
+		if (c_dmg + m_dmg + w_dmg) > 0.0 or (c_k + m_k + w_k) > 0:
+			var line := Label.new()
+			line.name = "AttributionSummary"
+			line.add_theme_color_override("font_color", Color(0.75, 0.82, 0.9, 0.9))
+			line.add_theme_font_size_override("font_size", 10)
+			line.text = "GUN: %d dmg (%d kills) | MISSILE: %d dmg (%d kills) | WINGMEN: %d dmg (%d kills)" % [
+				int(c_dmg), c_k, int(m_dmg), m_k, int(w_dmg), w_k
+			]
+			breakdown_container.add_child(line)
 
 func _show_screen() -> void:
 	visible = true

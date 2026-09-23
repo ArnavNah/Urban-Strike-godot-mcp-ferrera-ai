@@ -1,18 +1,19 @@
-[gd_scene format=3 uid="uid://c6chimneysml02"]
+[gd_scene format=3 uid="uid://cpaqu8fookp2x"]
 
 [ext_resource type="PackedScene" uid="uid://fbqoi4ab81w2" path="res://assets/environment/industrial/chimney_small.glb" id="1_chims"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_chims"]
-height = 0.75
-radius = 0.15
+height = 7.5
+radius = 1.5
 
-[node name="ChimneySmall" type="StaticBody3D"]
+[node name="ChimneySmall" type="StaticBody3D" unique_id=191221499]
 collision_mask = 0
 
-[node name="Intact" type="Node3D" parent="."]
+[node name="Intact" type="Node3D" parent="." unique_id=2147329053]
 
-[node name="ChimneyModel" parent="Intact" instance=ExtResource("1_chims")]
+[node name="ChimneyModel" parent="Intact" unique_id=705902668 instance=ExtResource("1_chims")]
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0)
 
-[node name="CollisionChimney" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+[node name="CollisionChimney" type="CollisionShape3D" parent="." unique_id=1556854113]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.75, 0)
 shape = SubResource("CylinderShape3D_chims")

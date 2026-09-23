@@ -238,7 +238,7 @@ To ensure that procedural animations (suspension bobbing, chassis sway) do not i
 1. **Root `CharacterBody3D`**: Remains strictly at $Y=0$, with `floor_snap_length = 0.6` and `floor_max_angle = 45°`.
 2. **`CollisionShape3D`**: Parented directly to the root, maintaining tight collision boundaries for line-of-sight raycasting.
 3. **`Body` (Node3D Container)**: Houses all visual meshes and the `Turret`. The `AnimationPlayer` animates `Body:position` and `Body:rotation_degrees`.
-4. **`Turret` & `Barrel`**: Inherit the suspension movement from `Body`, but their yaw and pitch rotations are driven directly by GDScript in [`tank.gd`](file:///c:/Users/Prime%203/Documents/Downloads/urban-stike-rogue/scripts/enemies/tank.gd) without animation track conflict.
+4. **`Turret` & `Barrel`**: Inherit the suspension movement from `Body`, but their yaw and pitch rotations are driven directly by GDScript in [`tank.gd`](scripts/enemies/tank.gd) without animation track conflict.
 5. **Orthonormal Basis Transforms**: Realigned from SketchUp $-X$ forward to Godot $-Z$ standard forward using direct `Basis` matrices, preventing gimbal singularity warnings.
 
 ---
@@ -246,13 +246,13 @@ To ensure that procedural animations (suspension bobbing, chassis sway) do not i
 ## Visual Verification
 
 ````carousel
-![In-Game Avenue Showcase: Tank A (Single Cannon MBT) & Tank B (Dual Cannon Destroyer)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_gameplay_showcase.png)
+![In-Game Avenue Showcase: Low-Altitude Combat](docs/images/gameplay_forward_combat.png)
 <!-- slide -->
-![Tank A Isolated (Single Cannon Battle Tank Model)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_a_isolated.png)
+![Autocannon & Rocket Engagement](docs/images/gameplay_autocannon_engagement.png)
 <!-- slide -->
-![Tank B Isolated (Dual Cannon Heavy Destroyer Model)](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_b_isolated.png)
+![Tactical Skyline & Operations Theater](docs/images/gameplay_tactical_skyline.png)
 <!-- slide -->
-![Live Combat Action & Firing Effects on Battlefield](file:///C:/Users/Prime%203/.gemini/antigravity/brain/8ca32915-61d4-4eba-8ea3-db58a37aea64/tank_combat_action.png)
+![Urban Canyon Flight & Skyscraper Architecture](docs/images/gameplay_skyscraper_canyon.png)
 ````
 
 ---

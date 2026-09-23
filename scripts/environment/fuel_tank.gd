@@ -17,6 +17,8 @@ var _is_smoking: bool = false
 @onready var tank_mesh: MeshInstance3D = get_node_or_null("TankMesh")
 @onready var collision_shape: CollisionShape3D = get_node_or_null("CollisionShape3D")
 @onready var smoke_particles: GPUParticles3D = get_node_or_null("SmokeParticles")
+const ExplosionScene := preload("res://scenes/vfx/explosion.tscn")
+const SalvageCrateScene := preload("res://scenes/pickups/salvage_crate.tscn")
 
 func _ready() -> void:
 	add_to_group("destructibles")
@@ -26,15 +28,18 @@ func _ready() -> void:
 	current_health = max_health
 
 func take_damage(amount: float, _source: Node = null, hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if is_destroyed:
+	if is_destroyed or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
+	var actual_damage: float = prev_hp - current_health
 
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		var p: Vector3 = hit_pos if hit_pos != Vector3.ZERO else ((global_position if is_inside_tree() else position) + Vector3(0, 3.0, 0))
-		eb.emit_signal("damage_number_spawned", p, amount, false, {"target_id": get_instance_id()})
+	if actual_damage > 0.0:
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			var p: Vector3 = hit_pos if hit_pos != Vector3.ZERO else ((global_position if is_inside_tree() else position) + Vector3(0, 3.0, 0))
+			eb.emit_signal("damage_number_spawned", p, actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
 	if current_health <= max_health * 0.5 and not _is_smoking:
 		_is_smoking = true
@@ -60,31 +65,39 @@ func _explode() -> void:
 	var gm := get_tree().get_first_node_in_group("game_manager")
 	if gm and gm.has_method("add_salvage"):
 		gm.call("add_salvage", salvage_reward)
+	# AoE Damage to nearby ground enemies (use spatial registry when available)
+	var nearby_enemies: Array[Node3D] = []
+	if EnemyRegistry.instance:
+		nearby_enemies = EnemyRegistry.instance.get_enemies_in_radius(global_position, aoe_radius)
+	else:
+		for node in get_tree().get_nodes_in_group("enemies"):
+			var n3d := node as Node3D
+			if is_instance_valid(n3d) and n3d != self:
+				if global_position.distance_to(n3d.global_position) <= aoe_radius:
+					nearby_enemies.append(n3d)
 
-	# AoE Damage to nearby ground enemies
-	var enemies := get_tree().get_nodes_in_group("enemies")
-	for e in enemies:
+	for e: Node3D in nearby_enemies:
 		if not is_instance_valid(e) or e == self:
 			continue
-		if e is Node3D:
-			var d: float = global_position.distance_to((e as Node3D).global_position)
-			if d <= aoe_radius and e.has_method("take_damage"):
-				var falloff := 1.0 - (d / aoe_radius) * 0.5
-				e.call("take_damage", aoe_damage * falloff, self, (e as Node3D).global_position)
+		var d: float = global_position.distance_to(e.global_position)
+		if e.has_method("take_damage"):
+			var falloff := 1.0 - (d / aoe_radius) * 0.5
+			e.call("take_damage", aoe_damage * falloff, self, e.global_position)
 
-	# Spawn explosion VFX
-	var expl_scene: PackedScene = load("res://scenes/vfx/explosion.tscn")
-	if expl_scene:
-		var expl := expl_scene.instantiate() as Node3D
+	# Spawn explosion VFX via VfxPool or fallback
+	var expl_pos := global_position + Vector3(0, 2.0, 0)
+	if VfxPool.instance:
+		VfxPool.instance.spawn_explosion(expl_pos, 1.8)
+	elif ExplosionScene:
+		var expl := ExplosionScene.instantiate() as Node3D
 		if expl:
-			expl.transform.origin = global_position + Vector3(0, 2.0, 0)
+			expl.transform.origin = expl_pos
 			var parent := get_parent() if get_parent() else get_tree().root
 			parent.add_child.call_deferred(expl)
 
 	# Spawn salvage crate pickup
-	var crate_scene: PackedScene = load("res://scenes/pickups/salvage_crate.tscn")
-	if crate_scene:
-		var crate := crate_scene.instantiate() as Node3D
+	if SalvageCrateScene:
+		var crate := SalvageCrateScene.instantiate() as Node3D
 		if crate:
 			crate.transform.origin = global_position + Vector3(0, 0.8, 0)
 			var p: Node = get_tree().current_scene if (is_inside_tree() and get_tree().current_scene) else (get_parent() if get_parent() else get_tree().root)

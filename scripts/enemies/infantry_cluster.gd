@@ -622,13 +622,16 @@ func _trigger_damage_flash() -> void:
 	DamageFlashManager.flash_target(self, _visual_meshes)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_trigger_damage_flash()
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.8, 0), amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.8, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 	if current_health <= 0.0:
 		_die()
 

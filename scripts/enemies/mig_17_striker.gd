@@ -230,17 +230,21 @@ func _release_attack_token() -> void:
 		if CombatDirector.instance:
 			CombatDirector.instance.release_attack_permission(self)
 
+func _exit_tree() -> void:
+	_release_attack_token()
+
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO, _hit_norm: Vector3 = Vector3.UP) -> void:
-	if not is_alive or _is_dead:
+	if not is_alive or _is_dead or amount <= 0.0:
 		return
 
-	current_health -= amount
-
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.5, 0), amount, false, {"target_id": get_instance_id()})
-
-	_flash_hit()
+	var prev_hp: float = current_health
+	current_health = maxf(0.0, current_health - amount)
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_flash_hit()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.5, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
 	if current_health <= 0.0:
 		_die()
@@ -254,6 +258,8 @@ func _die() -> void:
 	_is_dead = true
 	is_alive = false
 	DamageFlashManager.clear_target(self)
+	collision_layer = 0
+	collision_mask = 0
 	_release_attack_token()
 
 	if EnemyRegistry.instance:
@@ -265,19 +271,26 @@ func _die() -> void:
 
 	_spawn_rewards()
 
+	# Initial hit sparks
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position, 1.8)
-	else:
-		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-		if expl_scene:
-			var expl := expl_scene.instantiate() as Node3D
-			if expl:
-				expl.transform.origin = global_position
-				expl.scale = Vector3(2.2, 2.2, 2.2)
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(expl)
+		VfxPool.instance.spawn_sparks(global_position, Vector3.UP, true)
 
-	queue_free()
+	set_physics_process(false)
+	set_process(false)
+	var death_tw := create_tween()
+	if death_tw and is_inside_tree():
+		death_tw.parallel().tween_property(self, "position:y", position.y - 2.5, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		death_tw.parallel().tween_property(self, "rotation:z", rotation.z + PI * 2.0, 0.40)
+		death_tw.parallel().tween_property(self, "rotation:x", rotation.x + 0.6, 0.40)
+		death_tw.tween_callback(func():
+			if VfxPool.instance:
+				VfxPool.instance.spawn_explosion(global_position, 1.8)
+			queue_free()
+		)
+	else:
+		if VfxPool.instance:
+			VfxPool.instance.spawn_explosion(global_position, 1.8)
+		queue_free()
 
 func _spawn_rewards() -> void:
 	if _has_spawned_rewards:

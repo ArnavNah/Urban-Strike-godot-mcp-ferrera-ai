@@ -3,7 +3,7 @@ extends Node3D
 
 ## Modernized Nuclear Strike-style elevated overhead Chase & Classic camera rig.
 ## Oblique perspective framing, smooth heading/yaw lag, stable altitude tracking,
-## SpringArm3D obstruction safety with responsive clearance recovery, and subtle cinematic banking.
+## single placement ownership, bounded rooftop clearance, and reversible visual occlusion for blocking buildings.
 
 enum CameraMode {
 	CHASE,   ## Default: camera yaw smoothly tracks helicopter heading with ~0.25s lag
@@ -38,8 +38,13 @@ enum CameraMode {
 @export var look_response: float = 9.0 ## Look-target response
 @export var camera_roll_scale: float = 0.15 ## Subtle cinematic roll (<= 15%)
 @export var roll_response: float = 5.0
-@export var obstruction_collapse_speed: float = 55.0 ## Rapid SpringArm shortening
-@export var obstruction_recovery_speed: float = 24.0 ## Responsive SpringArm recovery to prevent lingering
+
+@export_category("Arcade Obstruction & Clearance")
+@export var min_camera_distance: float = 24.0 ## Minimum follow distance; prevents extreme close-ups or moving ahead of player
+@export var clearance_margin: float = 1.2 ## Clearance buffer above rooftops or solid surfaces
+@export var obstruction_smooth_speed: float = 8.0 ## Speed of bounded vertical clearance adjustment
+@export var occlusion_alpha: float = 0.28 ## Transparency for buildings blocking the player
+@export var occlusion_fade_speed: float = 8.0 ## Fade transition speed for occluded structures
 
 @export_category("Accessibility & Screen Shake")
 @export var camera_shake_enabled: bool = true
@@ -52,6 +57,7 @@ var _current_yaw: float = 0.0
 var _classic_yaw: float = 0.0
 var _sustained_travel_timer: float = 0.0
 var _current_spring_length: float = 38.0
+var _current_clearance_elevation: float = 0.0
 var _is_initialized: bool = false
 var _shake_trauma: float = 0.0
 
@@ -59,6 +65,16 @@ var _shake_trauma: float = 0.0
 var _mode_blend_timer: float = 0.0
 var _mode_blend_duration: float = 0.4
 var _mode_start_yaw: float = 0.0
+
+# Reversible visual occlusion state:
+# instance_id (int) -> {
+#   "building": Node3D,
+#   "meshes": Array[MeshInstance3D],
+#   "orig_overrides": Array,
+#   "mat": StandardMaterial3D,
+#   "current_alpha": float
+# }
+var _occluded_buildings: Dictionary = {}
 
 @onready var spring_arm: SpringArm3D = $SpringArm3D
 @onready var camera_roll_pivot: Node3D = $SpringArm3D/CameraRollPivot
@@ -68,6 +84,8 @@ func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if spring_arm:
 		spring_arm.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+		# Single placement owner: disable engine-level SpringArm3D auto-collapse
+		spring_arm.collision_mask = 0
 	if camera:
 		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		camera.fov = camera_fov
@@ -87,6 +105,9 @@ func _ready() -> void:
 		EventBus.setting_changed.connect(_on_setting_changed)
 
 	_setup_player_tracking()
+
+func _exit_tree() -> void:
+	_restore_all_occluded_buildings()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("camera_toggle_mode"):
@@ -118,8 +139,8 @@ func _setup_player_tracking() -> void:
 		return
 
 	if spring_arm:
-		spring_arm.add_excluded_object(tracked_player.get_rid())
-		spring_arm.collision_mask = 1 # Environment / Buildings only
+		# Single placement owner: disable engine-level SpringArm3D auto-collapse
+		spring_arm.collision_mask = 0
 
 	var p_pos := _get_tracking_position()
 	var forward := -tracked_player.global_transform.basis.z
@@ -144,8 +165,9 @@ func _setup_player_tracking() -> void:
 	smoothed_look_position = p_pos + camera_forward * lookahead_distance
 	smoothed_look_position.y = p_pos.y * look_height_scale + look_height_offset
 
+	_current_clearance_elevation = 0.0
 	var to_cam := smoothed_camera_position - smoothed_look_position
-	_current_spring_length = to_cam.length()
+	_current_spring_length = maxf(min_camera_distance, to_cam.length())
 	global_position = smoothed_look_position
 	_update_rig_and_spring_arm(0.016)
 	_is_initialized = true
@@ -153,6 +175,7 @@ func _setup_player_tracking() -> void:
 func reset_smoothing() -> void:
 	if is_instance_valid(tracked_player):
 		tracked_player.force_update_transform()
+	_current_clearance_elevation = 0.0
 	_setup_player_tracking()
 
 func exp_response(rate: float, delta: float) -> float:
@@ -230,7 +253,7 @@ func _process(delta: float) -> void:
 	# 2. Generate a horizontal camera-forward direction from _current_yaw
 	var camera_forward := Vector3(-sin(_current_yaw), 0.0, -cos(_current_yaw)).normalized()
 
-	# 3. Calculate distance, height, and desired camera position
+	# 3. Calculate distance, height, and desired camera position (unobstructed ideal follow framing)
 	var player_altitude := player_position.y
 	var camera_distance := base_distance + speed_ratio * speed_distance_bonus
 	var camera_height := base_height + maxf(0.0, player_altitude - 2.4) * altitude_height_scale + speed_ratio * speed_height_bonus
@@ -251,15 +274,58 @@ func _process(delta: float) -> void:
 
 	smoothed_look_position = smoothed_look_position.lerp(desired_look_position, look_weight)
 
-	# Update rig orientation and SpringArm3D obstruction
+	# 5. Apply single-owner arcade obstruction handling and clearance
 	_update_rig_and_spring_arm(delta)
 	_update_cinematic_bank(delta)
 	_apply_camera_shake(delta)
 
+## Calculates bounded vertical clearance elevation when camera position would clip rooftop/wall geometry
+func _calculate_clearance_elevation(ideal_cam_pos: Vector3) -> float:
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return 0.0
+
+	var needed_elevation := 0.0
+
+	# 1. Downward probe: check if camera position sits below or clips into a roof surface
+	var probe_top := ideal_cam_pos + Vector3(0.0, 10.0, 0.0)
+	var probe_bottom := ideal_cam_pos - Vector3(0.0, 3.0, 0.0)
+	var down_query := PhysicsRayQueryParameters3D.create(probe_top, probe_bottom, 1) # Layer 1 = World
+	if is_instance_valid(tracked_player):
+		down_query.exclude = [tracked_player.get_rid()]
+
+	var down_hit := space.intersect_ray(down_query)
+	if not down_hit.is_empty():
+		var surface_y: float = down_hit.position.y
+		if ideal_cam_pos.y < surface_y + clearance_margin:
+			needed_elevation = maxf(needed_elevation, (surface_y + clearance_margin) - ideal_cam_pos.y)
+
+	# 2. Sphere clearance probe at camera position
+	var sphere := SphereShape3D.new()
+	sphere.radius = clearance_margin
+	var shape_query := PhysicsShapeQueryParameters3D.new()
+	shape_query.shape = sphere
+	shape_query.transform = Transform3D(Basis(), ideal_cam_pos + Vector3(0.0, needed_elevation, 0.0))
+	shape_query.collision_mask = 1 # Layer 1 = World
+	if is_instance_valid(tracked_player):
+		shape_query.exclude = [tracked_player.get_rid()]
+
+	var overlaps := space.intersect_shape(shape_query, 1)
+	if not overlaps.is_empty():
+		needed_elevation += 2.0
+
+	return clampf(needed_elevation, 0.0, 14.0)
+
 func _update_rig_and_spring_arm(delta: float) -> void:
 	global_position = smoothed_look_position
 
-	var to_cam := smoothed_camera_position - smoothed_look_position
+	# Calculate bounded rooftop clearance elevation (smoothly applied)
+	var target_elevation := _calculate_clearance_elevation(smoothed_camera_position)
+	var elev_weight := exp_response(obstruction_smooth_speed, delta)
+	_current_clearance_elevation = lerp(_current_clearance_elevation, target_elevation, elev_weight)
+
+	var effective_camera_pos := smoothed_camera_position + Vector3(0.0, _current_clearance_elevation, 0.0)
+	var to_cam := effective_camera_pos - smoothed_look_position
 	var target_dist := to_cam.length()
 
 	if target_dist > 0.01:
@@ -273,14 +339,136 @@ func _update_rig_and_spring_arm(delta: float) -> void:
 
 		if spring_arm:
 			spring_arm.transform = Transform3D.IDENTITY
-			var hit_len: float = spring_arm.get_hit_length()
-			if hit_len < _current_spring_length:
-				# Obstruction detected: rapid inward collapse
-				_current_spring_length = move_toward(_current_spring_length, hit_len, obstruction_collapse_speed * delta)
-			else:
-				# Clearance restored: responsive recovery back to target_dist
-				_current_spring_length = move_toward(_current_spring_length, target_dist, obstruction_recovery_speed * delta)
+			# Ensure engine-level auto-collapse remains completely disabled
+			spring_arm.collision_mask = 0
+
+			# Bounded follow distance: enforce minimum distance so camera never causes extreme close-ups
+			_current_spring_length = maxf(min_camera_distance, target_dist)
 			spring_arm.spring_length = _current_spring_length
+
+	# Process reversible visual occlusion for structures blocking line of sight to player
+	_update_building_occlusion(delta)
+
+## Manages reversible visual fading for structures blocking line of sight between camera and helicopter
+func _update_building_occlusion(delta: float) -> void:
+	if not is_instance_valid(tracked_player) or not is_inside_tree():
+		_restore_all_occluded_buildings()
+		return
+
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return
+
+	var cam_pos := camera.global_position if camera else (smoothed_camera_position + Vector3(0.0, _current_clearance_elevation, 0.0))
+	var player_target := _get_tracking_position() + Vector3(0.0, 0.8, 0.0)
+
+	var active_building_ids: Dictionary = {}
+	var cur_from := cam_pos
+	var cur_to := player_target
+	var excluded_rids: Array[RID] = []
+	if is_instance_valid(tracked_player):
+		excluded_rids.append(tracked_player.get_rid())
+
+	# Discover up to 4 intervening buildings along line of sight
+	for step in range(4):
+		var query := PhysicsRayQueryParameters3D.create(cur_from, cur_to, 1) # Layer 1 = World
+		query.exclude = excluded_rids
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			break
+		var col: Object = hit.get("collider")
+		if not col or not (col is Node3D):
+			break
+
+		excluded_rids.append(hit.get("rid"))
+		var building := col as Node3D
+		var inst_id := building.get_instance_id()
+		active_building_ids[inst_id] = true
+
+		if not _occluded_buildings.has(inst_id):
+			_register_occluded_building(building)
+
+		var hit_p: Vector3 = hit.get("position")
+		var step_dir := (cur_to - hit_p).normalized()
+		cur_from = hit_p + step_dir * 0.5
+		if cur_from.distance_squared_to(cur_to) < 1.0:
+			break
+
+	# Update fade alpha and restore cleared structures
+	var to_remove: Array[int] = []
+	for b_id in _occluded_buildings.keys():
+		var info: Dictionary = _occluded_buildings[b_id]
+		var building_node: Node3D = info.get("building") as Node3D
+		if not is_instance_valid(building_node) or building_node.is_queued_for_deletion():
+			to_remove.append(b_id)
+			continue
+
+		var is_active: bool = active_building_ids.has(b_id)
+		var target_a: float = occlusion_alpha if is_active else 1.0
+		var cur_a: float = float(info.get("current_alpha", 1.0))
+		cur_a = move_toward(cur_a, target_a, occlusion_fade_speed * delta)
+		info["current_alpha"] = cur_a
+
+		var mat: StandardMaterial3D = info.get("mat") as StandardMaterial3D
+		if mat:
+			mat.albedo_color.a = cur_a
+
+		if not is_active and cur_a >= 0.99:
+			# Fully restored back to opaque: clear material override
+			_restore_building_override(info)
+			to_remove.append(b_id)
+
+	for b_id in to_remove:
+		_occluded_buildings.erase(b_id)
+
+func _register_occluded_building(building: Node3D) -> void:
+	var inst_id := building.get_instance_id()
+	var meshes: Array[MeshInstance3D] = []
+	_find_mesh_instances(building, meshes)
+	if meshes.is_empty():
+		return
+
+	var orig_overrides: Array = []
+	for m in meshes:
+		orig_overrides.append(m.material_override)
+
+	var occ_mat := StandardMaterial3D.new()
+	occ_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	occ_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	occ_mat.cull_mode = BaseMaterial3D.CULL_BACK
+	occ_mat.albedo_color = Color(0.72, 0.76, 0.82, 1.0) # Start from 1.0 and fade in to occlusion_alpha
+
+	for m in meshes:
+		m.material_override = occ_mat
+
+	_occluded_buildings[inst_id] = {
+		"building": building,
+		"meshes": meshes,
+		"orig_overrides": orig_overrides,
+		"mat": occ_mat,
+		"current_alpha": 1.0
+	}
+
+func _restore_building_override(info: Dictionary) -> void:
+	var meshes: Array = info.get("meshes", [])
+	var orig_overrides: Array = info.get("orig_overrides", [])
+	for i in range(meshes.size()):
+		var m: MeshInstance3D = meshes[i] as MeshInstance3D
+		if is_instance_valid(m):
+			var orig = orig_overrides[i] if i < orig_overrides.size() else null
+			m.material_override = orig
+
+func _restore_all_occluded_buildings() -> void:
+	for b_id in _occluded_buildings.keys():
+		var info: Dictionary = _occluded_buildings[b_id]
+		_restore_building_override(info)
+	_occluded_buildings.clear()
+
+func _find_mesh_instances(node: Node, result: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D:
+		result.append(node as MeshInstance3D)
+	for child in node.get_children():
+		_find_mesh_instances(child, result)
 
 func _update_cinematic_bank(delta: float) -> void:
 	if not camera_roll_pivot or not is_instance_valid(tracked_player):

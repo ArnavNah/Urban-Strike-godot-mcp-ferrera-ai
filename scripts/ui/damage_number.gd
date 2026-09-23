@@ -1,16 +1,24 @@
 class_name DamageNumber
 extends Label
 
+## Survivor-style combat damage numbers.
+## Renders screen-space floating text anchored to world positions with font outline,
+## upward drift, pop scaling, and fade over 0.5-0.7s.
+## Suppresses blocked and invulnerable hits (0 damage).
+
 enum DamageCategory {
-	NORMAL = 0,    # Cream/off-white, 16px, clean number e.g. "12"
-	CRITICAL = 1,  # Radiant gold, 22px, strong pop, e.g. "★ 75"
-	PLAYER = 2,    # Vivid red, 18px, downward cue, e.g. "▼ -16"
-	BLOCKED = 3    # Cool steel cyan, 15px, e.g. "[SHIELD] 0" or "BLOCKED"
+	NORMAL = 0,       ## Warm-white, 16px, clean number e.g. "12"
+	CRITICAL = 1,     ## Amber, 22px, pop, e.g. "★ 75"
+	PLAYER_HULL = 2,  ## Red/orange, 18px, downward cue, e.g. "▼ -16"
+	PLAYER_SHIELD = 3,## Cyan, 17px, e.g. "◆ -12"
+	HEAL = 4,         ## Green, 17px, e.g. "▲ +25"
+	BLOCKED = 5       ## Legacy placeholder (suppressed)
 }
+const PLAYER: int = DamageCategory.PLAYER_HULL
 
 var world_position: Vector3 = Vector3.ZERO
 var velocity_2d: Vector2 = Vector2.ZERO
-var lifetime: float = 0.65
+var lifetime: float = 0.60
 var _age: float = 0.0
 var is_active: bool = false
 var is_high_priority: bool = false
@@ -50,23 +58,32 @@ func reset_state() -> void:
 	pivot_offset = Vector2.ZERO
 	velocity_2d = Vector2.ZERO
 	world_position = Vector3.ZERO
-	lifetime = 0.65
+	lifetime = 0.60
 	category = DamageCategory.NORMAL
 	is_high_priority = false
 
 	remove_theme_font_size_override("font_size")
 	remove_theme_color_override("font_color")
+	remove_theme_constant_override("outline_size")
+	remove_theme_color_override("font_outline_color")
 
 func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumberManager = null, p_category: int = -1, metadata: Dictionary = {}) -> void:
 	reset_state()
 	manager = p_manager
 	world_position = pos
 
+	# Suppress zero/blocked/invulnerable hits completely
+	if amount <= 0.0 or metadata.get("is_blocked", false) or metadata.get("is_invulnerable", false):
+		deactivate()
+		return
+
 	# Category resolution:
-	if amount <= 0.0 or p_category == DamageCategory.BLOCKED or metadata.get("is_blocked", false):
-		category = DamageCategory.BLOCKED
-	elif p_category == DamageCategory.PLAYER or metadata.get("is_player", false) or metadata.get("target_type", "") == "player":
-		category = DamageCategory.PLAYER
+	if p_category == DamageCategory.HEAL or metadata.get("is_heal", false):
+		category = DamageCategory.HEAL
+	elif p_category == DamageCategory.PLAYER_SHIELD or metadata.get("is_shield", false):
+		category = DamageCategory.PLAYER_SHIELD
+	elif p_category == DamageCategory.PLAYER_HULL or metadata.get("is_player", false) or metadata.get("target_type", "") == "player":
+		category = DamageCategory.PLAYER_HULL
 	elif is_critical or p_category == DamageCategory.CRITICAL or metadata.get("is_critical", false):
 		category = DamageCategory.CRITICAL
 	else:
@@ -74,47 +91,66 @@ func setup(pos: Vector3, amount: float, is_critical: bool, p_manager: DamageNumb
 
 	is_high_priority = (
 		category == DamageCategory.CRITICAL
-		or category == DamageCategory.PLAYER
+		or category == DamageCategory.PLAYER_HULL
+		or category == DamageCategory.PLAYER_SHIELD
 		or bool(metadata.get("is_lethal", false))
 		or bool(metadata.get("is_objective", false))
 	)
 
-	var rand_angle := randf_range(-PI * 0.75, -PI * 0.25)
-	velocity_2d = Vector2(cos(rand_angle), sin(rand_angle)) * randf_range(40.0, 75.0)
+	var rand_angle := randf_range(-PI * 0.70, -PI * 0.30)
+	velocity_2d = Vector2(cos(rand_angle), sin(rand_angle)) * randf_range(30.0, 55.0)
+
+	# Distinct outline for readability against noisy backgrounds
+	add_theme_constant_override("outline_size", 4)
+	add_theme_color_override("font_outline_color", Color(0.05, 0.05, 0.06, 0.95))
 
 	match category:
 		DamageCategory.CRITICAL:
-			# Actual critical damage: gold, slightly larger, stronger pop, multi-cue icon
+			# Genuine critical hits: larger amber numbers with energetic pop
 			text = "★ %s" % format_damage_value(amount)
 			add_theme_font_size_override("font_size", 22)
 			add_theme_color_override("font_color", Color(1.0, 0.82, 0.15, 1.0))
+			add_theme_color_override("font_outline_color", Color(0.14, 0.07, 0.0, 0.95))
 			pivot_offset = size * 0.5
 			scale = Vector2(1.4, 1.4)
 			_tween = create_tween()
 			if _tween:
 				_tween.tween_property(self, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-		DamageCategory.PLAYER:
-			# Player damage received: distinct red treatment with downward arrow + negative indicator
+		DamageCategory.PLAYER_HULL:
+			# Incoming player hull damage in red/orange with downward indicator
 			text = "▼ -%s" % format_damage_value(amount)
 			add_theme_font_size_override("font_size", 18)
 			add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+			add_theme_color_override("font_outline_color", Color(0.15, 0.02, 0.02, 0.95))
 			pivot_offset = size * 0.5
 			scale = Vector2(1.25, 1.25)
 			_tween = create_tween()
 			if _tween:
 				_tween.tween_property(self, "scale", Vector2.ONE, 0.10).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-		DamageCategory.BLOCKED:
-			# Blocked or zero-damage hits: steel cyan, shield tag
-			text = "[SHIELD] 0" if amount <= 0.0 else "[BLOCKED] %s" % format_damage_value(amount)
-			add_theme_font_size_override("font_size", 15)
-			add_theme_color_override("font_color", Color(0.65, 0.85, 1.0, 0.95))
+		DamageCategory.PLAYER_SHIELD:
+			# Player shield damage in cyan
+			text = "◆ -%s" % format_damage_value(amount)
+			add_theme_font_size_override("font_size", 17)
+			add_theme_color_override("font_color", Color(0.20, 0.88, 1.0, 1.0))
+			add_theme_color_override("font_outline_color", Color(0.02, 0.09, 0.14, 0.95))
 			pivot_offset = size * 0.5
-			scale = Vector2(1.1, 1.1)
+			scale = Vector2(1.20, 1.20)
 			_tween = create_tween()
 			if _tween:
-				_tween.tween_property(self, "scale", Vector2.ONE, 0.08).set_ease(Tween.EASE_OUT)
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.09).set_ease(Tween.EASE_OUT)
+		DamageCategory.HEAL:
+			# Actual healing in green
+			text = "▲ +%s" % format_damage_value(amount)
+			add_theme_font_size_override("font_size", 17)
+			add_theme_color_override("font_color", Color(0.25, 1.0, 0.40, 1.0))
+			add_theme_color_override("font_outline_color", Color(0.02, 0.12, 0.04, 0.95))
+			pivot_offset = size * 0.5
+			scale = Vector2(1.20, 1.20)
+			_tween = create_tween()
+			if _tween:
+				_tween.tween_property(self, "scale", Vector2.ONE, 0.09).set_ease(Tween.EASE_OUT)
 		_: # DamageCategory.NORMAL
-			# Normal enemy damage: cream/off-white, standard clean number
+			# Normal hits: warm-white numbers
 			text = format_damage_value(amount)
 			add_theme_font_size_override("font_size", 16)
 			add_theme_color_override("font_color", Color(0.96, 0.94, 0.88, 1.0))
@@ -162,10 +198,10 @@ func _process(delta: float) -> void:
 
 	visible = true
 	var base_screen_pos := cam.unproject_position(world_position)
-	var anim_offset := velocity_2d * _age + Vector2(0.0, -30.0 * _age)
+	var anim_offset := velocity_2d * _age + Vector2(0.0, -36.0 * _age)
 	position = base_screen_pos + anim_offset - (size * 0.5)
 
-	# Fade out near end of life
+	# Fade out near end of life (over 0.5-0.7s)
 	var alpha := clampf(1.0 - (_age / lifetime), 0.0, 1.0)
 	modulate.a = alpha
 

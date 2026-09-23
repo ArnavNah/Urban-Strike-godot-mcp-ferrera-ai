@@ -19,27 +19,36 @@ func _ready() -> void:
 	current_health = max_health
 
 func take_damage(amount: float, _source: Node = null, hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if is_destroyed:
+	if is_destroyed or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
+	var actual_damage: float = prev_hp - current_health
 
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		var p: Vector3 = hit_pos if hit_pos != Vector3.ZERO else ((global_position if is_inside_tree() else position) + Vector3(0, 1.2, 0))
-		eb.emit_signal("damage_number_spawned", p, amount, false, {"target_id": get_instance_id()})
+	if actual_damage > 0.0:
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			var p: Vector3 = hit_pos if hit_pos != Vector3.ZERO else ((global_position if is_inside_tree() else position) + Vector3(0, 1.2, 0))
+			eb.emit_signal("damage_number_spawned", p, actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
 	if current_health <= 0.0:
 		_destroy_prop()
+
+const ImpactSparksScene := preload("res://scenes/vfx/impact_sparks.tscn")
+const XpGemScene := preload("res://scenes/pickups/xp_gem.tscn")
 
 func _destroy_prop() -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
+	collision_layer = 0
+	collision_mask = 0
 
-	var spark_scene: PackedScene = load("res://scenes/vfx/impact_sparks.tscn")
-	if spark_scene:
-		var spark := spark_scene.instantiate() as Node3D
+	if VfxPool.instance:
+		VfxPool.instance.spawn_sparks(global_position)
+	elif ImpactSparksScene:
+		var spark := ImpactSparksScene.instantiate() as Node3D
 		if spark:
 			spark.transform.origin = global_position
 			var parent := get_parent() if get_parent() else get_tree().root
@@ -49,16 +58,14 @@ func _destroy_prop() -> void:
 		var spawn_pos := global_position + Vector3(0, 0.4, 0)
 		if XpGemPool.instance:
 			XpGemPool.instance.spawn_gem(spawn_pos, 5)
-		else:
-			var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
-			if gem_scene:
-				var gem := gem_scene.instantiate() as Node3D
-				if gem:
-					if "xp_value" in gem:
-						gem.xp_value = 5
-					gem.transform.origin = spawn_pos
-					var p: Node = get_tree().current_scene if (is_inside_tree() and get_tree().current_scene) else (get_parent() if get_parent() else get_tree().root)
-					p.add_child.call_deferred(gem)
+		elif XpGemScene:
+			var gem := XpGemScene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = 5
+				gem.transform.origin = spawn_pos
+				var p: Node = get_tree().current_scene if (is_inside_tree() and get_tree().current_scene) else (get_parent() if get_parent() else get_tree().root)
+				p.add_child.call_deferred(gem)
 
 	var gm := get_tree().get_first_node_in_group("game_manager")
 	if gm and gm.has_method("add_salvage") and salvage_reward > 0:

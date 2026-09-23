@@ -1,5 +1,16 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://bj2g15y8huj4q"]
 
+[ext_resource type="Texture2D" uid="uid://5jh1fqhx60i6" path="res://resources/environment/textures/concrete_sidewalk_albedo.png" id="1_dxccu"]
+[ext_resource type="Texture2D" uid="uid://b7rl1apoueo12" path="res://resources/environment/textures/concrete_sidewalk_normal.png" id="2_42yg0"]
+
 [resource]
-albedo_color = Color(0.78, 0.76, 0.72, 1)
-roughness = 0.75
+albedo_color = Color(0.84, 0.82, 0.78, 1)
+albedo_texture = ExtResource("1_dxccu")
+roughness = 0.78
+normal_enabled = true
+normal_scale = 0.6
+normal_texture = ExtResource("2_42yg0")
+uv1_scale = Vector3(0.333, 0.333, 0.333)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5

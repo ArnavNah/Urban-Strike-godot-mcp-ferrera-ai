@@ -214,9 +214,24 @@ func _update_streaming_targets(center_chunk: Vector2i) -> void:
 		else:
 			_queue_load(c, desired_level, priority)
 
+	# Prune queued loads for chunks no longer desired (e.g. player turned around)
+	var q_idx := load_queue.size() - 1
+	while q_idx >= 0:
+		var q_coord: Vector2i = load_queue[q_idx].get("coord", Vector2i.ZERO) as Vector2i
+		if not desired_chunks.has(q_coord):
+			load_queue.remove_at(q_idx)
+		q_idx -= 1
+
 	_sort_load_queue(center_chunk)
 
 func _sort_load_queue(center_chunk: Vector2i) -> void:
+	var heading := Vector2.ZERO
+	if is_instance_valid(target_player) and "velocity" in target_player:
+		var v: Vector3 = target_player.velocity
+		var h_speed: float = Vector2(v.x, v.z).length()
+		if h_speed > 3.0:
+			heading = Vector2(v.x, v.z).normalized()
+
 	load_queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var prio_a: int = a.get("priority", 0) as int
 		var prio_b: int = b.get("priority", 0) as int
@@ -224,8 +239,13 @@ func _sort_load_queue(center_chunk: Vector2i) -> void:
 			return prio_a > prio_b
 		var ca: Vector2i = a.get("coord", Vector2i.ZERO) as Vector2i
 		var cb: Vector2i = b.get("coord", Vector2i.ZERO) as Vector2i
-		var da: int = maxi(absi(ca.x - center_chunk.x), absi(ca.y - center_chunk.y))
-		var db: int = maxi(absi(cb.x - center_chunk.x), absi(cb.y - center_chunk.y))
+		var da: float = float(maxi(absi(ca.x - center_chunk.x), absi(ca.y - center_chunk.y)))
+		var db: float = float(maxi(absi(cb.x - center_chunk.x), absi(cb.y - center_chunk.y)))
+		if heading != Vector2.ZERO:
+			var dir_a := Vector2(float(ca.x - center_chunk.x), float(ca.y - center_chunk.y))
+			var dir_b := Vector2(float(cb.x - center_chunk.x), float(cb.y - center_chunk.y))
+			da -= dir_a.dot(heading) * 0.75
+			db -= dir_b.dot(heading) * 0.75
 		return da < db
 	)
 
@@ -333,7 +353,10 @@ func _recycle_chunk(c: Vector2i) -> void:
 	active_chunks.erase(c)
 	chunk.set_detail_level(CityChunk.DetailLevel.UNLOADED)
 	chunk.visible = false
-	chunk_pool.append(chunk)
+	if chunk_pool.size() < 16:
+		chunk_pool.append(chunk)
+	else:
+		chunk.queue_free()
 	total_chunks_recycled += 1
 
 func _get_road_point_id(pos: Vector3) -> int:
@@ -748,3 +771,33 @@ func _ensure_named_marker(parent: Node3D, m_name: String, pos: Vector3) -> Marke
 		parent.add_child(m)
 	m.global_position = pos
 	return m
+
+func apply_graphics_preset(p_preset_name: String) -> void:
+	var pname := p_preset_name.to_lower()
+	match pname:
+		"low":
+			full_detail_radius = 1
+			hlod_radius = 2
+			max_full_detail_loads_per_frame = 1
+			max_hlod_loads_per_frame = 1
+			max_unloads_per_frame = 2
+		"high":
+			full_detail_radius = 1
+			hlod_radius = 3
+			max_full_detail_loads_per_frame = 1
+			max_hlod_loads_per_frame = 3
+			max_unloads_per_frame = 1
+		_: # "medium" default
+			full_detail_radius = 1
+			hlod_radius = 3
+			max_full_detail_loads_per_frame = 1
+			max_hlod_loads_per_frame = 2
+			max_unloads_per_frame = 1
+
+	for chunk in active_chunks.values():
+		var c := chunk as CityChunk
+		if is_instance_valid(c) and c.has_method("update_graphics_settings"):
+			c.update_graphics_settings(pname)
+
+	if _is_initialized and last_player_chunk != Vector2i(9999, 9999):
+		_update_streaming_targets(last_player_chunk)

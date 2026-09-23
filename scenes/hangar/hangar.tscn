@@ -402,6 +402,52 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
+[node name="LoadoutSectionTitle" type="Label" parent="Margin/MainVBox/ContentHBox/LeftColumn" unique_id=665837902]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 0.9)
+theme_override_fonts/font = ExtResource("7_fhvtw")
+theme_override_font_sizes/font_size = 13
+text = "// OPERATIONAL FLIGHT LOADOUT"
+
+[node name="LoadoutContainer" type="VBoxContainer" parent="Margin/MainVBox/ContentHBox/LeftColumn" unique_id=790061254]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LoadoutSelectorHBox" type="HBoxContainer" parent="Margin/MainVBox/ContentHBox/LeftColumn/LoadoutContainer" unique_id=385635513]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LoadoutPrevBtn" type="Button" parent="Margin/MainVBox/ContentHBox/LeftColumn/LoadoutContainer/LoadoutSelectorHBox" unique_id=455843640]
+custom_minimum_size = Vector2(80, 36)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("9_o8q61")
+theme_override_font_sizes/font_size = 11
+text = "< PREV"
+
+[node name="LoadoutCurrentBtn" type="Button" parent="Margin/MainVBox/ContentHBox/LeftColumn/LoadoutContainer/LoadoutSelectorHBox" unique_id=260252999]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("7_fhvtw")
+theme_override_font_sizes/font_size = 15
+text = "AH-9 VULTURE // BALANCED"
+
+[node name="LoadoutNextBtn" type="Button" parent="Margin/MainVBox/ContentHBox/LeftColumn/LoadoutContainer/LoadoutSelectorHBox" unique_id=1248449649]
+custom_minimum_size = Vector2(80, 36)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("9_o8q61")
+theme_override_font_sizes/font_size = 11
+text = "NEXT >"
+
+[node name="LoadoutDescLabel" type="Label" parent="Margin/MainVBox/ContentHBox/LeftColumn/LoadoutContainer" unique_id=1718870637]
+custom_minimum_size = Vector2(560, 32)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.86, 0.9)
+theme_override_fonts/font = ExtResource("8_6bwlo")
+theme_override_font_sizes/font_size = 11
+text = "Standard multi-role airframe. Balanced armor, standard 11.5 rps chaingun, 2.2s missile cycle."
+autowrap_mode = 3
+
 [node name="UpgradesSectionTitle" type="Label" parent="Margin/MainVBox/ContentHBox/LeftColumn" unique_id=1163164010]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.961, 0.725, 0.106, 0.9)

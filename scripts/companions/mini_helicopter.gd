@@ -15,7 +15,7 @@ signal destroyed(wingman: MiniHelicopter, slot: String)
 
 @export_category("Formation Slots")
 @export var slot_id: String = "left" # "left" or "right"
-@export var formation_offset: Vector3 = Vector3(-4.8, 0.5, 2.6)
+@export var formation_offset: Vector3 = Vector3(-8.2, 0.6, 3.8)
 @export var follow_gain: float = 7.5
 @export var max_flight_speed: float = 52.0
 @export var follow_responsiveness: float = 7.5
@@ -28,10 +28,10 @@ signal destroyed(wingman: MiniHelicopter, slot: String)
 @export var rotor_speed: float = 48.0
 
 @export_category("Visual & Procedural Animation")
-@export var visual_scale: float = 0.28
-@export var lateral_spacing: float = 4.8
-@export var rear_offset: float = 2.6
-@export var altitude_offset: float = 0.5
+@export var visual_scale: float = 0.68
+@export var lateral_spacing: float = 8.2
+@export var rear_offset: float = 3.8
+@export var altitude_offset: float = 0.6
 @export var hover_bob_amplitude: float = 0.08
 @export var hover_bob_frequency: float = 2.4
 @export var max_bank_angle: float = 0.45 # ~26 deg
@@ -197,22 +197,22 @@ func _handle_movement_and_banking(delta: float) -> void:
 	# Smooth follow with bounded acceleration and maximum flight speed
 	var desired_vel: Vector3 = to_target * follow_gain
 
-	# Anti-stacking: separation push away from player if too close (< 2.8m)
+	# Anti-stacking: separation push away from player if too close (< 4.5m)
 	var to_player: Vector3 = global_position - player_target.global_position
 	to_player.y = 0.0
 	var player_dist: float = to_player.length()
-	if player_dist < 2.8 and player_dist > 0.01:
-		var push: Vector3 = (to_player / player_dist) * ((2.8 - player_dist) * 8.0)
+	if player_dist < 4.5 and player_dist > 0.01:
+		var push: Vector3 = (to_player / player_dist) * ((4.5 - player_dist) * 8.0)
 		desired_vel += push
 
-	# Anti-stacking: separation push away from peer wingmen (< 3.2m)
+	# Anti-stacking: separation push away from peer wingmen (< 4.0m)
 	for peer in get_tree().get_nodes_in_group("mini_helicopters"):
 		if peer != self and is_instance_valid(peer) and peer is Node3D:
 			var to_peer: Vector3 = global_position - (peer as Node3D).global_position
 			to_peer.y = 0.0
 			var peer_dist: float = to_peer.length()
-			if peer_dist < 3.2 and peer_dist > 0.01:
-				var push: Vector3 = (to_peer / peer_dist) * ((3.2 - peer_dist) * 10.0)
+			if peer_dist < 4.0 and peer_dist > 0.01:
+				var push: Vector3 = (to_peer / peer_dist) * ((4.0 - peer_dist) * 10.0)
 				desired_vel += push
 
 	if desired_vel.length() > max_flight_speed:
@@ -353,7 +353,7 @@ func _find_best_target() -> Node3D:
 	return closest_enemy
 
 func _fire_at_target(target: Node3D) -> void:
-	var muzzle_pos: Vector3 = weapon_mount.global_position if weapon_mount else global_position + Vector3(0.0, -0.06, -0.72)
+	var muzzle_pos: Vector3 = weapon_mount.global_position if weapon_mount else global_position + Vector3(0.0, -0.15, -1.75)
 	var target_center: Vector3 = target.global_position + Vector3(0, 0.4, 0)
 	var fire_dir: Vector3 = (target_center - muzzle_pos).normalized()
 	if fire_dir.length_squared() < 0.001:
@@ -364,7 +364,7 @@ func _fire_at_target(target: Node3D) -> void:
 		pool = get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if pool:
 		# Allied round: from_player = true (hits World & Enemies, will NEVER hit player or companions)
-		pool.spawn_projectile(muzzle_pos, fire_dir, true, get_effective_damage(), 0, 0, 1.0)
+		pool.spawn_projectile(muzzle_pos, fire_dir, true, get_effective_damage(), 0, 0, 1.0, "wingmen")
 
 	if muzzle_flash:
 		muzzle_flash.visible = true
@@ -377,18 +377,21 @@ func _fire_at_target(target: Node3D) -> void:
 
 ## Physical Interception: Called by Projectile when an enemy round collides with this aircraft.
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
 	health_changed.emit(current_health, max_health)
 
-	_trigger_damage_flash()
-	_update_health_display()
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
+		_update_health_display()
 
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.8, 0), amount, false, {"target_id": get_instance_id()})
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 0.8, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
 	if current_health <= 0.0:
 		_die()

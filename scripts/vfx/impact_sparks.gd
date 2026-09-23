@@ -7,6 +7,7 @@ var _remaining: float = 0.0
 
 static var _armor_material: StandardMaterial3D = null
 static var _terrain_material: StandardMaterial3D = null
+static var _shield_material: StandardMaterial3D = null
 
 static func _get_armor_mat() -> StandardMaterial3D:
 	if not _armor_material:
@@ -22,6 +23,13 @@ static func _get_terrain_mat() -> StandardMaterial3D:
 		_terrain_material.albedo_color = Color(0.68, 0.64, 0.58, 0.85)
 	return _terrain_material
 
+static func _get_shield_mat() -> StandardMaterial3D:
+	if not _shield_material:
+		_shield_material = StandardMaterial3D.new()
+		_shield_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shield_material.albedo_color = Color(0.20, 0.92, 1.0, 1.0)
+	return _shield_material
+
 func _ready() -> void:
 	if is_pooled:
 		_on_pooled_finish()
@@ -31,13 +39,18 @@ func _ready() -> void:
 func play() -> void:
 	play_impact(Vector3.UP, false)
 
-func play_impact(normal: Vector3 = Vector3.UP, is_armor: bool = false) -> void:
+func play_impact(normal: Vector3 = Vector3.UP, is_armor: bool = false, is_shield: bool = false) -> void:
 	process_mode = Node.PROCESS_MODE_INHERIT
 	visible = true
 	is_active = true
 	_remaining = lifetime + 0.05
 	
-	material_override = _get_armor_mat() if is_armor else _get_terrain_mat()
+	if is_shield:
+		material_override = _get_shield_mat()
+	elif is_armor:
+		material_override = _get_armor_mat()
+	else:
+		material_override = _get_terrain_mat()
 	
 	# Orient along surface normal so debris shoots outward
 	if normal.length_squared() > 0.01:

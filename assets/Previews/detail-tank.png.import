@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cqkckjhu1x581"
-path="res://.godot/imported/detail-tank.png-315e2bf8fd4146a95309fc148c666843.ctex"
+path="res://.godot/imported/detail-tank.png-67a12ad523dcfc82ae428b5e689cb798.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/previews/detail-tank.png"
-dest_files=["res://.godot/imported/detail-tank.png-315e2bf8fd4146a95309fc148c666843.ctex"]
+source_file="res://assets/Previews/detail-tank.png"
+dest_files=["res://.godot/imported/detail-tank.png-67a12ad523dcfc82ae428b5e689cb798.ctex"]
 
 [params]
 

@@ -67,18 +67,37 @@ func _ready() -> void:
 		los_ray.collision_mask = 1 # World layer blocks LoS
 		los_ray.add_exception(self)
 
+var _laser_beam_mesh: MeshInstance3D = null
+
 func _setup_telegraph_mesh() -> void:
 	_telegraph_mesh = MeshInstance3D.new()
 	_telegraph_mesh.name = "TelegraphMesh"
 	var sphere := SphereMesh.new()
-	sphere.radius = 0.08
-	sphere.height = 0.16
+	sphere.radius = 0.12
+	sphere.height = 0.24
 	_telegraph_mesh.mesh = sphere
 	var t_mat := StandardMaterial3D.new()
 	t_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	t_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.9)
+	t_mat.albedo_color = Color(1.0, 0.45, 0.1, 0.95)
 	_telegraph_mesh.material_override = t_mat
 	_telegraph_mesh.visible = false
+
+	_laser_beam_mesh = MeshInstance3D.new()
+	_laser_beam_mesh.name = "LaserBeamMesh"
+	var beam_cyl := CylinderMesh.new()
+	beam_cyl.top_radius = 0.035
+	beam_cyl.bottom_radius = 0.035
+	beam_cyl.height = 1.0
+	_laser_beam_mesh.mesh = beam_cyl
+	var beam_mat := StandardMaterial3D.new()
+	beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_mat.albedo_color = Color(1.0, 0.25, 0.1, 0.65)
+	beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_laser_beam_mesh.material_override = beam_mat
+	_laser_beam_mesh.visible = false
+	_laser_beam_mesh.top_level = true
+	add_child(_laser_beam_mesh)
+
 	if muzzle:
 		muzzle.add_child(_telegraph_mesh)
 	elif barrel:
@@ -141,10 +160,8 @@ func _physics_process(delta: float) -> void:
 
 			_track_player(step_delta)
 			_state_timer -= step_delta
-			if is_instance_valid(_telegraph_mesh):
-				_telegraph_mesh.visible = true
-				var progress: float = 1.0 - clampf(_state_timer / maxf(aim_prep_time, 0.01), 0.0, 1.0)
-				_telegraph_mesh.scale = Vector3.ONE * progress
+			var progress: float = 1.0 - clampf(_state_timer / maxf(aim_prep_time, 0.01), 0.0, 1.0)
+			_update_telegraph(progress)
 
 			if _state_timer <= 0.0:
 				var can_attack: bool = _request_slot()
@@ -187,36 +204,8 @@ func _physics_process(delta: float) -> void:
 				else:
 					_transition_to(State.IDLE)
 
-func _request_slot() -> bool:
-	if _arming_timer > 0.0:
-		debug_last_blocked_reason = "arming_delay"
-		return false
-
-	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
-	if not dir and CombatDirector.instance:
-		dir = CombatDirector.instance
-	if dir:
-		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_TURRET, false, false, false, CombatDirector.DANGER_COST_BULLET, "turret")
-		_has_attack_slot = granted
-		debug_last_blocked_reason = "active" if granted else "token_denied"
-		return granted
-	_has_attack_slot = true
-	debug_last_blocked_reason = "active_no_director"
-	return true
-
-func _release_slot() -> void:
-	if _has_attack_slot:
-		var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
-		if not dir and CombatDirector.instance:
-			dir = CombatDirector.instance
-		if dir:
-			dir.release_attack_permission(self)
-	_has_attack_slot = false
-
 func _transition_to(new_state: State) -> void:
 	current_state = new_state
-	if new_state != State.AIMING:
-		_set_telegraph(false)
 	match new_state:
 		State.IDLE:
 			_state_timer = 0.0
@@ -234,6 +223,27 @@ func _set_telegraph(active: bool) -> void:
 		_telegraph_mesh.visible = active
 		if not active:
 			_telegraph_mesh.scale = Vector3.ZERO
+	if is_instance_valid(_laser_beam_mesh):
+		_laser_beam_mesh.visible = active
+
+func _update_telegraph(progress: float) -> void:
+	if is_instance_valid(_telegraph_mesh):
+		_telegraph_mesh.visible = true
+		_telegraph_mesh.scale = Vector3.ONE * progress
+	if is_instance_valid(_laser_beam_mesh) and is_instance_valid(_player_node):
+		var muzzle_pos: Vector3 = muzzle.global_position if muzzle else global_position
+		var target_pos: Vector3 = _player_node.global_position + Vector3(0, 0.5, 0)
+		var diff := target_pos - muzzle_pos
+		var dist := diff.length()
+		if dist > 0.5:
+			_laser_beam_mesh.visible = true
+			var mid_point := muzzle_pos + diff * 0.5
+			_laser_beam_mesh.global_position = mid_point
+			var dir := diff.normalized()
+			var up_vec := Vector3.UP if absf(dir.y) < 0.9 else Vector3.FORWARD
+			_laser_beam_mesh.look_at(target_pos, up_vec)
+			_laser_beam_mesh.rotate_object_local(Vector3.RIGHT, PI * 0.5)
+			_laser_beam_mesh.scale = Vector3(1.0, dist, 1.0)
 
 func _track_player(delta: float) -> void:
 	if not is_instance_valid(_player_node) or not head or not barrel:
@@ -290,6 +300,32 @@ func _fire_shot() -> void:
 		if EventBus:
 			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
 
+func _request_slot() -> bool:
+	if _arming_timer > 0.0:
+		debug_last_blocked_reason = "arming_delay"
+		return false
+
+	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+	if not dir and CombatDirector.instance:
+		dir = CombatDirector.instance
+	if dir:
+		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_TURRET, false, false, false, CombatDirector.DANGER_COST_BULLET, "turret")
+		_has_attack_slot = granted
+		debug_last_blocked_reason = "active" if granted else "token_denied"
+		return granted
+	_has_attack_slot = true
+	debug_last_blocked_reason = "active_no_director"
+	return true
+
+func _release_slot() -> void:
+	if _has_attack_slot:
+		var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+		if not dir and CombatDirector.instance:
+			dir = CombatDirector.instance
+		if dir:
+			dir.release_attack_permission(self)
+	_has_attack_slot = false
+
 func _check_line_of_sight() -> bool:
 	if not is_instance_valid(_player_node) or not los_ray:
 		return false
@@ -308,14 +344,17 @@ func _check_line_of_sight() -> bool:
 	return true
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_flash_hit()
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.2, 0), amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_flash_hit()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.2, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
 	if current_health <= 0.0:
 		_die()
@@ -324,7 +363,7 @@ var _visual_meshes: Array[MeshInstance3D] = []
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D and child != _laser_beam_mesh:
 			_visual_meshes.append(child as MeshInstance3D)
 		_collect_visual_meshes(child)
 
@@ -383,7 +422,25 @@ func _die() -> void:
 				var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				target_parent.add_child.call_deferred(expl)
 
-	queue_free()
+	# Transition visual meshes to charred scrap that lingers briefly
+	set_physics_process(false)
+	set_process(false)
+	if _visual_meshes.is_empty():
+		_collect_visual_meshes(self)
+	var burnt_mat := StandardMaterial3D.new()
+	burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
+	burnt_mat.roughness = 0.95
+	for m in _visual_meshes:
+		if is_instance_valid(m):
+			m.material_override = burnt_mat
+
+	var tw := create_tween()
+	if tw:
+		tw.tween_interval(2.0)
+		tw.tween_property(self, "position:y", position.y - 0.4, 0.6)
+		tw.tween_callback(queue_free)
+	else:
+		get_tree().create_timer(2.6).timeout.connect(queue_free)
 
 func _release_socket() -> void:
 	if not reserved_socket_id.is_empty():

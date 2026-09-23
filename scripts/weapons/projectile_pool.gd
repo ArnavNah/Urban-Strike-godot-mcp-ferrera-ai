@@ -22,7 +22,7 @@ func _ready() -> void:
 		add_child(proj)
 		_pool.append(proj)
 
-func spawn_projectile(start_pos: Vector3, dir: Vector3, from_player: bool = true, damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0) -> Projectile:
+func spawn_projectile(start_pos: Vector3, dir: Vector3, from_player: bool = true, damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0, weapon_source: String = "chaingun") -> Projectile:
 	var count: int = _pool.size()
 	if count == 0:
 		return null
@@ -32,12 +32,12 @@ func spawn_projectile(start_pos: Vector3, dir: Vector3, from_player: bool = true
 		var proj: Projectile = _pool[idx]
 		if not proj._is_active:
 			_pool_index = (idx + 1) % count
-			proj.launch(start_pos, dir, from_player, damage, pierce_count, ricochet_count, armor_mult)
+			proj.launch(start_pos, dir, from_player, damage, pierce_count, ricochet_count, armor_mult, weapon_source)
 			return proj
 
 	# If all are active, steal the oldest one
 	var oldest: Projectile = _pool[_pool_index]
 	_pool_index = (_pool_index + 1) % count
 	oldest.deactivate()
-	oldest.launch(start_pos, dir, from_player, damage, pierce_count, ricochet_count, armor_mult)
+	oldest.launch(start_pos, dir, from_player, damage, pierce_count, ricochet_count, armor_mult, weapon_source)
 	return oldest

@@ -420,8 +420,11 @@ func _cleanup_surviving_enemies() -> void:
 			enemy.queue_free()
 
 	if spawn_director:
-		spawn_director.is_wave_active = false
-		spawn_director._wave_enemies.clear()
+		if spawn_director.has_method("stop_spawning"):
+			spawn_director.stop_spawning()
+		else:
+			spawn_director.is_wave_active = false
+			spawn_director._wave_enemies.clear()
 
 	emit_signal("enemy_count_changed", 0)
 
@@ -434,13 +437,19 @@ func stop_run() -> void:
 	spawn_timer.stop()
 	intermission_timer.stop()
 	countdown_timer.stop()
+	if spawn_director and spawn_director.has_method("stop_spawning"):
+		spawn_director.stop_spawning()
 	_cleanup_surviving_enemies()
 
 func pause_spawning() -> void:
 	spawn_timer.paused = true
+	if spawn_director and spawn_director.has_method("pause_spawning"):
+		spawn_director.pause_spawning()
 
 func resume_spawning() -> void:
 	spawn_timer.paused = false
+	if spawn_director and spawn_director.has_method("resume_spawning"):
+		spawn_director.resume_spawning()
 
 func finish_current_wave() -> void:
 	if current_state == State.ACTIVE_WAVE:

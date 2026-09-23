@@ -73,6 +73,8 @@ func _ready() -> void:
 				break
 
 func _exit_tree() -> void:
+	_warn_player(false)
+	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 
@@ -271,13 +273,16 @@ func _release_slot() -> void:
 	_has_attack_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_trigger_damage_flash()
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 	if current_health <= 0.0:
 		_die()
 
@@ -300,6 +305,8 @@ func _die() -> void:
 	_is_dead = true
 	is_alive = false
 	DamageFlashManager.clear_target(self)
+	collision_layer = 0
+	collision_mask = 0
 	_warn_player(false)
 	_release_slot()
 	if EnemyRegistry.instance:
@@ -322,7 +329,25 @@ func _die() -> void:
 				expl.scale = Vector3(2.0, 2.0, 2.0)
 				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				p.add_child.call_deferred(expl)
-	queue_free()
+
+	# Transition visual meshes to charred scrap that lingers cleanly
+	set_process(false)
+	if _visual_meshes.is_empty():
+		_collect_visual_meshes(self)
+	var burnt_mat := StandardMaterial3D.new()
+	burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
+	burnt_mat.roughness = 0.95
+	for m in _visual_meshes:
+		if is_instance_valid(m):
+			m.material_override = burnt_mat
+
+	var tw := create_tween()
+	if tw:
+		tw.tween_interval(2.2)
+		tw.tween_property(self, "position:y", position.y - 0.4, 0.6)
+		tw.tween_callback(queue_free)
+	else:
+		get_tree().create_timer(2.8).timeout.connect(queue_free)
 
 func _spawn_xp() -> void:
 	if _has_spawned_rewards:

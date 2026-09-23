@@ -47,8 +47,17 @@ func _ready() -> void:
 	_init_pools()
 	call_deferred("warm_up")
 
+var _cached_camera: Camera3D = null
+
+func _get_camera() -> Camera3D:
+	if not is_instance_valid(_cached_camera) or not _cached_camera.is_inside_tree():
+		var vp := get_viewport()
+		if vp:
+			_cached_camera = vp.get_camera_3d()
+	return _cached_camera
+
 func _allow_effect(pos: Vector3, pool: Array[Node3D], limit: int) -> bool:
-	var camera: Camera3D = get_viewport().get_camera_3d()
+	var camera: Camera3D = _get_camera()
 	if camera and camera.global_position.distance_squared_to(pos) > effect_distance * effect_distance:
 		return false
 	var active: int = 0
@@ -137,7 +146,7 @@ func spawn_muzzle_flash(pos: Vector3, dir: Vector3 = Vector3.ZERO, is_enemy: boo
 		oldest.call("play")
 	return oldest
 
-func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = false) -> Node3D:
+func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = false, is_shield: bool = false) -> Node3D:
 	if not _allow_effect(pos, _spark_pool, max_active_sparks):
 		return null
 	var count: int = _spark_pool.size()
@@ -151,7 +160,7 @@ func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = f
 			_spark_idx = (idx + 1) % count
 			item.global_position = pos
 			if item.has_method("play_impact"):
-				item.call("play_impact", normal, is_armor)
+				item.call("play_impact", normal, is_armor, is_shield)
 			else:
 				item.call("play")
 			return item
@@ -160,7 +169,7 @@ func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = f
 	_spark_idx = (_spark_idx + 1) % count
 	oldest.global_position = pos
 	if oldest.has_method("play_impact"):
-		oldest.call("play_impact", normal, is_armor)
+		oldest.call("play_impact", normal, is_armor, is_shield)
 	else:
 		oldest.call("play")
 	return oldest

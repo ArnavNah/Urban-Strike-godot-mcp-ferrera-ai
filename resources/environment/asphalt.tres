@@ -1,6 +1,17 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://dmqmstpvn8eaj"]
 
+[ext_resource type="Texture2D" uid="uid://bl4uot7kfodeq" path="res://resources/environment/textures/asphalt_albedo.png" id="1_c5y61"]
+[ext_resource type="Texture2D" uid="uid://dbcyllmu71bqw" path="res://resources/environment/textures/asphalt_normal.png" id="2_nshgo"]
+
 [resource]
 resource_name = "Asphalt"
-albedo_color = Color(0.14, 0.16, 0.19, 1)
-roughness = 0.82
+albedo_color = Color(0.24, 0.27, 0.31, 1)
+albedo_texture = ExtResource("1_c5y61")
+roughness = 0.84
+normal_enabled = true
+normal_scale = 0.5
+normal_texture = ExtResource("2_nshgo")
+uv1_scale = Vector3(0.2, 0.2, 0.2)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5

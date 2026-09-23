@@ -15,7 +15,7 @@ enum State {
 @export var magnet_accel: float = 250.0
 @export var collection_radius: float = 2.8
 @export var collection_radius_xz: float = 3.5
-@export var collection_height: float = 4.0
+@export var collection_height: float = 35.0
 
 var current_state: State = State.IDLE
 var _target_player: Node3D = null
@@ -93,7 +93,7 @@ func _ready() -> void:
 func _ensure_persistent_parent() -> void:
 	var p := get_parent()
 	while p:
-		if p.is_in_group("city_chunks"):
+		if p.is_in_group("city_chunks") or p.name == "Encounters" or p.name == "encounters_root":
 			var root_scene := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			reparent.call_deferred(root_scene, true)
 			break
@@ -123,6 +123,9 @@ func activate(pos: Vector3, val: int) -> void:
 	monitorable = true
 
 func deactivate() -> void:
+	if _collection_tween:
+		_collection_tween.kill()
+		_collection_tween = null
 	is_active = false
 	_is_collected = true
 	visible = false
@@ -211,9 +214,23 @@ func _play_collection_fx() -> void:
 		else:
 			queue_free()
 
+func _is_line_of_sight_clear(target_pos: Vector3) -> bool:
+	if not is_inside_tree():
+		return true
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return true
+	var from_pos := global_position + Vector3(0.0, 0.4, 0.0)
+	var ray_query := PhysicsRayQueryParameters3D.create(from_pos, target_pos, 1) # Layer 1 = World/Buildings
+	ray_query.exclude = [get_rid()]
+	var hit := space.intersect_ray(ray_query)
+	return hit.is_empty()
+
 ## Primary survivor magnet activation
 func magnetize_to(player: Node3D) -> void:
 	if not is_instance_valid(player) or _is_collected or not is_active:
+		return
+	if not _is_line_of_sight_clear(player.global_position):
 		return
 	_target_player = player
 	current_state = State.MAGNETIZED
@@ -246,21 +263,24 @@ func _physics_process(delta: float) -> void:
 			if mesh:
 				mesh.scale = Vector3.ONE
 				mesh.rotation = Vector3.ZERO
+		# Only skip cosmetic bobbing when far from camera; still run gameplay proximity check below
 		var cam := get_viewport().get_camera_3d() if is_inside_tree() and get_viewport() else null
-		if cam and global_position.distance_squared_to(cam.global_position) > 6400.0:
-			return
-		rotate_y(3.0 * delta)
-		_bob_timer += delta * 3.5
-		position.y = _base_y + sin(_bob_timer) * 0.15
+		var cam_far := cam and global_position.distance_squared_to(cam.global_position) > 6400.0
+		if not cam_far:
+			rotate_y(3.0 * delta)
+			_bob_timer += delta * 3.5
+			position.y = _base_y + sin(_bob_timer) * 0.15
 
-		# Direct 3D proximity check when idle (e.g. low-flying helicopter or gem placed on rooftop at player altitude)
+		# Idle proximity collection: uses consistent cylinder check (flat XZ + bounded height)
 		var active_player: Node3D = _target_player
 		if not is_instance_valid(active_player) and is_inside_tree():
 			active_player = get_tree().get_first_node_in_group("player") as Node3D
 		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
 			var to_player := active_player.global_position - global_position
-			if to_player.length() <= collection_radius:
-				collect(active_player)
+			var flat_d := Vector2(to_player.x, to_player.z).length()
+			if to_player.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_player.y) <= collection_height):
+				if _is_line_of_sight_clear(active_player.global_position):
+					collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with full relative velocity feed-forward

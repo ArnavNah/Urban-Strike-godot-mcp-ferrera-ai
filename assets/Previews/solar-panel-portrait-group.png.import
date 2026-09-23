@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c2oxndf1ax0dn"
-path="res://.godot/imported/solar-panel-portrait-group.png-b6b3eda1501a7c3043711c2ff445b7cd.ctex"
+path="res://.godot/imported/solar-panel-portrait-group.png-19343ade09b6396599c9a3bc8361cb2e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/previews/solar-panel-portrait-group.png"
-dest_files=["res://.godot/imported/solar-panel-portrait-group.png-b6b3eda1501a7c3043711c2ff445b7cd.ctex"]
+source_file="res://assets/Previews/solar-panel-portrait-group.png"
+dest_files=["res://.godot/imported/solar-panel-portrait-group.png-19343ade09b6396599c9a3bc8361cb2e.ctex"]
 
 [params]
 

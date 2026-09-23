@@ -11,8 +11,8 @@ extends Node
 
 # Default capacities by wave
 const WAVE_TOKEN_CONFIG := {
-	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 6 },
-	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 7 },
+	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 6 },
+	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 7 },
 	3: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 8 },
 	4: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 3, "danger_cap": 9 },
 	5: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 10 },
@@ -202,13 +202,7 @@ func request_attack_permission(
 		last_rejection_reasons["monopoly"] += 1
 		return false
 
-	# 3. Global Attacker Count Constraint
-	if _active_leases.size() >= max_concurrent_attackers:
-		_add_to_waiting(enemy)
-		last_rejection_reasons["max_attackers"] += 1
-		return false
-
-	# 4. Token Capacity Constraints
+	# 3. Attacker Count & Category Token Constraints
 	var ground_used: int = get_ground_tokens_used()
 	var air_used: int = get_air_tokens_used()
 	var effective_tokens: int = token_cost
@@ -237,6 +231,10 @@ func request_attack_permission(
 				_add_to_waiting(enemy)
 				last_rejection_reasons["tokens"] += 1
 				return false
+		if _active_leases.size() >= max_concurrent_attackers and air_used == 0:
+			_add_to_waiting(enemy)
+			last_rejection_reasons["max_attackers"] += 1
+			return false
 
 	# 5. Heavy Attack Mutual Exclusion: At most ONE heavy attack across the entire battlefield
 	if is_heavy and _active_heavy_attackers.size() > 0:
@@ -458,6 +456,11 @@ func _cleanup_expired(_delta: float) -> void:
 		if is_instance_valid(hm) and _active_leases.has(hm):
 			valid_homing.append(hm)
 	_active_homing_lock_holders = valid_homing
+
+	# 5. Clean release timestamps for dead enemies
+	for rel_key in _enemy_last_release_time.keys():
+		if not is_instance_valid(rel_key) or rel_key.is_queued_for_deletion():
+			_enemy_last_release_time.erase(rel_key)
 
 func _cleanup_slots() -> void:
 	_cleanup_expired(0.0)

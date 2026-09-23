@@ -9,6 +9,7 @@ static var low_particles: bool = false
 static func get_default_data() -> Dictionary:
 	return {
 		"salvage": 0,
+		"selected_loadout": "balanced",
 		"upgrades": {
 			"scavenger_rig": 0,
 			"rotor_armor": 0,
@@ -34,7 +35,8 @@ static func get_default_data() -> Dictionary:
 			"camera_shake": 1.0,
 			"screen_vignette": true,
 			"camera_mode": "chase",
-			"graphics_preset": "medium"
+			"graphics_preset": "medium",
+			"damage_numbers": "all"
 		},
 		"telemetry": {
 			"total_runs": 0,
@@ -80,6 +82,15 @@ static func save_data(data: Dictionary) -> void:
 		file.store_string(JSON.stringify(data, "\t"))
 		file.close()
 
+static func get_selected_loadout() -> String:
+	var data := load_data()
+	return String(data.get("selected_loadout", "balanced"))
+
+static func set_selected_loadout(loadout_id: String) -> void:
+	var data := load_data()
+	data["selected_loadout"] = loadout_id
+	save_data(data)
+
 static func get_all_settings() -> Dictionary:
 	var data := load_data()
 	return data.get("settings", {}).duplicate()
@@ -105,33 +116,56 @@ static func set_setting(key: String, val: Variant) -> void:
 		apply_graphics_preset(val, tree)
 
 static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -> void:
+	if not tree:
+		tree = Engine.get_main_loop() as SceneTree
 	preset_name = preset_name.to_lower()
 	low_particles = preset_name == "low"
-	var shadow_dist: float = 160.0
+	var shadow_dist: float = 150.0
 	var glow_int: float = 0.12
 	var glow_hdr: float = 1.15
+	var fog_begin: float = 160.0
+	var fog_end: float = 400.0
 	var max_explosions: int = 6
+	var max_sparks: int = 12
+	var max_flashes: int = 12
+	var effect_dist: float = 140.0
 	var detail_rad: int = 1
+	var hlod_rad: int = 3
 
-	match preset_name.to_lower():
+	match preset_name:
 		"low":
-			shadow_dist = 120.0
+			shadow_dist = 110.0
 			glow_int = 0.08
 			glow_hdr = 1.25
+			fog_begin = 140.0
+			fog_end = 340.0
 			max_explosions = 4
-			detail_rad = 1
+			max_sparks = 6
+			max_flashes = 8
+			effect_dist = 110.0
+			hlod_rad = 2
 		"high":
 			shadow_dist = 180.0
 			glow_int = 0.15
 			glow_hdr = 1.10
+			fog_begin = 180.0
+			fog_end = 450.0
 			max_explosions = 8
-			detail_rad = 1
+			max_sparks = 16
+			max_flashes = 16
+			effect_dist = 160.0
+			hlod_rad = 3
 		_: # "medium" default
-			shadow_dist = 160.0
+			shadow_dist = 150.0
 			glow_int = 0.12
 			glow_hdr = 1.15
+			fog_begin = 160.0
+			fog_end = 400.0
 			max_explosions = 6
-			detail_rad = 1
+			max_sparks = 12
+			max_flashes = 12
+			effect_dist = 140.0
+			hlod_rad = 3
 
 	if tree:
 		var root := tree.current_scene if tree.current_scene else tree.root
@@ -146,20 +180,23 @@ static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -
 				env_node.environment.glow_bloom = 0.0
 				env_node.environment.fog_enabled = true
 				env_node.environment.fog_mode = Environment.FOG_MODE_DEPTH
-				env_node.environment.fog_depth_begin = 100.0
-				env_node.environment.fog_depth_end = 260.0
+				env_node.environment.fog_depth_begin = fog_begin
+				env_node.environment.fog_depth_end = fog_end
 				env_node.environment.volumetric_fog_enabled = false
 			var streamer := root.find_child("CityWorldStreamer", true, false)
 			if streamer:
-				if "full_detail_radius" in streamer:
-					streamer.full_detail_radius = detail_rad
-				if "hlod_radius" in streamer:
-					streamer.hlod_radius = 2 if preset_name.to_lower() == "low" else 3
+				if streamer.has_method("apply_graphics_preset"):
+					streamer.call("apply_graphics_preset", preset_name)
+				else:
+					if "full_detail_radius" in streamer:
+						streamer.full_detail_radius = detail_rad
+					if "hlod_radius" in streamer:
+						streamer.hlod_radius = hlod_rad
 	if VfxPool.instance:
 		VfxPool.instance.max_active_explosions = max_explosions
-		VfxPool.instance.max_active_sparks = 6 if preset_name == "low" else 12
-		VfxPool.instance.max_active_flashes = 8 if preset_name == "low" else 12
-		VfxPool.instance.effect_distance = 110.0 if preset_name == "low" else 140.0
+		VfxPool.instance.max_active_sparks = max_sparks
+		VfxPool.instance.max_active_flashes = max_flashes
+		VfxPool.instance.effect_distance = effect_dist
 	if DamageNumberManager.instance:
 		DamageNumberManager.instance.set_preset(preset_name)
 	if tree:

@@ -362,8 +362,11 @@ var upgrade_database: Dictionary = {
 # Typed UpgradeDefinition resources mapped by ID
 var upgrade_definitions: Dictionary = {}
 
+func queue_free_upgrade_choice() -> void:
+	pending_levels.append(current_level)
+	_present_next_choice.call_deferred()
+
 func _ready() -> void:
-	add_to_group("upgrade_manager")
 	_init_definitions()
 	_notify_xp()
 
@@ -972,8 +975,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 				spawn_parent = get_tree().root
 
 			var slot_configs: Dictionary = {
-				"left": Vector3(-4.8, 0.5, 2.6),
-				"right": Vector3(4.8, 0.5, 2.6)
+				"left": Vector3(-8.2, 0.6, 3.8),
+				"right": Vector3(8.2, 0.6, 3.8)
 			}
 			var occupied := get_occupied_wingman_slots()
 

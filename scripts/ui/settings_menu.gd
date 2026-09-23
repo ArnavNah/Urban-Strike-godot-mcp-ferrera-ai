@@ -156,7 +156,9 @@ func _build_ui() -> void:
 
 	# 1. VISUALS & ACCESSIBILITY
 	_build_section_header(content_vbox, "01. VISUALS & ACCESSIBILITY")
+	_add_graphics_preset_option(content_vbox, "graphics_preset", "Graphics Quality", ["Low (Performance)", "Medium (Balanced)", "High (Fidelity)"], "medium")
 	_add_camera_mode_option(content_vbox, "camera_mode", "Camera View", ["Chase", "Classic"], "chase")
+	_add_damage_numbers_option(content_vbox, "damage_numbers", "Damage Numbers", ["All Numbers", "Important Only", "Off"], "all")
 	_add_checkbox(content_vbox, "screen_shake_enabled", "Screen Shake Enabled", true)
 	_add_slider(content_vbox, "screen_shake_intensity", "Screen Shake Intensity", 0.0, 2.0, 0.05, 1.0, "%.2fx")
 	_add_checkbox(content_vbox, "damage_flash_enabled", "Damage Flash Enabled", true)
@@ -358,6 +360,42 @@ func _add_option_button(parent: Control, key: String, label_text: String, option
 	_controls[key] = opt_btn
 	_focus_widgets.append(opt_btn)
 
+func _add_graphics_preset_option(parent: Control, key: String, label_text: String, options: Array, _default_opt: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	parent.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_override("font", FONT_INTER_REG)
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.85, 0.89, 0.94))
+	row.add_child(lbl)
+
+	var opt_btn := OptionButton.new()
+	opt_btn.custom_minimum_size = Vector2(180, 34)
+	opt_btn.add_theme_font_override("font", FONT_INTER_REG)
+	opt_btn.add_theme_font_size_override("font_size", 12)
+	for i in range(options.size()):
+		opt_btn.add_item(str(options[i]), i)
+
+	opt_btn.focus_entered.connect(_play_focus_sound)
+	opt_btn.item_selected.connect(func(idx: int):
+		_play_ui_audio(SOUND_CONFIRM, -14.0)
+		var preset_id: String = "medium"
+		match idx:
+			0: preset_id = "low"
+			1: preset_id = "medium"
+			2: preset_id = "high"
+		SaveSystem.set_setting(key, preset_id)
+	)
+
+	row.add_child(opt_btn)
+	_controls[key] = opt_btn
+	_focus_widgets.append(opt_btn)
+
 func _add_camera_mode_option(parent: Control, key: String, label_text: String, options: Array, _default_opt: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
@@ -390,6 +428,42 @@ func _add_camera_mode_option(parent: Control, key: String, label_text: String, o
 	_controls[key] = opt_btn
 	_focus_widgets.append(opt_btn)
 
+func _add_damage_numbers_option(parent: Control, key: String, label_text: String, options: Array, _default_opt: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	parent.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_override("font", FONT_INTER_REG)
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.85, 0.89, 0.94))
+	row.add_child(lbl)
+
+	var opt_btn := OptionButton.new()
+	opt_btn.custom_minimum_size = Vector2(180, 34)
+	opt_btn.add_theme_font_override("font", FONT_INTER_REG)
+	opt_btn.add_theme_font_size_override("font_size", 12)
+	for i in range(options.size()):
+		opt_btn.add_item(str(options[i]), i)
+
+	opt_btn.focus_entered.connect(_play_focus_sound)
+	opt_btn.item_selected.connect(func(idx: int):
+		_play_ui_audio(SOUND_CONFIRM, -14.0)
+		var mode_str: String = "all"
+		match idx:
+			0: mode_str = "all"
+			1: mode_str = "important_only"
+			2: mode_str = "off"
+		SaveSystem.set_setting(key, mode_str)
+	)
+
+	row.add_child(opt_btn)
+	_controls[key] = opt_btn
+	_focus_widgets.append(opt_btn)
+
 func _load_current_values() -> void:
 	var settings := SaveSystem.get_all_settings()
 	for key in settings.keys():
@@ -406,8 +480,18 @@ func _load_current_values() -> void:
 					var mult: float = float(_controls.get(key + "_mult", 1.0))
 					val_lbl.text = fmt % (float(val) * mult)
 			elif widget is OptionButton:
-				if key == "camera_mode":
+				if key == "graphics_preset":
+					match str(val).to_lower():
+						"low": widget.selected = 0
+						"high": widget.selected = 2
+						_: widget.selected = 1
+				elif key == "camera_mode":
 					widget.selected = 0 if str(val).to_lower() == "chase" else 1
+				elif key == "damage_numbers":
+					match str(val).to_lower():
+						"important_only": widget.selected = 1
+						"off": widget.selected = 2
+						_: widget.selected = 0
 				else:
 					match str(val):
 						"auto": widget.selected = 0

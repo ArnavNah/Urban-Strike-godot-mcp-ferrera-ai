@@ -50,7 +50,14 @@ const WaterTowerScene := preload("res://scenes/environment/town/water_tower.tscn
 const SolarArrayScene := preload("res://scenes/environment/town/solar_array.tscn")
 const ContainerStackScene := preload("res://scenes/environment/industrial/container_stack.tscn")
 const StorageTanksScene := preload("res://scenes/environment/industrial/storage_tanks.tscn")
+const ChimneyLargeScene := preload("res://scenes/environment/industrial/chimney_large.tscn")
+const ChimneySmallScene := preload("res://scenes/environment/industrial/chimney_small.tscn")
+const SolarPanelPortraitScene := preload("res://scenes/environment/industrial/solar_panel_portrait.tscn")
 const BarrierScene := preload("res://scenes/environment/props/barrier.tscn")
+const SupplyBeaconScript := preload("res://scripts/encounters/supply_beacon.gd")
+const GuardedCacheScript := preload("res://scripts/encounters/guarded_cache.gd")
+const RewardLocationScript := preload("res://scripts/encounters/reward_location.gd")
+const XPBurstPickupScript := preload("res://scripts/pickups/xp_burst_pickup.gd")
 
 const AsphaltMat := preload("res://resources/environment/asphalt.tres")
 const AsphaltWornMat := preload("res://resources/environment/asphalt_worn.tres")
@@ -65,6 +72,10 @@ const RoofMat := preload("res://resources/environment/roof.tres")
 const RoofMetalMat := preload("res://resources/environment/roof_metal.tres")
 const RustMat := preload("res://resources/environment/rust.tres")
 const BrickMat := preload("res://resources/environment/brick.tres")
+
+# Static road mesh cache (keys: bitmask of ns_is_avenue, ew_is_avenue, is_helipad)
+static var _cached_road_meshes: Dictionary = {}
+static var _cached_building_catalog: Dictionary = {}
 
 # Static shared meshes and materials for props (instantiated once project-wide)
 static var _shared_props_initialized: bool = false
@@ -223,6 +234,7 @@ var buildings_root: Node3D = null
 var props_root: Node3D = null
 var hlod_root: Node3D = null
 var markers_root: Node3D = null
+var encounters_root: Node3D = null
 
 # Cached typed gameplay positions in global world space
 var ground_spawn_points: Array[Vector3] = []
@@ -235,13 +247,15 @@ var safe_open_positions: Array[Vector3] = []
 # Rich building and rooftop socket metadata for gameplay queries
 var rooftop_sockets: Array[Dictionary] = []
 var building_records: Array[Dictionary] = []
+var _assembly_token: int = 0
+var is_fully_assembled: bool = false
 
 # Road configuration
 var ns_is_avenue: bool = false
 var ew_is_avenue: bool = false
 
 func _init() -> void:
-	pass
+	add_to_group("city_chunks")
 
 func setup(p_coord: Vector2i, p_detail: DetailLevel, p_seed: int) -> void:
 	coord = p_coord
@@ -275,6 +289,7 @@ func set_detail_level(new_level: DetailLevel) -> void:
 	if detail_level == new_level and detail_level != DetailLevel.UNLOADED:
 		return
 
+	_assembly_token += 1
 	detail_level = new_level
 
 	match detail_level:
@@ -287,10 +302,13 @@ func set_detail_level(new_level: DetailLevel) -> void:
 			visible = true
 		DetailLevel.FULL_DETAIL:
 			_clear_hlod()
-			_build_full_detail()
+			var immediate: bool = (coord == Vector2i.ZERO)
+			_build_full_detail(immediate)
 			visible = true
 
 func _clear_all() -> void:
+	_assembly_token += 1
+	is_fully_assembled = false
 	_clear_full_detail()
 	_clear_hlod()
 	ground_spawn_points.clear()
@@ -308,6 +326,8 @@ func _clear_hlod() -> void:
 		hlod_root = null
 
 func _clear_full_detail() -> void:
+	_assembly_token += 1
+	is_fully_assembled = false
 	if is_instance_valid(roads_root):
 		roads_root.queue_free()
 		roads_root = null
@@ -320,6 +340,9 @@ func _clear_full_detail() -> void:
 	if is_instance_valid(markers_root):
 		markers_root.queue_free()
 		markers_root = null
+	if is_instance_valid(encounters_root):
+		encounters_root.queue_free()
+		encounters_root = null
 
 	ground_spawn_points.clear()
 	rooftop_spawn_points.clear()
@@ -409,13 +432,99 @@ func _build_hlod() -> void:
 # ==============================================================================
 # FULL DETAIL BUILDER
 # ==============================================================================
-func _build_full_detail() -> void:
+func _build_full_detail(immediate: bool = false) -> void:
 	var rng := _get_chunk_rng()
 
 	_build_roads()
-	_build_buildings(rng)
+	_build_buildings_stage_1(rng)
+	_populate_initial_candidates()
+
+	if immediate:
+		_build_buildings_stage_2(rng)
+		_build_props(rng)
+		_populate_gameplay_candidates()
+		_build_encounters(rng)
+		is_fully_assembled = true
+	else:
+		is_fully_assembled = false
+		var token: int = _assembly_token
+		call_deferred("_finish_full_detail_assembly", token)
+
+func _finish_full_detail_assembly(token: int) -> void:
+	if token != _assembly_token or detail_level != DetailLevel.FULL_DETAIL:
+		return
+	var rng := _get_chunk_rng()
+	_build_buildings_stage_2(rng)
 	_build_props(rng)
 	_populate_gameplay_candidates()
+	_build_encounters(rng)
+	is_fully_assembled = true
+
+	var streamer: Node = get_parent()
+	if streamer and streamer.has_method("_register_chunk_metadata"):
+		streamer.call("_register_chunk_metadata", self)
+		if "_markers_dirty" in streamer:
+			streamer.set("_markers_dirty", true)
+
+func _populate_initial_candidates() -> void:
+	var origin := global_position
+	ground_spawn_points.clear()
+	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 0.0))
+	ground_spawn_points.append(origin + Vector3(0.0, 0.3, -56.0))
+	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 56.0))
+	ground_spawn_points.append(origin + Vector3(-56.0, 0.3, 0.0))
+	ground_spawn_points.append(origin + Vector3(56.0, 0.3, 0.0))
+	safe_open_positions.clear()
+	safe_open_positions.append(origin + Vector3(0.0, 0.3, 0.0))
+
+func _build_encounters(rng: RandomNumberGenerator) -> void:
+	if coord == Vector2i.ZERO or safe_open_positions.is_empty():
+		return
+
+	# ~55% probability of spawning an encounter in non-origin chunks
+	var encounter_roll: float = rng.randf()
+	if encounter_roll > 0.55:
+		return
+
+	encounters_root = Node3D.new()
+	encounters_root.name = "Encounters"
+	add_child(encounters_root)
+
+	var spawn_pos: Vector3 = safe_open_positions[0]
+	var enc_type_roll: float = rng.randf()
+	var enc: Node3D = null
+
+	if enc_type_roll < 0.28:
+		# Supply Beacon
+		var b: Node3D = SupplyBeaconScript.new()
+		b.name = "SupplyBeacon"
+		b.set("chunk_coord", coord)
+		b.set("encounter_id", "supply_beacon_%d_%d" % [coord.x, coord.y])
+		enc = b
+	elif enc_type_roll < 0.58:
+		# Guarded Upgrade Cache
+		var c: Node3D = GuardedCacheScript.new()
+		c.name = "GuardedCache"
+		c.set("chunk_coord", coord)
+		c.set("encounter_id", "guarded_cache_%d_%d" % [coord.x, coord.y])
+		enc = c
+	elif enc_type_roll < 0.85:
+		# Reward Location (Repair Station or Ammo Depot)
+		var r: Node3D = RewardLocationScript.new()
+		r.name = "RewardLocation"
+		r.set("chunk_coord", coord)
+		r.set("encounter_id", "reward_location_%d_%d" % [coord.x, coord.y])
+		r.set("reward_type", 0 if rng.randf() < 0.5 else 1) # 0=REPAIR_STATION, 1=AMMO_DEPOT
+		enc = r
+	else:
+		# Rare XP Burst Pickup
+		var p: Node3D = XPBurstPickupScript.new()
+		p.name = "XPBurstPickup"
+		enc = p
+
+	if enc:
+		enc.transform.origin = spawn_pos
+		encounters_root.add_child(enc)
 
 func _get_chunk_rng() -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
@@ -438,124 +547,132 @@ func _build_roads() -> void:
 	roads_root.name = "Roads"
 	add_child(roads_root)
 
-	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
-	var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
-	var ew_asphalt_w: float = 16.0 if ew_is_avenue else 9.0
-	var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
+	var cache_key: int = (1 if ns_is_avenue else 0) | (2 if ew_is_avenue else 0) | (4 if coord == Vector2i.ZERO else 0)
+	var merged_mesh: ArrayMesh = null
 
-	var boxes_by_mat: Dictionary = {}
-	var add_box := func(mat: Material, size: Vector3, pos: Vector3) -> void:
-		if not boxes_by_mat.has(mat):
-			boxes_by_mat[mat] = []
-		boxes_by_mat[mat].append([size, pos])
+	if _cached_road_meshes.has(cache_key):
+		merged_mesh = _cached_road_meshes[cache_key] as ArrayMesh
+	else:
+		var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
+		var ns_shoulder_w: float = 20.0 if ns_is_avenue else 13.0
+		var ew_asphalt_w: float = 16.0 if ew_is_avenue else 9.0
+		var ew_shoulder_w: float = 20.0 if ew_is_avenue else 13.0
 
-	# 1. Parcel underlay
-	add_box.call(ConcreteAgedMat, Vector3(CHUNK_SIZE, 0.1, CHUNK_SIZE), Vector3(0.0, 0.05, 0.0))
+		var boxes_by_mat: Dictionary = {}
+		var add_box := func(mat: Material, size: Vector3, pos: Vector3) -> void:
+			if not boxes_by_mat.has(mat):
+				boxes_by_mat[mat] = []
+			boxes_by_mat[mat].append([size, pos])
 
-	# 2. Road geometry: NS Road
-	add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.12, CHUNK_SIZE), Vector3(0.0, 0.07, 0.0))
-	add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.14, CHUNK_SIZE), Vector3(0.0, 0.08, 0.0))
+		# 1. Parcel underlay
+		add_box.call(ConcreteAgedMat, Vector3(CHUNK_SIZE, 0.1, CHUNK_SIZE), Vector3(0.0, 0.05, 0.0))
 
-	# 3. Road geometry: EW Road
-	add_box.call(ConcreteSidewalkMat, Vector3(CHUNK_SIZE, 0.12, ew_shoulder_w), Vector3(0.0, 0.075, 0.0))
-	add_box.call(AsphaltMat, Vector3(CHUNK_SIZE, 0.145, ew_asphalt_w), Vector3(0.0, 0.085, 0.0))
+		# 2. Road geometry: NS Road
+		add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.12, CHUNK_SIZE), Vector3(0.0, 0.07, 0.0))
+		add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.14, CHUNK_SIZE), Vector3(0.0, 0.08, 0.0))
 
-	# 4. Center intersection marking / patch
-	add_box.call(AsphaltMat, Vector3(ns_asphalt_w + 1.0, 0.15, ew_asphalt_w + 1.0), Vector3(0.0, 0.09, 0.0))
+		# 3. Road geometry: EW Road
+		add_box.call(ConcreteSidewalkMat, Vector3(CHUNK_SIZE, 0.12, ew_shoulder_w), Vector3(0.0, 0.075, 0.0))
+		add_box.call(AsphaltMat, Vector3(CHUNK_SIZE, 0.145, ew_asphalt_w), Vector3(0.0, 0.085, 0.0))
 
-	# 5. Thin geometry overlays: crosswalks, stop lines, yellow centerlines
-	var line_y: float = 0.153
-	var stop_mat := LineWhiteMat
-	var dash_mat := LineMat
-	var wear_mat := AsphaltWornMat
+		# 4. Center intersection marking / patch
+		add_box.call(AsphaltMat, Vector3(ns_asphalt_w + 1.0, 0.15, ew_asphalt_w + 1.0), Vector3(0.0, 0.09, 0.0))
 
-	# North intersection approach: stop line and crosswalk
-	add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, -ew_asphalt_w * 0.5 - 1.2))
-	for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
-		add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, -ew_asphalt_w * 0.5 - 3.2))
+		# 5. Thin geometry overlays: crosswalks, stop lines, yellow centerlines
+		var line_y: float = 0.153
+		var stop_mat := LineWhiteMat
+		var dash_mat := LineMat
+		var wear_mat := AsphaltWornMat
 
-	# South intersection approach: stop line and crosswalk
-	add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, ew_asphalt_w * 0.5 + 1.2))
-	for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
-		add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, ew_asphalt_w * 0.5 + 3.2))
+		# North intersection approach: stop line and crosswalk
+		add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, -ew_asphalt_w * 0.5 - 1.2))
+		for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+			add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, -ew_asphalt_w * 0.5 - 3.2))
 
-	# East intersection approach: stop line and crosswalk
-	add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(ns_asphalt_w * 0.5 + 1.2, line_y, 0.0))
-	for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
-		add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(ns_asphalt_w * 0.5 + 3.2, line_y, stripe_z))
+		# South intersection approach: stop line and crosswalk
+		add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, ew_asphalt_w * 0.5 + 1.2))
+		for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+			add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, ew_asphalt_w * 0.5 + 3.2))
 
-	# West intersection approach: stop line and crosswalk
-	add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(-ns_asphalt_w * 0.5 - 1.2, line_y, 0.0))
-	for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
-		add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(-ns_asphalt_w * 0.5 - 3.2, line_y, stripe_z))
+		# East intersection approach: stop line and crosswalk
+		add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(ns_asphalt_w * 0.5 + 1.2, line_y, 0.0))
+		for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+			add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(ns_asphalt_w * 0.5 + 3.2, line_y, stripe_z))
 
-	# Dashed yellow centerlines (NS road)
-	var z_cur: float = -ew_asphalt_w * 0.5 - 6.5
-	while z_cur > -62.0:
-		add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
-		z_cur -= 5.2
+		# West intersection approach: stop line and crosswalk
+		add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(-ns_asphalt_w * 0.5 - 1.2, line_y, 0.0))
+		for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+			add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(-ns_asphalt_w * 0.5 - 3.2, line_y, stripe_z))
 
-	z_cur = ew_asphalt_w * 0.5 + 6.5
-	while z_cur < 62.0:
-		add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
-		z_cur += 5.2
+		# Dashed yellow centerlines (NS road)
+		var z_cur: float = -ew_asphalt_w * 0.5 - 6.5
+		while z_cur > -62.0:
+			add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
+			z_cur -= 5.2
 
-	# Dashed yellow centerlines (EW road)
-	var x_cur: float = ns_asphalt_w * 0.5 + 6.5
-	while x_cur < 62.0:
-		add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
-		x_cur += 5.2
+		z_cur = ew_asphalt_w * 0.5 + 6.5
+		while z_cur < 62.0:
+			add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
+			z_cur += 5.2
 
-	x_cur = -ns_asphalt_w * 0.5 - 6.5
-	while x_cur > -62.0:
-		add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
-		x_cur -= 5.2
+		# Dashed yellow centerlines (EW road)
+		var x_cur: float = ns_asphalt_w * 0.5 + 6.5
+		while x_cur < 62.0:
+			add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
+			x_cur += 5.2
 
-	# Asphalt wear / utility patches
-	add_box.call(wear_mat, Vector3(2.6, 0.01, 3.8), Vector3(-ns_asphalt_w * 0.25, line_y - 0.002, -26.0))
-	add_box.call(wear_mat, Vector3(3.6, 0.01, 2.2), Vector3(24.0, line_y - 0.002, ew_asphalt_w * 0.25))
+		x_cur = -ns_asphalt_w * 0.5 - 6.5
+		while x_cur > -62.0:
+			add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
+			x_cur -= 5.2
 
-	# Lane direction arrows (North and South intersection approaches)
-	add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(-ns_asphalt_w * 0.25, line_y, -ew_asphalt_w * 0.5 - 10.0))
-	add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(ns_asphalt_w * 0.25, line_y, ew_asphalt_w * 0.5 + 10.0))
+		# Asphalt wear / utility patches
+		add_box.call(wear_mat, Vector3(2.6, 0.01, 3.8), Vector3(-ns_asphalt_w * 0.25, line_y - 0.002, -26.0))
+		add_box.call(wear_mat, Vector3(3.6, 0.01, 2.2), Vector3(24.0, line_y - 0.002, ew_asphalt_w * 0.25))
 
-	# Yellow corner curb markings (hazard curb paint near intersection)
-	var curb_corners: Array[Vector3] = [
-		Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
-		Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
-		Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0),
-		Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0)
-	]
-	for c_pos in curb_corners:
-		add_box.call(dash_mat, Vector3(0.35, 0.015, 4.0), c_pos)
+		# Lane direction arrows (North and South intersection approaches)
+		add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(-ns_asphalt_w * 0.25, line_y, -ew_asphalt_w * 0.5 - 10.0))
+		add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(ns_asphalt_w * 0.25, line_y, ew_asphalt_w * 0.5 + 10.0))
 
-	# Helipad flat surfaces if chunk (0,0)
-	if coord == Vector2i.ZERO:
-		add_box.call(AsphaltMat, Vector3(24.0, 0.14, 24.0), Vector3(0.0, 0.07, 0.0))
-		add_box.call(LineMat, Vector3(23.6, 0.15, 23.6), Vector3(0.0, 0.075, 0.0))
-		add_box.call(ConcreteMat, Vector3(22.0, 0.16, 22.0), Vector3(0.0, 0.08, 0.0))
-		add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(-2.5, 0.17, 0.0))
-		add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(2.5, 0.17, 0.0))
-		add_box.call(LineMat, Vector3(4.5, 0.02, 0.9), Vector3(0.0, 0.17, 0.0))
+		# Yellow corner curb markings (hazard curb paint near intersection)
+		var curb_corners: Array[Vector3] = [
+			Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
+			Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
+			Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0),
+			Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0)
+		]
+		for c_pos in curb_corners:
+			add_box.call(dash_mat, Vector3(0.35, 0.015, 4.0), c_pos)
 
-	# Commit merged static mesh with 1 surface per material
-	var merged_mesh := ArrayMesh.new()
-	for mat: Material in boxes_by_mat:
-		var items: Array = boxes_by_mat[mat]
-		if items.is_empty():
-			continue
-		var st := SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		st.set_material(mat)
-		for box_data in items:
-			var b_size: Vector3 = box_data[0]
-			var b_pos: Vector3 = box_data[1]
-			var bm := BoxMesh.new()
-			bm.size = b_size
-			st.append_from(bm, 0, Transform3D(Basis(), b_pos))
-		st.commit(merged_mesh)
-		var surf_idx: int = merged_mesh.get_surface_count() - 1
-		merged_mesh.surface_set_material(surf_idx, mat)
+		# Helipad flat surfaces if chunk (0,0)
+		if coord == Vector2i.ZERO:
+			add_box.call(AsphaltMat, Vector3(24.0, 0.14, 24.0), Vector3(0.0, 0.07, 0.0))
+			add_box.call(LineMat, Vector3(23.6, 0.15, 23.6), Vector3(0.0, 0.075, 0.0))
+			add_box.call(ConcreteMat, Vector3(22.0, 0.16, 22.0), Vector3(0.0, 0.08, 0.0))
+			add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(-2.5, 0.17, 0.0))
+			add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(2.5, 0.17, 0.0))
+			add_box.call(LineMat, Vector3(4.5, 0.02, 0.9), Vector3(0.0, 0.17, 0.0))
+
+		# Commit merged static mesh with 1 surface per material
+		merged_mesh = ArrayMesh.new()
+		for mat: Material in boxes_by_mat:
+			var items: Array = boxes_by_mat[mat]
+			if items.is_empty():
+				continue
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			st.set_material(mat)
+			for box_data in items:
+				var b_size: Vector3 = box_data[0]
+				var b_pos: Vector3 = box_data[1]
+				var bm := BoxMesh.new()
+				bm.size = b_size
+				st.append_from(bm, 0, Transform3D(Basis(), b_pos))
+			st.commit(merged_mesh)
+			var surf_idx: int = merged_mesh.get_surface_count() - 1
+			merged_mesh.surface_set_material(surf_idx, mat)
+
+		_cached_road_meshes[cache_key] = merged_mesh
 
 	var roads_mesh_inst := MeshInstance3D.new()
 	roads_mesh_inst.name = "MergedRoadGeometry"
@@ -663,7 +780,10 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	staging.add_child(mm_fences)
 
 static func _get_building_catalog() -> Dictionary:
-	return {
+	if not _cached_building_catalog.is_empty():
+		return _cached_building_catalog
+
+	_cached_building_catalog = {
 		"skyscraper_a": {
 			"scene": BuildingLargeScene,
 			"name": "BuildingLarge",
@@ -888,8 +1008,39 @@ static func _get_building_catalog() -> Dictionary:
 			"roof_clearance": 0.0,
 			"roof_height": 0.0,
 			"surface_type": "metal"
+		},
+		"chimney_large": {
+			"scene": ChimneyLargeScene,
+			"name": "ChimneyLarge",
+			"size": Vector2(5.8, 5.8),
+			"height": 17.0,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "metal"
+		},
+		"chimney_small": {
+			"scene": ChimneySmallScene,
+			"name": "ChimneySmall",
+			"size": Vector2(3.2, 3.2),
+			"height": 7.5,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "metal"
+		},
+		"solar_panel_portrait": {
+			"scene": SolarPanelPortraitScene,
+			"name": "SolarPanelPortrait",
+			"size": Vector2(3.5, 4.8),
+			"height": 1.44,
+			"has_flat_roof": false,
+			"roof_clearance": 0.0,
+			"roof_height": 0.0,
+			"surface_type": "solar"
 		}
 	}
+	return _cached_building_catalog
 
 func _place_lot_building(
 	entry: Dictionary,
@@ -916,10 +1067,25 @@ func _place_lot_building(
 	var half_w: float = eff_w * 0.5
 	var half_d: float = eff_d * 0.5
 
-	var min_u: float = x_inner + 0.8
-	var max_u: float = 62.0 - 0.8
-	var min_v: float = z_inner + 0.8
-	var max_v: float = 62.0 - 0.8
+	var b_height: float = float(entry.get("height", 10.0))
+	var clearance: float = 2.0
+	if b_height >= 35.0:
+		clearance = 6.0
+	elif b_height >= 15.0:
+		clearance = 4.5
+	elif b_height >= 3.0:
+		clearance = 3.5
+
+	var center_offset: Vector3 = Vector3.ZERO
+	if entry.has("center_offset"):
+		center_offset = entry["center_offset"] as Vector3
+	var rotated_offset_x: float = center_offset.x * cos(rot_y) + center_offset.z * sin(rot_y)
+	var rotated_offset_z: float = -center_offset.x * sin(rot_y) + center_offset.z * cos(rot_y)
+
+	var min_u: float = x_inner + 1.2
+	var max_u: float = 62.0 - 1.2
+	var min_v: float = z_inner + 1.2
+	var max_v: float = 62.0 - 1.2
 
 	# Check if building fits within the quadrant parcel boundaries
 	if eff_w > (max_u - min_u) or eff_d > (max_v - min_v):
@@ -942,7 +1108,6 @@ func _place_lot_building(
 	v_z = clampf(v_z, min_v + half_d, max_v - half_d)
 
 	var proposed_rect := Rect2(u_x - half_w, v_z - half_d, eff_w, eff_d)
-	var clearance: float = 1.5
 	var test_rect := proposed_rect.grow(clearance * 0.5)
 
 	var collides: bool = false
@@ -966,7 +1131,7 @@ func _place_lot_building(
 
 	var x_sign: float = -1.0 if (q == 0 or q == 2) else 1.0
 	var z_sign: float = -1.0 if (q == 0 or q == 1) else 1.0
-	var final_pos := Vector3(x_sign * u_x, 0.0, z_sign * v_z)
+	var final_pos := Vector3(x_sign * u_x - x_sign * rotated_offset_x, 0.0, z_sign * v_z - z_sign * rotated_offset_z)
 
 	var scene: PackedScene = entry["scene"] as PackedScene
 	var b_inst := scene.instantiate() as Node3D
@@ -1041,6 +1206,12 @@ func _place_lot_building(
 	return true
 
 func _build_buildings(rng: RandomNumberGenerator) -> void:
+	_build_buildings_stage_1(rng)
+	_build_buildings_stage_2(rng)
+
+func _build_buildings_stage_1(rng: RandomNumberGenerator) -> void:
+	if is_instance_valid(buildings_root):
+		buildings_root.queue_free()
 	buildings_root = Node3D.new()
 	buildings_root.name = "Buildings"
 	add_child(buildings_root)
@@ -1049,13 +1220,28 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 	building_records.clear()
 
 	var cat := _get_building_catalog()
-
 	var x_inner: float = 12.0 if ns_is_avenue else 8.5
 	var z_inner: float = 12.0 if ew_is_avenue else 8.5
 	var block_w: float = 62.0 - x_inner
 	var block_d: float = 62.0 - z_inner
 
-	for q in range(4):
+	for q in range(0, 2):
+		_build_quadrant(q, rng, cat, x_inner, z_inner, block_w, block_d)
+
+func _build_buildings_stage_2(rng: RandomNumberGenerator) -> void:
+	if not is_instance_valid(buildings_root):
+		return
+	var cat := _get_building_catalog()
+	var x_inner: float = 12.0 if ns_is_avenue else 8.5
+	var z_inner: float = 12.0 if ew_is_avenue else 8.5
+	var block_w: float = 62.0 - x_inner
+	var block_d: float = 62.0 - z_inner
+
+	for q in range(2, 4):
+		_build_quadrant(q, rng, cat, x_inner, z_inner, block_w, block_d)
+
+func _build_quadrant(q: int, rng: RandomNumberGenerator, cat: Dictionary, x_inner: float, z_inner: float, block_w: float, block_d: float) -> void:
+	for _q_exec in [q]:
 		var occupied_rects: Array[Rect2] = []
 		match district_type:
 			DistrictType.HELIPAD:
@@ -1145,7 +1331,7 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 			DistrictType.INDUSTRIAL:
 				var pattern_ind: int = rng.randi_range(0, 2)
 				if pattern_ind == 0:
-					# Archetype A: Logistics Yard (Warehouse + Multi-Unit Container Rows + Storage)
+					# Archetype A: Logistics Yard (Warehouse + Multi-Unit Container Rows + Storage + Industrial Chimney)
 					var wh: Dictionary = cat["warehouse_a"] if rng.randf() < 0.6 else cat["warehouse_b"]
 					_place_lot_building(wh, 0.34, 0.24, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
 					_place_lot_building(cat["container_stack"], 0.22, 0.74, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
@@ -1154,9 +1340,9 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(cat["container_stack"], 0.22, 0.54, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["container_stack"], 0.44, 0.54, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["storage_tanks"], 0.74, 0.28, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
-					_place_lot_building(cat["small_c"], 0.74, 0.62, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+					_place_lot_building(cat["chimney_large"], 0.74, 0.62, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["solar_panel_portrait", "parking_lot"])
 				elif pattern_ind == 1:
-					# Archetype B: Tank Farm & Storage (Storage tanks + Water tower + Container rows)
+					# Archetype B: Tank Farm & Storage (Storage tanks + Water tower + Chimney + Container rows)
 					_place_lot_building(cat["storage_tanks"], 0.28, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
 					_place_lot_building(cat["water_tower"], 0.72, 0.24, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["small_b"], 0.24, 0.72, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
@@ -1164,15 +1350,15 @@ func _build_buildings(rng: RandomNumberGenerator) -> void:
 					_place_lot_building(cat["container_stack"], 0.70, 0.48, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
 					_place_lot_building(cat["container_stack"], 0.48, 0.72, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["storage_tanks"], 0.50, 0.26, q, 6, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
-					_place_lot_building(cat["small_c"], 0.24, 0.48, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+					_place_lot_building(cat["chimney_small"], 0.24, 0.48, q, 7, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c", "small_b"])
 				else:
-					# Archetype C: Sawtooth Depot & Freight Staging
+					# Archetype C: Sawtooth Depot & Freight Staging (Depot + Chimneys + Solar Portrait + Containers)
 					_place_lot_building(cat["warehouse_b"], 0.38, 0.38, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["warehouse_a"])
 					_place_lot_building(cat["container_stack"], 0.78, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
-					_place_lot_building(cat["container_stack"], 0.78, 0.46, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["chimney_large"], 0.78, 0.46, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["chimney_small", "small_c"])
 					_place_lot_building(cat["parking_lot"], 0.78, 0.72, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					_place_lot_building(cat["container_stack"], 0.26, 0.78, q, 4, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
-					_place_lot_building(cat["container_stack"], 0.48, 0.78, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+					_place_lot_building(cat["solar_panel_portrait"], 0.48, 0.78, q, 5, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["chimney_small", "small_c"])
 
 			DistrictType.RESIDENTIAL, _:
 				var pattern_res: int = rng.randi_range(0, 2)
@@ -1307,7 +1493,8 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 			return absf(p.x) > 13.0 or absf(p.z) > 13.0
 		)
 
-	for idx in range(car_candidates.size()):
+	var max_cars: int = 3 if SaveSystem.low_particles else car_candidates.size()
+	for idx in range(mini(car_candidates.size(), max_cars)):
 		var base_pos: Vector3 = car_candidates[idx]
 		var jitter_z: float = rng.randf_range(-1.0, 1.0)
 		var spawn_pos: Vector3 = base_pos + Vector3(0.0, 0.0, jitter_z)
@@ -1324,11 +1511,15 @@ func _build_vehicles(rng: RandomNumberGenerator) -> void:
 			v_node.name = "Vehicle_%d" % idx
 			v_node.position = spawn_pos
 			v_node.rotation.y = rot_y
-			if coord.length() > 1.0:
-				for vc in v_node.find_children("*", "GeometryInstance3D", true, false):
-					var v_gi := vc as GeometryInstance3D
-					if v_gi:
-						v_gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var v_shadow: GeometryInstance3D.ShadowCastingSetting = (
+				GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				if (coord.length() > 1.0 or SaveSystem.low_particles)
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			)
+			for vc in v_node.find_children("*", "GeometryInstance3D", true, false):
+				var v_gi := vc as GeometryInstance3D
+				if v_gi:
+					v_gi.cast_shadow = v_shadow
 			props_root.add_child(v_node)
 
 func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
@@ -1380,6 +1571,9 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 		# Industrial district: sparse planting (skip ~50% of avenue slots)
 		if district_type == DistrictType.INDUSTRIAL and dec_rng.randf() < 0.5:
 			continue
+		# On low particles/performance preset, scale back sidewalk planting
+		if SaveSystem.low_particles and dec_rng.randf() < 0.4:
+			continue
 
 		if not _is_vegetation_position_clear(slot_pos, 1.2, placed_vegetation, x_inner, z_inner):
 			continue
@@ -1406,6 +1600,8 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 		DistrictType.HELIPAD: max_additional = 1
 
 	var target_additional: int = dec_rng.randi_range(int(max_additional * 0.5), max_additional)
+	if SaveSystem.low_particles:
+		target_additional = int(target_additional * 0.4)
 	var additional_placed: int = 0
 
 	var quad_templates: Array[Vector2] = [
@@ -1810,3 +2006,34 @@ func _populate_gameplay_candidates() -> void:
 	safe_open_positions.append(origin + Vector3(0.0, 0.3, 0.0))
 	if coord == Vector2i.ZERO:
 		safe_open_positions.append(origin + Vector3(0.0, 0.3, 0.0))
+
+func update_graphics_settings(preset_name: String = "") -> void:
+	if not props_root or not is_instance_valid(props_root):
+		return
+	var is_low: bool = (preset_name.to_lower() == "low") if not preset_name.is_empty() else SaveSystem.low_particles
+	var shadow_setting: GeometryInstance3D.ShadowCastingSetting = (
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (coord.length() > 1.5 or is_low)
+		else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+	var mm_s := props_root.get_node_or_null("KenneyTreesSmallMultiMesh") as GeometryInstance3D
+	if mm_s:
+		mm_s.cast_shadow = shadow_setting
+	var mm_l := props_root.get_node_or_null("KenneyTreesLargeMultiMesh") as GeometryInstance3D
+	if mm_l:
+		mm_l.cast_shadow = shadow_setting
+	var mm_p := props_root.get_node_or_null("KenneyPlantersMultiMesh") as GeometryInstance3D
+	if mm_p:
+		mm_p.cast_shadow = shadow_setting
+
+	var v_shadow: GeometryInstance3D.ShadowCastingSetting = (
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if (coord.length() > 1.0 or is_low)
+		else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+	for child in props_root.get_children():
+		if child.name.begins_with("Vehicle_"):
+			for vc in child.find_children("*", "GeometryInstance3D", true, false):
+				var gi := vc as GeometryInstance3D
+				if gi:
+					gi.cast_shadow = v_shadow

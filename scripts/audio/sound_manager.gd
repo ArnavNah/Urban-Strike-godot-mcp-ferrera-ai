@@ -133,11 +133,13 @@ func _on_player_fired_primary(_muzzle_pos: Vector3, _dir: Vector3) -> void:
 
 func _on_enemy_fired_weapon(_enemy: Node3D, _muzzle_pos: Vector3, _dir: Vector3, is_heavy: bool) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
-	if now - _last_enemy_shot_time < 0.07:
+	if now - _last_enemy_shot_time < 0.06:
 		return
 	_last_enemy_shot_time = now
 	if is_heavy:
-		_play_sweep(95.0, 42.0, 0.09, 0.35)
+		# Heavy cannon / mortar: low menacing launch thump
+		_play_sweep(105.0, 36.0, 0.12, 0.42, true)
+		_play_tone(alert_player, 65.0, 0.15)
 	else:
 		_play_sweep(135.0, 62.0, 0.06, 0.30)
 
@@ -192,15 +194,27 @@ func _on_missile_impact(_impact_pos: Vector3, _is_player: bool) -> void:
 	_last_missile_impact_time = now
 	_play_sweep(145.0, 42.0, 0.26, 0.40)
 
-func _on_enemy_destroyed(_enemy: Node3D, points: int) -> void:
-	if points >= 150:
+func _on_enemy_destroyed(enemy: Node3D, points: int) -> void:
+	var is_air := false
+	if is_instance_valid(enemy):
+		if enemy.is_in_group("air_enemies") or enemy is AirEnemyController or enemy is HunterHelicopter or enemy is Mig17Striker:
+			is_air = true
+
+	if is_air:
+		# Aircraft destruction: descending airframe decompression whine / screech + secondary explosion pop
+		_play_sweep(340.0, 85.0, 0.38, 0.40)
+		_play_tone(explosion_player, 70.0, 0.45)
+	elif points >= 150:
 		# Major destruction (command unit, boss, radar, high-threat elite)
-		_play_tone(explosion_player, 55.0, 0.75)
-		_play_sweep(85.0, 32.0, 0.42, 0.45, true)
+		_play_tone(explosion_player, 48.0, 0.85)
+		_play_sweep(75.0, 28.0, 0.48, 0.48, true)
 	elif points >= 25:
-		_play_tone(explosion_player, 75.0, 0.5)
+		# Standard ground armor / turret destruction: deep mechanical bass rumble + crunch
+		_play_tone(explosion_player, 55.0, 0.60)
+		_play_sweep(90.0, 35.0, 0.35, 0.38, true)
 	else:
-		_play_tone(explosion_player, 110.0, 0.35)
+		# Light unit destruction
+		_play_tone(explosion_player, 95.0, 0.35)
 
 func _on_missile_lock(_progress: float, _target: Node3D, is_locked: bool) -> void:
 	if is_locked and not _was_missile_locked:
@@ -215,7 +229,8 @@ func _on_flares_updated(_left: int, _max: int, _is_ready: bool) -> void:
 
 func _on_missile_warning(_pos: Vector3, is_active: bool) -> void:
 	if is_active:
-		_play_tone(alert_player, 950.0, 0.18)
+		# Urgent incoming missile alert warble (980Hz -> 650Hz sweep)
+		_play_sweep(980.0, 650.0, 0.16, 0.38)
 
 func _on_level_up(_level: int) -> void:
 	_play_arpeggio(alert_player, [523.25, 659.25, 783.99, 1046.5], 0.11)

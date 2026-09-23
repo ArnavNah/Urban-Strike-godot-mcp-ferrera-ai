@@ -19,12 +19,18 @@ func _ready() -> void:
 	else:
 		play()
 
+func play_directional(dir: Vector3 = Vector3.ZERO, is_enemy: bool = false, base_scale: float = 1.4) -> void:
+	play(is_enemy, base_scale, dir)
+
 func play(is_enemy: bool = false, base_scale: float = 1.4, dir: Vector3 = Vector3.ZERO) -> void:
 	if _tween:
 		_tween.kill()
 	process_mode = Node.PROCESS_MODE_INHERIT
 	visible = true
 	is_active = true
+
+	if bool(SaveSystem.get_setting("reduced_flashing", false)):
+		base_scale *= 0.6
 
 	if not _player_flash_mat:
 		_player_flash_mat = StandardMaterial3D.new()

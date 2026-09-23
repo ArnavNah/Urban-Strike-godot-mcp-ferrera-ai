@@ -238,17 +238,20 @@ func _spawn_hunter_escort() -> void:
 			p.add_child.call_deferred(hunter)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_trigger_damage_flash()
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb:
-		if eb.has_signal("boss_health_changed"):
-			eb.emit_signal("boss_health_changed", current_health, max_health, current_phase)
-		if eb.has_signal("damage_number_spawned"):
-			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb:
+			if eb.has_signal("boss_health_changed"):
+				eb.emit_signal("boss_health_changed", current_health, max_health, current_phase)
+			if eb.has_signal("damage_number_spawned"):
+				eb.emit_signal("damage_number_spawned", global_position + Vector3(0, 1.5, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0, "is_objective": true})
 
 	if current_health <= 0.0:
 		_die()
@@ -272,6 +275,8 @@ func _die() -> void:
 	_is_dead = true
 	is_alive = false
 	DamageFlashManager.clear_target(self)
+	collision_layer = 0
+	collision_mask = 0
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 

@@ -135,6 +135,7 @@ func _ready() -> void:
 		visuals.add_child(beacon)
 
 func _exit_tree() -> void:
+	_warn_incoming_missile(false)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 	_release_air_slot()
@@ -181,74 +182,65 @@ func _physics_process(delta: float) -> void:
 	if _arming_timer > 0.0:
 		_arming_timer -= delta
 
-	# Distance-based AI update tiers (NEAR <= 60m: 60Hz, MEDIUM 60-140m: 30Hz staggered, FAR > 140m: 10Hz staggered)
-	var dist_to_player := global_position.distance_to(_player.global_position)
+	# Full 60Hz physics process for smooth pursuit and collision; dormant only beyond arena limits (280m)
 	_lod_frame_counter += 1
-	var step_delta := delta
-	var frame_stagger := _lod_frame_counter + _stagger_offset
-
+	var dist_to_player := global_position.distance_to(_player.global_position)
 	if dist_to_player > 280.0:
-		return # Dormant beyond 280m
-	elif dist_to_player > 140.0:
-		# FAR TIER: 10 Hz corridor advance
-		if frame_stagger % 6 != 0:
-			return
-		step_delta = delta * 6.0
-	elif dist_to_player > 60.0:
-		# MEDIUM TIER: 30 Hz approach
-		if frame_stagger % 2 != 0:
-			return
-		step_delta = delta * 2.0
+		return
 
 	if _avoidance_timer > 0.0:
-		_avoidance_timer -= step_delta
+		_avoidance_timer -= delta
 
 	# Smooth altitude band compliance and rooftop clearance
-	_update_altitude(step_delta)
+	_update_altitude(delta)
 
 	var flat_dist := Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
 
-	# Safety check: Never hover directly over player or ram
-	if flat_dist < 14.0 and current_state != State.BREAK_AWAY and current_state != State.DISENGAGE and current_state != State.RETREAT and current_state != State.RECOVER:
+	# Safety check: Never hover directly over player or ram (break away only if dangerously close < 10m)
+	if flat_dist < 10.0 and current_state != State.BREAK_AWAY and current_state != State.DISENGAGE and current_state != State.RETREAT and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.BREAK_AWAY)
 
 	# Active pursuit check: If player travels away across the city, resume approach
-	if flat_dist > archetype.preferred_distance * 1.6 and current_state != State.APPROACH and current_state != State.ENTER and current_state != State.RETREAT and current_state != State.RECOVER:
+	if flat_dist > archetype.preferred_distance * 1.5 and current_state != State.APPROACH and current_state != State.ENTER and current_state != State.RETREAT and current_state != State.RECOVER:
 		_release_air_slot()
 		_transition_to(State.APPROACH)
 
 	# Stuck detection against obstacles or buildings
-	_check_stuck_condition(step_delta)
+	_check_stuck_condition(delta)
 
 	match current_state:
 		State.ENTER:
-			_tick_enter(step_delta, flat_dist)
+			_tick_enter(delta, flat_dist)
 		State.APPROACH:
-			_tick_approach(step_delta, flat_dist)
+			_tick_approach(delta, flat_dist)
 		State.ATTACK_SETUP:
-			_tick_attack_setup(step_delta, flat_dist)
+			_tick_attack_setup(delta, flat_dist)
 		State.ORBIT:
-			_tick_orbit(step_delta, flat_dist)
+			_tick_orbit(delta, flat_dist)
 		State.STRAFE:
-			_tick_strafe(step_delta, flat_dist)
+			_tick_strafe(delta, flat_dist)
 		State.ATTACK:
-			_tick_attack(step_delta, flat_dist)
+			_tick_attack(delta, flat_dist)
 		State.BREAK_AWAY, State.DISENGAGE:
-			_tick_break_away(step_delta)
+			_tick_break_away(delta)
 		State.REPOSITION:
-			_tick_reposition(step_delta, flat_dist)
+			_tick_reposition(delta, flat_dist)
 		State.RETREAT:
-			_tick_retreat(step_delta)
+			_tick_retreat(delta)
 		State.RECOVER:
-			_tick_recover(step_delta)
+			_tick_recover(delta)
+
+	# Active combat machine gun bursts while engaging
+	if archetype and archetype.weapon_type == AirEnemyArchetype.WeaponType.MACHINE_GUN and is_alive:
+		_process_machine_gun_fire(delta, flat_dist)
 
 	# Lightweight aircraft separation steering so helicopters never stack
 	_apply_separation()
 
 	# Move and update visual bank/pitch
 	move_and_slide()
-	_update_visual_orientation(step_delta)
+	_update_visual_orientation(delta)
 
 func _update_altitude(delta: float) -> void:
 	if not is_instance_valid(_player):
@@ -476,12 +468,14 @@ func _update_visual_orientation(delta: float) -> void:
 	var speed := horiz_vel.length()
 
 	var target_yaw := rotation.y
-	if current_state == State.ATTACK or current_state == State.ATTACK_SETUP:
-		if is_instance_valid(_player):
-			var to_p := (_player.global_position - global_position)
-			to_p.y = 0.0
-			if to_p.length_squared() > 0.1:
-				target_yaw = atan2(-to_p.x, -to_p.z)
+	var dist_to_player := global_position.distance_to(_player.global_position) if is_instance_valid(_player) else 999.0
+
+	# When engaging in combat (within 38m) or in attack/strafe/orbit states, aim nose directly at player!
+	if is_instance_valid(_player) and (dist_to_player <= 38.0 or current_state == State.ATTACK or current_state == State.ATTACK_SETUP or current_state == State.STRAFE or current_state == State.ORBIT):
+		var to_p := (_player.global_position - global_position)
+		to_p.y = 0.0
+		if to_p.length_squared() > 0.1:
+			target_yaw = atan2(-to_p.x, -to_p.z)
 	elif speed > 1.0:
 		target_yaw = atan2(-velocity.x, -velocity.z)
 
@@ -515,12 +509,14 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 	var approach_dest := _player.global_position
 
 	var approach_speed := archetype.cruise_speed
-	if flat_dist > 50.0:
+	if flat_dist > 35.0:
 		approach_speed *= 1.35 # Catch-up speed so aircraft never get permanently left behind
+	if flat_dist > 65.0:
+		approach_speed *= 1.6 # High catch-up speed for distant spawns
 
 	_fly_toward(approach_dest, approach_speed, delta)
 
-	if flat_dist <= archetype.preferred_distance + 2.0 or _state_timer <= 0.0:
+	if flat_dist <= archetype.preferred_distance + 3.0:
 		match archetype.weapon_type:
 			AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
 				_transition_to(State.ATTACK_SETUP)
@@ -528,6 +524,8 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 				_transition_to(State.ORBIT)
 			_:
 				_transition_to(State.ATTACK_SETUP)
+	elif _state_timer <= 0.0:
+		_state_timer = archetype.approach_timeout
 
 func _tick_attack_setup(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
@@ -602,12 +600,7 @@ func _tick_strafe(delta: float, flat_dist: float) -> void:
 	velocity.x = move_toward(velocity.x, strafe_vec.x * archetype.attack_speed, _max_horizontal_accel * delta)
 	velocity.z = move_toward(velocity.z, strafe_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
 
-	# Frequent machine gun bursts during strafe pass
-	if _shot_cooldown <= 0.0:
-		_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
-		_fire_bullet(1.0)
-
-	if _state_timer <= 0.0 or flat_dist < 14.0:
+	if _state_timer <= 0.0 or flat_dist < 10.0:
 		_release_air_slot()
 		_transition_to(State.BREAK_AWAY)
 
@@ -649,15 +642,62 @@ func _tick_attack(delta: float, flat_dist: float) -> void:
 			AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
 				_exec_transport_drop(delta)
 
-	if _attack_timer <= 0.0 or flat_dist < 14.0:
+	if _attack_timer <= 0.0 or flat_dist < 10.0:
 		_release_air_slot()
-		_transition_to(State.BREAK_AWAY)
+		_transition_to(State.ORBIT if randf() < 0.6 else State.BREAK_AWAY)
 
+func _process_machine_gun_fire(delta: float, flat_dist: float) -> void:
+	_shot_cooldown -= delta
 
-func _exec_machine_gun_attack(_delta: float) -> void:
-	if _shot_cooldown <= 0.0:
-		_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
-		_fire_bullet(1.0)
+	var in_combat_state: bool = (
+		current_state == State.ATTACK or
+		current_state == State.STRAFE or
+		current_state == State.ORBIT or
+		current_state == State.ATTACK_SETUP or
+		(current_state == State.APPROACH and flat_dist <= 32.0)
+	)
+	if not in_combat_state or flat_dist > 36.0:
+		return
+
+	if _arming_timer > 0.0:
+		return
+
+	# Only fire when facing reasonably toward the player (within ~60 degrees)
+	if is_instance_valid(_player):
+		var to_p := (_player.global_position - global_position)
+		to_p.y = 0.0
+		var fwd := -global_transform.basis.z
+		fwd.y = 0.0
+		if to_p.length_squared() > 0.1 and fwd.length_squared() > 0.1:
+			if fwd.normalized().dot(to_p.normalized()) < 0.45:
+				return
+
+	if not _check_los():
+		return
+
+	if not _has_air_slot:
+		if not _request_air_slot():
+			return
+
+	if _burst_shots_remaining > 0:
+		if _shot_cooldown <= 0.0:
+			_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
+			_burst_shots_remaining -= 1
+			_fire_bullet(1.0)
+			if _burst_shots_remaining <= 0:
+				_shot_cooldown = randf_range(1.2, 1.8)
+	else:
+		if _shot_cooldown <= 0.0:
+			_burst_shots_remaining = maxi(3, archetype.burst_count if archetype else 3)
+			_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
+			_burst_shots_remaining -= 1
+			_fire_bullet(1.0)
+
+func _exec_machine_gun_attack(delta: float) -> void:
+	var fd := 0.0
+	if is_instance_valid(_player):
+		fd = Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
+	_process_machine_gun_fire(delta, fd)
 
 func _exec_rocket_salvo_attack(_delta: float) -> void:
 	if _is_telegraphing:
@@ -813,10 +853,18 @@ func _check_los() -> bool:
 	if not is_instance_valid(_player):
 		return false
 	var space := get_world_3d().direct_space_state
-	var origin := global_position + Vector3(0.0, -0.3, 0.0)
-	var target_pos := _player.global_position
+	if not space:
+		return false
+	var reach := _get_forward_hull_reach()
+	var origin := global_position + (-global_transform.basis.z * reach) + Vector3(0.0, -0.2, 0.0)
+	var target_pos := _player.global_position + Vector3(0.0, 0.5, 0.0)
 	var query := PhysicsRayQueryParameters3D.create(origin, target_pos, 1) # Layer 1 = World
-	query.exclude = [get_rid()]
+	var excludes: Array[RID] = [get_rid()]
+	if _player is CollisionObject3D:
+		excludes.append((_player as CollisionObject3D).get_rid())
+	query.exclude = excludes
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
 	var hit := space.intersect_ray(query)
 	return hit.is_empty()
 
@@ -980,21 +1028,24 @@ func _release_air_slot() -> void:
 	_has_air_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_trigger_damage_flash()
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
 
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		var dmg_y := _get_damage_number_y_offset()
-		eb.emit_signal("damage_number_spawned", global_position + Vector3(0, dmg_y, 0), amount, false, {"target_id": get_instance_id()})
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			var dmg_y := _get_damage_number_y_offset()
+			eb.emit_signal("damage_number_spawned", global_position + Vector3(0, dmg_y, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 
-	if visuals:
-		var tw := create_tween()
-		tw.tween_property(visuals, "scale", _base_visual_scale * 1.08, 0.05)
-		tw.tween_property(visuals, "scale", _base_visual_scale, 0.05)
+		if visuals:
+			var tw := create_tween()
+			tw.tween_property(visuals, "scale", _base_visual_scale * 1.08, 0.05)
+			tw.tween_property(visuals, "scale", _base_visual_scale, 0.05)
 
 	if current_health <= 0.0:
 		_die()
@@ -1021,6 +1072,7 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	_release_air_slot()
+	_warn_incoming_missile(false)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 	var eb: Node = get_node_or_null("/root/EventBus")
@@ -1033,6 +1085,10 @@ func _die() -> void:
 
 	_spawn_rewards()
 
+	# Initial hit sparks
+	if VfxPool.instance:
+		VfxPool.instance.spawn_sparks(global_position, Vector3.UP, true)
+
 	var expl_scale: float = 1.4
 	if is_major_target:
 		expl_scale = 2.4
@@ -1043,19 +1099,24 @@ func _die() -> void:
 			expl_scale = 2.2
 		elif archetype.threat_cost >= 6:
 			expl_scale = 1.8
-	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position, expl_scale)
-	else:
-		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-		if expl_scene:
-			var expl := expl_scene.instantiate() as Node3D
-			if expl:
-				expl.transform.origin = global_position
-				expl.scale = Vector3(expl_scale, expl_scale, expl_scale)
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(expl)
 
-	queue_free()
+	# Aircraft death spin / downward plunge before final explosion
+	set_physics_process(false)
+	set_process(false)
+	var death_tw := create_tween()
+	if death_tw and visuals:
+		death_tw.parallel().tween_property(self, "position:y", position.y - 2.5, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		death_tw.parallel().tween_property(visuals, "rotation:z", visuals.rotation.z + PI * 1.5, 0.40)
+		death_tw.parallel().tween_property(visuals, "rotation:x", visuals.rotation.x + 0.5, 0.40)
+		death_tw.tween_callback(func():
+			if VfxPool.instance:
+				VfxPool.instance.spawn_explosion(global_position, expl_scale)
+			queue_free()
+		)
+	else:
+		if VfxPool.instance:
+			VfxPool.instance.spawn_explosion(global_position, expl_scale)
+		queue_free()
 
 func _spawn_rewards() -> void:
 	if _has_spawned_rewards:

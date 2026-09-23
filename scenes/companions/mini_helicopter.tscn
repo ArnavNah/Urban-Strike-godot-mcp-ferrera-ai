@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://twppmoss73ee" path="res://assets/vehicles/player/escort_drone.glb" id="2_7qaoa"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_h2w3n"]
-size = Vector3(1.8, 0.8, 2)
+size = Vector3(3.4, 1.6, 4.8)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_lt6nh"]
 radius = 36.0
@@ -15,22 +15,22 @@ albedo_color = Color(1, 0.8, 0.2, 1)
 
 [sub_resource type="SphereMesh" id="SphereMesh_077v6"]
 material = SubResource("StandardMaterial3D_dmrqq")
-radius = 0.12
-height = 0.24
+radius = 0.22
+height = 0.44
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l12sc"]
 shading_mode = 0
 albedo_color = Color(0.05, 0.08, 0.1, 0.85)
 
 [sub_resource type="BoxMesh" id="BoxMesh_pl6bc"]
-size = Vector3(1, 0.06, 0.02)
+size = Vector3(1.6, 0.08, 0.02)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g6e6o"]
 shading_mode = 0
 albedo_color = Color(0.1, 0.9, 0.8, 0.9)
 
 [sub_resource type="BoxMesh" id="BoxMesh_gukfo"]
-size = Vector3(1, 0.06, 0.02)
+size = Vector3(1.6, 0.08, 0.02)
 
 [node name="MiniHelicopter" type="CharacterBody3D" unique_id=1422453403]
 collision_layer = 2
@@ -39,13 +39,13 @@ motion_mode = 1
 script = ExtResource("1_ljto1")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1903538466]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0.2)
 shape = SubResource("BoxShape3D_h2w3n")
 
 [node name="VisualRoot" type="Node3D" parent="." unique_id=1618849347]
 
 [node name="PlaneModel" type="Node3D" parent="VisualRoot" unique_id=1115339518]
-transform = Transform3D(0, 0, 0.28, 0, 0.28, 0, -0.28, 0, 0, 0, 0, 0)
+transform = Transform3D(0, 0, 0.68, 0, 0.68, 0, -0.68, 0, 0, 0, 0, 0)
 
 [node name="MainRotor" type="Node3D" parent="VisualRoot/PlaneModel" unique_id=1067425150]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.509348, 2.333048, 0.064362)
@@ -53,7 +53,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.509348, 2.333048, 0.064362
 [node name="IronWingsModel" parent="VisualRoot/PlaneModel" unique_id=1195371944 instance=ExtResource("2_7qaoa")]
 
 [node name="WeaponMount" type="Marker3D" parent="." unique_id=2081932191]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, -0.72)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, -1.75)
 
 [node name="TargetDetection" type="Area3D" parent="." unique_id=980706583]
 collision_layer = 0
@@ -63,7 +63,7 @@ collision_mask = 4
 shape = SubResource("SphereShape3D_lt6nh")
 
 [node name="MuzzleFlash" type="MeshInstance3D" parent="." unique_id=562740369]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, -0.76)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, -1.85)
 visible = false
 mesh = SubResource("SphereMesh_077v6")
 
@@ -76,7 +76,7 @@ wait_time = 0.22
 autostart = true
 
 [node name="HealthBar3D" type="Node3D" parent="." unique_id=163913650]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.95, 0)
 
 [node name="Bg" type="MeshInstance3D" parent="HealthBar3D" unique_id=963501274]
 material_override = SubResource("StandardMaterial3D_l12sc")

@@ -210,13 +210,46 @@ func _populate_telemetry() -> void:
 	if kills_value_label:
 		kills_value_label.text = "%d KILLS" % kills
 
-	# 4. Total Damage
+	# 4. Total Damage & Source Attribution Breakdown
 	var dmg: float = gm.damage_dealt if gm else 0.0
 	if damage_value_label:
 		if dmg >= 1000.0:
 			damage_value_label.text = "%.1fK DMG" % (dmg / 1000.0)
 		else:
 			damage_value_label.text = "%d DMG" % int(dmg)
+
+	var breakdown_container: Node = find_child("WeaponBreakdownContainer", true, false)
+	if not breakdown_container and damage_value_label and damage_value_label.get_parent():
+		var parent_container := damage_value_label.get_parent().get_parent()
+		if parent_container:
+			var vbox := VBoxContainer.new()
+			vbox.name = "WeaponBreakdownContainer"
+			vbox.add_theme_constant_override("separation", 2)
+			parent_container.add_child(vbox)
+			breakdown_container = vbox
+
+	if breakdown_container and gm:
+		for child in breakdown_container.get_children():
+			child.queue_free()
+
+		var dmg_by_src: Dictionary = gm.get("damage_by_source") if "damage_by_source" in gm else {}
+		var kills_by_src: Dictionary = gm.get("kills_by_source") if "kills_by_source" in gm else {}
+
+		var c_dmg: float = float(dmg_by_src.get("chaingun", 0.0))
+		var m_dmg: float = float(dmg_by_src.get("missiles", 0.0))
+		var w_dmg: float = float(dmg_by_src.get("wingmen", 0.0))
+		var c_k: int = int(kills_by_src.get("chaingun", 0))
+		var m_k: int = int(kills_by_src.get("missiles", 0))
+		var w_k: int = int(kills_by_src.get("wingmen", 0))
+
+		var line := Label.new()
+		line.name = "AttributionSummaryLabel"
+		line.add_theme_color_override("font_color", Color(0.75, 0.82, 0.9, 0.9))
+		line.add_theme_font_size_override("font_size", 10)
+		line.text = "GUN: %d dmg (%d kills) | MISSILE: %d dmg (%d kills) | WINGMEN: %d dmg (%d kills)" % [
+			int(c_dmg), c_k, int(m_dmg), m_k, int(w_dmg), w_k
+		]
+		breakdown_container.add_child(line)
 
 func _populate_salvage(lost_salvage: int, has_insurance: bool) -> void:
 	var save_data: Dictionary = SaveSystem.load_data()

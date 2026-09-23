@@ -36,6 +36,8 @@ var _current_target_has_los: bool = false
 var _last_raycast_count: int = 0
 var _total_acquisitions_count: int = 0
 var _total_raycasts_count: int = 0
+var _jammed_check_timer: float = 0.0
+var _is_jammed_cached: bool = false
 
 signal target_changed(new_target: Node3D)
 signal manual_aim_toggled(is_manual: bool)
@@ -43,6 +45,11 @@ signal manual_aim_toggled(is_manual: bool)
 func _physics_process(delta: float) -> void:
 	if not is_inside_tree() or not get_world_3d():
 		return
+
+	_jammed_check_timer -= delta
+	if _jammed_check_timer <= 0.0:
+		_jammed_check_timer = 0.2
+		_is_jammed_cached = _evaluate_is_jammed()
 
 	if _manual_settle_timer > 0.0:
 		_manual_settle_timer -= delta
@@ -106,6 +113,11 @@ func _set_manual_aim(manual: bool) -> void:
 			eb.emit_signal("manual_aim_state_changed", is_manual_aim)
 
 func is_jammed() -> bool:
+	return _is_jammed_cached
+
+func _evaluate_is_jammed() -> bool:
+	if not is_inside_tree():
+		return false
 	var jammers: Array = get_tree().get_nodes_in_group("jammers")
 	for jammer in jammers:
 		var j := jammer as Node3D

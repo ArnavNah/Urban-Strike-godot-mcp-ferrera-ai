@@ -28,12 +28,15 @@ func _process(delta: float) -> void:
 		beacon_light.light_energy = 1.0 + sin(Time.get_ticks_msec() * 0.005) * 1.5
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_active:
+	if not is_active or amount <= 0.0:
 		return
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	if EventBus:
-		EventBus.damage_number_spawned.emit(global_position + Vector3(0, 2.5, 0), amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		if EventBus:
+			EventBus.damage_number_spawned.emit(global_position + Vector3(0, 2.5, 0), actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0, "is_objective": true})
 
 	if current_health <= 0.0:
 		_destroy_radar()
@@ -42,6 +45,8 @@ func _destroy_radar() -> void:
 	if not is_active:
 		return
 	is_active = false
+	collision_layer = 0
+	collision_mask = 0
 	if EventBus:
 		EventBus.radar_status_changed.emit(false)
 		EventBus.enemy_destroyed.emit(self, 250)

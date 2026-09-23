@@ -16,6 +16,32 @@ var bosses_killed: int = 0
 var run_timer: float = 0.0
 var is_run_active: bool = true
 
+var damage_by_source: Dictionary = {
+	"chaingun": 0.0,
+	"missiles": 0.0,
+	"wingmen": 0.0,
+	"other": 0.0
+}
+var kills_by_source: Dictionary = {
+	"chaingun": 0,
+	"missiles": 0,
+	"wingmen": 0,
+	"other": 0
+}
+
+func record_attributed_damage(amount: float, source_id: String) -> void:
+	damage_dealt += amount
+	var key := source_id.to_lower()
+	if not damage_by_source.has(key):
+		key = "other"
+	damage_by_source[key] = float(damage_by_source.get(key, 0.0)) + amount
+
+func record_attributed_kill(source_id: String) -> void:
+	var key := source_id.to_lower()
+	if not kills_by_source.has(key):
+		key = "other"
+	kills_by_source[key] = int(kills_by_source.get(key, 0)) + 1
+
 func _ready() -> void:
 	add_to_group("game_manager")
 	var eb: Node = get_node_or_null("/root/EventBus")
@@ -71,7 +97,9 @@ func get_run_telemetry(status: String = "IN_PROGRESS") -> Dictionary:
 		"shots_fired": shots_fired,
 		"missiles_fired": missiles_fired,
 		"boss_defeated": bosses_killed > 0,
-		"is_endless": is_endless_mode
+		"is_endless": is_endless_mode,
+		"damage_by_source": damage_by_source.duplicate(),
+		"kills_by_source": kills_by_source.duplicate()
 	}
 
 func finalize_telemetry(status: String) -> void:

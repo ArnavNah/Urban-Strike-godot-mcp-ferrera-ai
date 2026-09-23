@@ -127,6 +127,11 @@ func _ready() -> void:
 				append_log(l, log_lines)
 		append_log("=== SOME TESTS FAILED! ===", log_lines)
 
+	# Flush deferred deletion queue over process frames to allow all queue_free()
+	# invocations to be completely purged from Godot's ObjectDB before shutdown.
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	get_tree().quit(0 if success else 1)
 
 func test_player_flight_and_nodes(logs: Array[String]) -> bool:
@@ -1311,6 +1316,7 @@ func test_continuous_horde_survival_director(logs: Array[String]) -> bool:
 
 	# Test elite modifier application
 	var dummy_enemy := Node3D.new()
+	add_child(dummy_enemy)
 	dummy_enemy.set("max_health", 50.0)
 	dummy_enemy.set("current_health", 50.0)
 	dummy_enemy.set("xp_value", 10)
@@ -1326,11 +1332,13 @@ func test_continuous_horde_survival_director(logs: Array[String]) -> bool:
 	sd._on_enemy_destroyed(dummy_enemy, 10)
 	if not sd.is_wave_active:
 		logs.append("FAIL: Continuous wave was stopped when enemy was destroyed")
-		dummy_enemy.queue_free()
+		if is_instance_valid(dummy_enemy) and not dummy_enemy.is_queued_for_deletion():
+			dummy_enemy.queue_free()
 		sd.queue_free()
 		return false
 
-	dummy_enemy.queue_free()
+	if is_instance_valid(dummy_enemy) and not dummy_enemy.is_queued_for_deletion():
+		dummy_enemy.queue_free()
 	sd.queue_free()
 	logs.append("  -> Continuous horde progression, budget accumulation, and elite modifiers verified.")
 	return true
@@ -3151,66 +3159,66 @@ func test_level_up_pacing_and_continuous_spawning(logs: Array[String]) -> bool:
 		var arch: Variant = inst.get("archetype")
 		if not arch:
 			append_log("FAIL: Enemy %s missing archetype resource" % item["path"], logs)
-			inst.queue_free()
+			inst.free()
 			root_node.queue_free()
 			return false
 		var xp_rew: int = int(arch.get("xp_reward"))
 		if xp_rew != item["expected_xp"]:
 			append_log("FAIL: Enemy %s xp_reward mismatch (got %d, expected %d)" % [item["path"], xp_rew, item["expected_xp"]], logs)
-			inst.queue_free()
+			inst.free()
 			root_node.queue_free()
 			return false
-		inst.queue_free()
+		inst.free()
 
 	# Test Infantry Cluster XP reward
 	var inf_scene := load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
 	var inf := inf_scene.instantiate() as InfantryCluster
 	if inf.xp_reward != 3:
 		append_log("FAIL: InfantryCluster xp_reward is not 3 (got %d)" % inf.xp_reward, logs)
-		inf.queue_free()
+		inf.free()
 		root_node.queue_free()
 		return false
-	inf.queue_free()
+	inf.free()
 
 	# Test Tank XP reward
 	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
 	var tank := tank_scene.instantiate() as Tank
 	if tank.xp_reward != 16:
 		append_log("FAIL: Tank baseline xp_reward is not 16 (got %d)" % tank.xp_reward, logs)
-		tank.queue_free()
+		tank.free()
 		root_node.queue_free()
 		return false
-	tank.queue_free()
+	tank.free()
 
 	# Test SAM Site XP reward
 	var sam_scene := load("res://scenes/enemies/sam_site.tscn") as PackedScene
 	var sam := sam_scene.instantiate() as SAMSite
 	if sam.xp_reward != 25:
 		append_log("FAIL: SAMSite xp_reward is not 25 (got %d)" % sam.xp_reward, logs)
-		sam.queue_free()
+		sam.free()
 		root_node.queue_free()
 		return false
-	sam.queue_free()
+	sam.free()
 
 	# Test Ground Turret XP reward
 	var turret_scene := load("res://scenes/enemies/ground_turret.tscn") as PackedScene
 	var turret := turret_scene.instantiate() as GroundTurret
 	if turret.xp_reward != 12:
 		append_log("FAIL: GroundTurret xp_reward is not 12 (got %d)" % turret.xp_reward, logs)
-		turret.queue_free()
+		turret.free()
 		root_node.queue_free()
 		return false
-	turret.queue_free()
+	turret.free()
 
 	# Test Hunter Helicopter XP reward
 	var hunter_scene := load("res://scenes/enemies/hunter_helicopter.tscn") as PackedScene
 	var hunter := hunter_scene.instantiate() as HunterHelicopter
 	if hunter.xp_reward != 15:
 		append_log("FAIL: HunterHelicopter xp_reward is not 15 (got %d)" % hunter.xp_reward, logs)
-		hunter.queue_free()
+		hunter.free()
 		root_node.queue_free()
 		return false
-	hunter.queue_free()
+	hunter.free()
 
 	# 4. Test SpawnDirector Continuous Intervals
 	var sd_script: GDScript = load("res://scripts/directors/spawn_director.gd")
@@ -4652,9 +4660,10 @@ func test_xp_aggregation_and_acceptance_suite(logs: Array[String]) -> bool:
 	var t_l := up_mgr.roll_rarity_tier(0.98, true, true, true)
 	if t_c != "Common" or t_r != "Rare" or t_l != "Legendary":
 		append_log("FAIL: Step 9 (Drafting weights) roll_rarity_tier did not follow 70/25/5 (got %s, %s, %s)" % [t_c, t_r, t_l], logs)
+		up_mgr.free()
 		root_node.queue_free()
 		return false
-	up_mgr.queue_free()
+	up_mgr.free()
 
 	# Step 10: Boss Archon 3 phases
 	var archon_scene := load("res://scenes/enemies/boss_archon.tscn") as PackedScene
@@ -4756,10 +4765,10 @@ func test_phase_10a_population_and_spawning_foundation(logs: Array[String]) -> b
 	var inf := inf_scene.instantiate() as InfantryCluster
 	if inf.visual_crowd_weight != 4:
 		append_log("FAIL: [Step 2] InfantryCluster visual_crowd_weight is not 4 (got %d)" % inf.visual_crowd_weight, logs)
-		inf.queue_free()
+		inf.free()
 		root_node.queue_free()
 		return false
-	inf.queue_free()
+	inf.free()
 
 	# 3. Test EnemyRegistry Visual Crowd & Living Node Separation
 	if EnemyRegistry.instance:
@@ -6077,6 +6086,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 	spawn_director._deploy_formation_unit(q_unit, root_node, false, true)
 	if spawn_director._formation_spawn_queue.is_empty():
 		append_log("FAIL: Case 3 - Unit was not queued into _formation_spawn_queue", logs)
+		spawn_director.clear_formation_queue()
 		root_node.queue_free()
 		return false
 
@@ -6084,6 +6094,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 	var q_near := q_pos + Vector3(4.0, 0.0, 0.0)
 	if spawn_director.is_spawn_position_clear(q_near, false, 8.0):
 		append_log("FAIL: Case 3 - is_spawn_position_clear accepted position within 4m of queued formation unit", logs)
+		spawn_director.clear_formation_queue()
 		root_node.queue_free()
 		return false
 
@@ -6091,6 +6102,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 	var q_far := q_pos + Vector3(20.0, 0.0, 0.0)
 	if not spawn_director.is_spawn_position_clear(q_far, false, 8.0):
 		append_log("FAIL: Case 3 - is_spawn_position_clear falsely rejected position 20m away from queued unit", logs)
+		spawn_director.clear_formation_queue()
 		root_node.queue_free()
 		return false
 
@@ -7108,8 +7120,8 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 		append_log("FAIL: [Step 4] Player damage label not spawned via player_damaged_directional", logs)
 		vp.queue_free()
 		return false
-	if lbl_player.category != DamageNumber.DamageCategory.PLAYER:
-		append_log("FAIL: [Step 4] Expected category PLAYER, got %d" % lbl_player.category, logs)
+	if lbl_player.category != DamageNumber.DamageCategory.PLAYER_HULL:
+		append_log("FAIL: [Step 4] Expected category PLAYER_HULL, got %d" % lbl_player.category, logs)
 		vp.queue_free()
 		return false
 	if not lbl_player.text.contains("▼") or not lbl_player.text.contains("-25"):
@@ -7128,37 +7140,25 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 	deactivate_all.call()
 	append_log("  -> Sub-step 4: Player damage received (vivid red, 18px, '▼ -25' non-color indicator) verified.", logs)
 
-	# Sub-step 5: Blocked & zero-damage hits (steel cyan, 15px, '[SHIELD] 0' tag)
+	# Sub-step 5: Blocked & zero-damage hits suppressed (no label spawned per combat feedback requirements)
 	deactivate_all.call()
 	EventBus.player_damaged_directional.emit(0.0, visible_pos, Vector3(0, 0, 5), true)
 	var lbl_blocked := get_active_label.call() as DamageNumber
-	if not lbl_blocked:
-		append_log("FAIL: [Step 5] Blocked shield damage label not spawned", logs)
-		vp.queue_free()
-		return false
-	if lbl_blocked.category != DamageNumber.DamageCategory.BLOCKED:
-		append_log("FAIL: [Step 5] Expected category BLOCKED, got %d" % lbl_blocked.category, logs)
-		vp.queue_free()
-		return false
-	if not lbl_blocked.text.contains("SHIELD") and not lbl_blocked.text.contains("BLOCKED"):
-		append_log("FAIL: [Step 5] Expected blocked text with SHIELD/BLOCKED tag, got '%s'" % lbl_blocked.text, logs)
-		vp.queue_free()
-		return false
-	if lbl_blocked.get_theme_font_size("font_size") != 15:
-		append_log("FAIL: [Step 5] Expected font size 15 for blocked hit, got %d" % lbl_blocked.get_theme_font_size("font_size"), logs)
+	if lbl_blocked:
+		append_log("FAIL: [Step 5] Blocked hit should be suppressed, but spawned label: '%s'" % lbl_blocked.text, logs)
 		vp.queue_free()
 		return false
 	deactivate_all.call()
 
-	# Zero-damage hit via damage_number_spawned also maps to BLOCKED
+	# Zero-damage hit via damage_number_spawned is also suppressed
 	EventBus.damage_number_spawned.emit(visible_pos, 0.0, false)
 	var lbl_zero := get_active_label.call() as DamageNumber
-	if not lbl_zero or lbl_zero.category != DamageNumber.DamageCategory.BLOCKED:
-		append_log("FAIL: [Step 5] Zero-damage hit did not map to BLOCKED category", logs)
+	if lbl_zero:
+		append_log("FAIL: [Step 5] Zero-damage hit should be suppressed, but spawned label: '%s'" % lbl_zero.text, logs)
 		vp.queue_free()
 		return false
 	deactivate_all.call()
-	append_log("  -> Sub-step 5: Blocked and zero-damage hits (steel cyan, 15px, '[SHIELD] 0') verified.", logs)
+	append_log("  -> Sub-step 5: Blocked and zero-damage hits correctly suppressed (no spurious labels).", logs)
 
 	# Sub-step 6: Resolved vs Pre-mitigation value consistency
 	deactivate_all.call()
@@ -7564,7 +7564,7 @@ func test_combat_feedback_hierarchy_and_slot_reservation(logs: Array[String]) ->
 
 	var has_player := false
 	for lbl in manager._active_labels:
-		if lbl.category == DamageNumber.DamageCategory.PLAYER and lbl.text.contains("-25"):
+		if lbl.category == DamageNumber.DamageCategory.PLAYER_HULL and lbl.text.contains("-25"):
 			has_player = true
 			break
 	if not has_player:

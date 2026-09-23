@@ -20,6 +20,7 @@ var pierce_remaining: int = 0
 var ricochet_remaining: int = 0
 var armor_damage_multiplier: float = 1.0
 var has_danger_reservation: bool = false
+var weapon_source: String = "chaingun"
 
 static var _player_mat: StandardMaterial3D = null
 static var _enemy_mat: StandardMaterial3D = null
@@ -36,11 +37,12 @@ func _ready() -> void:
 	if raycast:
 		raycast.enabled = false
 
-func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0) -> void:
+func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0, weapon_src: String = "chaingun") -> void:
 	global_position = start_pos
 	_direction = dir.normalized()
 	_is_player_projectile = from_player
 	damage = proj_damage
+	weapon_source = weapon_src
 	# A pooled round starts with neutral upgrade state on every launch.
 	armored_damage_multiplier = 1.0
 	air_damage_multiplier = 1.0
@@ -158,10 +160,27 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 			source_node = PlayerHelicopter.instance if is_instance_valid(PlayerHelicopter.instance) else get_tree().get_first_node_in_group("player")
 		if siege_round and is_enemy:
 			_hit_target_ids.append(target_obj.get_instance_id())
-		target_obj.take_damage(_damage_for_target(target_obj), source_node, hit_pos)
+		var applied_dmg: float = _damage_for_target(target_obj)
+		target_obj.take_damage(applied_dmg, source_node, hit_pos)
+		if _is_player_projectile and is_enemy:
+			var gm: Node = get_tree().get_first_node_in_group("game_manager")
+			if gm and gm.has_method("record_attributed_damage"):
+				gm.call("record_attributed_damage", applied_dmg, weapon_source)
+			var is_dead: bool = false
+			if "current_health" in target_obj and float(target_obj.get("current_health")) <= 0.0:
+				is_dead = true
+			elif "is_alive" in target_obj and not bool(target_obj.get("is_alive")):
+				is_dead = true
+			if is_dead and gm and gm.has_method("record_attributed_kill"):
+				gm.call("record_attributed_kill", weapon_source)
+
+	var is_shield_hit := false
+	if is_player_unit and is_instance_valid(target_obj):
+		if bool(target_obj.get("has_ghost_rotor")) and "_ghost_rotor_timer" in target_obj and float(target_obj.get("_ghost_rotor_timer")) <= 0.0:
+			is_shield_hit = true
 
 	if not (siege_round and already_hit):
-		_spawn_spark(hit_pos, hit_norm, is_armored_surface)
+		_spawn_spark(hit_pos, hit_norm, is_armored_surface, is_shield_hit)
 		if EventBus:
 			EventBus.combat_impact_occurred.emit(hit_pos, hit_norm, is_armored_surface, is_lethal)
 
@@ -205,9 +224,9 @@ func _damage_for_target(target: Node) -> float:
 		return result * armored_damage_multiplier
 	return result
 
-func _spawn_spark(pos: Vector3, norm: Vector3, is_armor: bool = false) -> void:
+func _spawn_spark(pos: Vector3, norm: Vector3, is_armor: bool = false, is_shield: bool = false) -> void:
 	if VfxPool.instance:
-		VfxPool.instance.spawn_sparks(pos, norm, is_armor)
+		VfxPool.instance.spawn_sparks(pos, norm, is_armor, is_shield)
 		return
 	var spark_scene: PackedScene = preload("res://scenes/vfx/impact_sparks.tscn")
 	if spark_scene:
@@ -215,7 +234,7 @@ func _spawn_spark(pos: Vector3, norm: Vector3, is_armor: bool = false) -> void:
 		if spark:
 			if spark.has_method("play_impact"):
 				spark.global_position = pos
-				spark.call("play_impact", norm, is_armor)
+				spark.call("play_impact", norm, is_armor, is_shield)
 			elif norm.length_squared() > 0.01:
 				var up_axis := Vector3.UP if absf(norm.y) < 0.9 else Vector3.FORWARD
 				spark.look_at_from_position(pos, pos + norm, up_axis)

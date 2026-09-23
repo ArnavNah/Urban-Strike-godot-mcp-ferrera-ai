@@ -566,13 +566,16 @@ func _release_air_slot() -> void:
 	_has_air_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive:
+	if not is_alive or amount <= 0.0:
 		return
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
-	_trigger_damage_flash()
-	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("damage_number_spawned"):
-		eb.emit_signal("damage_number_spawned", global_position, amount, false, {"target_id": get_instance_id()})
+	var actual_damage: float = prev_hp - current_health
+	if actual_damage > 0.0:
+		_trigger_damage_flash()
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("damage_number_spawned"):
+			eb.emit_signal("damage_number_spawned", global_position, actual_damage, false, {"target_id": get_instance_id(), "is_lethal": current_health <= 0.0})
 	if current_health <= 0.0:
 		_die()
 
@@ -595,6 +598,8 @@ func _die() -> void:
 	_is_dead = true
 	is_alive = false
 	DamageFlashManager.clear_target(self)
+	collision_layer = 0
+	collision_mask = 0
 	_release_air_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
@@ -605,18 +610,26 @@ func _die() -> void:
 
 	_spawn_xp()
 
+	# Initial hit sparks
 	if VfxPool.instance:
-		VfxPool.instance.spawn_explosion(global_position)
+		VfxPool.instance.spawn_sparks(global_position, Vector3.UP, true)
+
+	set_physics_process(false)
+	set_process(false)
+	var death_tw := create_tween()
+	if death_tw and is_inside_tree():
+		death_tw.parallel().tween_property(self, "position:y", position.y - 2.5, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		death_tw.parallel().tween_property(self, "rotation:z", rotation.z + PI * 1.2, 0.40)
+		death_tw.parallel().tween_property(self, "rotation:x", rotation.x + 0.5, 0.40)
+		death_tw.tween_callback(func():
+			if VfxPool.instance:
+				VfxPool.instance.spawn_explosion(global_position)
+			queue_free()
+		)
 	else:
-		var expl_scene: PackedScene = preload("res://scenes/vfx/explosion.tscn")
-		if expl_scene:
-			var expl := expl_scene.instantiate() as Node3D
-			if expl:
-				expl.transform.origin = global_position
-				expl.scale = Vector3(2.0, 2.0, 2.0)
-				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-				p.add_child.call_deferred(expl)
-	queue_free()
+		if VfxPool.instance:
+			VfxPool.instance.spawn_explosion(global_position)
+		queue_free()
 
 func _spawn_xp() -> void:
 	if _has_spawned_rewards:

@@ -4,16 +4,19 @@ extends Control
 ## High-performance preallocated label pool for combat damage numbers.
 ## Replaces per-hit instantiation/destruction with zero-allocation pooling,
 ## camera frustum/screen culling, preset-aware active caps, multi-cue category handling,
-## and a 100 ms per-target aggregation window to eliminate continuous-fire clutter.
+## a 100 ms per-target aggregation window, and settings-driven display filtering.
 
 static var instance: DamageNumberManager = null
 
 enum DamageCategory {
-	NORMAL = 0,    # Cream/off-white, 16px, clean number e.g. "12"
-	CRITICAL = 1,  # Radiant gold, 22px, strong pop, e.g. "★ 75"
-	PLAYER = 2,    # Vivid red, 18px, downward cue, e.g. "▼ -16"
-	BLOCKED = 3    # Cool steel cyan, 15px, e.g. "[SHIELD] 0" or "BLOCKED"
+	NORMAL = 0,       ## Warm-white, 16px, clean number e.g. "12"
+	CRITICAL = 1,     ## Amber, 22px, pop, e.g. "★ 75"
+	PLAYER_HULL = 2,  ## Red/orange, 18px, downward cue, e.g. "▼ -16"
+	PLAYER_SHIELD = 3,## Cyan, 17px, e.g. "◆ -12"
+	HEAL = 4,         ## Green, 17px, e.g. "▲ +25"
+	BLOCKED = 5       ## Legacy placeholder (suppressed)
 }
+const PLAYER: int = DamageCategory.PLAYER_HULL
 
 const PRESET_BUDGET_LOW: int = 24
 const PRESET_BUDGET_MEDIUM: int = 40
@@ -154,34 +157,42 @@ func get_active_camera() -> Camera3D:
 	return _cached_camera
 
 func _on_damage_spawned(pos: Vector3, amount: float, is_critical: bool = false, metadata: Dictionary = {}) -> void:
+	# Suppress zero, blocked, or invulnerable damage numbers
+	if amount <= 0.0 or metadata.get("is_blocked", false) or metadata.get("is_invulnerable", false):
+		return
+
 	var cat := DamageCategory.NORMAL
-	if amount <= 0.0 or metadata.get("is_blocked", false):
-		cat = DamageCategory.BLOCKED
+	if metadata.get("is_heal", false):
+		cat = DamageCategory.HEAL
+	elif metadata.get("is_shield", false):
+		cat = DamageCategory.PLAYER_SHIELD
 	elif metadata.get("is_player", false) or metadata.get("target_type", "") == "player":
-		cat = DamageCategory.PLAYER
+		cat = DamageCategory.PLAYER_HULL
 	elif is_critical or metadata.get("is_critical", false):
 		cat = DamageCategory.CRITICAL
+	else:
+		cat = DamageCategory.NORMAL
+
 	spawn_damage_number(pos, amount, is_critical, cat, metadata)
 
-func _get_player_target_id() -> int:
-	if is_inside_tree():
-		var player := get_tree().get_first_node_in_group("player")
-		if is_instance_valid(player):
-			return player.get_instance_id()
-	return 1
-
 func _on_player_damaged_directional(amount: float, hit_pos: Vector3, source_pos: Vector3, is_shield_hit: bool, metadata: Dictionary = {}) -> void:
+	# Suppress zero, blocked, or invulnerable hits
+	if amount <= 0.0 or metadata.get("is_blocked", false) or metadata.get("is_invulnerable", false):
+		return
+
 	var player_tid: int = metadata.get("target_id", 0)
 	var meta: Dictionary = metadata.duplicate()
 	meta["source_pos"] = source_pos
+	meta["is_player"] = true
 	if player_tid != 0:
 		meta["target_id"] = player_tid
-	if is_shield_hit or amount <= 0.0:
-		meta["is_blocked"] = true
-		spawn_damage_number(hit_pos, 0.0, false, DamageCategory.BLOCKED, meta)
+
+	if is_shield_hit or metadata.get("is_shield", false):
+		meta["is_shield"] = true
+		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER_SHIELD, meta)
 	else:
-		meta["is_player"] = true
-		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER, meta)
+		meta["is_hull"] = true
+		spawn_damage_number(hit_pos, amount, false, DamageCategory.PLAYER_HULL, meta)
 
 func _on_enemy_destroyed(enemy: Node3D, _points: int = 0) -> void:
 	if not is_instance_valid(enemy):
@@ -196,6 +207,14 @@ func spawn_damage_number(
 	category: int = DamageCategory.NORMAL,
 	metadata: Dictionary = {}
 ) -> void:
+	# Global settings filter
+	var setting_mode := str(SaveSystem.get_setting("damage_numbers", "all")).to_lower()
+	if setting_mode == "off":
+		return
+
+	if amount <= 0.0 or metadata.get("is_blocked", false) or metadata.get("is_invulnerable", false):
+		return
+
 	var target_id: int = metadata.get("target_id", 0)
 	if target_id != 0:
 		# Per-target 100 ms fixed aggregation window
@@ -284,6 +303,28 @@ func _display_damage_number(
 	category: int = DamageCategory.NORMAL,
 	metadata: Dictionary = {}
 ) -> void:
+	if amount <= 0.0 or metadata.get("is_blocked", false) or metadata.get("is_invulnerable", false):
+		return
+
+	# Settings check: 'off' / 'important_only' / 'all'
+	var setting_mode := str(SaveSystem.get_setting("damage_numbers", "all")).to_lower()
+	if setting_mode == "off":
+		return
+
+	var is_high_priority: bool = (
+		category == DamageCategory.CRITICAL
+		or category == DamageCategory.PLAYER_HULL
+		or category == DamageCategory.PLAYER_SHIELD
+		or category == DamageCategory.HEAL
+		or amount >= 35.0
+		or bool(metadata.get("is_heavy", false))
+		or bool(metadata.get("is_lethal", false))
+		or bool(metadata.get("is_objective", false))
+	)
+
+	if setting_mode == "important_only" and not is_high_priority:
+		return
+
 	var cam := get_active_camera()
 	if not cam or not cam.is_inside_tree():
 		return
@@ -307,13 +348,6 @@ func _display_damage_number(
 		return
 
 	# 2. Priority Slot Reservation & Active Budget Enforcement
-	var is_high_priority: bool = (
-		category == DamageCategory.CRITICAL
-		or category == DamageCategory.PLAYER
-		or bool(metadata.get("is_lethal", false))
-		or bool(metadata.get("is_objective", false))
-	)
-
 	if _active_labels.size() >= max_active_numbers or _free_labels.is_empty():
 		if is_high_priority:
 			# High priority event: try to preempt the oldest low-priority active label

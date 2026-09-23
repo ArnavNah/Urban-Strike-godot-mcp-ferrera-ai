@@ -33,13 +33,20 @@ func launch(start_pos: Vector3, initial_dir: Vector3, missile_target: Node3D, fr
 			raycast.collision_mask = (1 << 0) | (1 << 2) # World + Enemies
 		else:
 			raycast.collision_mask = (1 << 0) | (1 << 1) # World + Player
+			add_to_group("incoming_enemy_missiles")
 
 func divert_to_flare(flare_pos: Vector3) -> void:
 	# Fooled by defensive countermeasure flare
 	target = null
+	if is_in_group("incoming_enemy_missiles"):
+		remove_from_group("incoming_enemy_missiles")
 	# Steer erratically towards flare position or deviate
 	var jitter_dir := (flare_pos - global_position).normalized() + Vector3(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5), randf_range(-0.5, 0.5))
 	look_at(global_position + jitter_dir.normalized(), Vector3.UP)
+
+func _exit_tree() -> void:
+	if is_in_group("incoming_enemy_missiles"):
+		remove_from_group("incoming_enemy_missiles")
 
 func _physics_process(delta: float) -> void:
 	if _has_exploded:
@@ -76,6 +83,8 @@ func explode(impact_pos: Vector3) -> void:
 	if _has_exploded:
 		return
 	_has_exploded = true
+	if is_in_group("incoming_enemy_missiles"):
+		remove_from_group("incoming_enemy_missiles")
 
 	# Splash damage query
 	var space := get_world_3d().direct_space_state
@@ -96,7 +105,19 @@ func explode(impact_pos: Vector3) -> void:
 			var col_pos: Vector3 = col.global_position if col is Node3D else impact_pos
 			var dist := impact_pos.distance_to(col_pos)
 			var falloff := clampf(1.0 - (dist / splash_radius), 0.35, 1.0)
-			col.take_damage(damage * falloff, self, impact_pos)
+			var applied_dmg: float = damage * falloff
+			col.take_damage(applied_dmg, self, impact_pos)
+			if is_player_missile:
+				var gm: Node = get_tree().get_first_node_in_group("game_manager")
+				if gm and gm.has_method("record_attributed_damage"):
+					gm.call("record_attributed_damage", applied_dmg, "missiles")
+				var is_dead: bool = false
+				if "current_health" in col and float(col.get("current_health")) <= 0.0:
+					is_dead = true
+				elif "is_alive" in col and not bool(col.get("is_alive")):
+					is_dead = true
+				if is_dead and gm and gm.has_method("record_attributed_kill"):
+					gm.call("record_attributed_kill", "missiles")
 
 	# Restrained camera shake & audio event for missile impact
 	if EventBus:

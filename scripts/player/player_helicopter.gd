@@ -62,6 +62,7 @@ var armor_reduction: float = 0.0 # Damage reduction percentage (capped at 60%)
 var repair_drone_enabled: bool = false
 var repair_rate: float = 4.0
 var _time_since_damage: float = 0.0
+var _repair_drone_healed_accum: float = 0.0
 var has_aegis_shield: bool = false
 var _aegis_cooldown: float = 0.0
 
@@ -78,6 +79,7 @@ var _invulnerability_timer: float = 0.0
 var _recent_damaging_sources: Dictionary = {} # Maps Variant -> float (expiry)
 
 var is_alive: bool = true
+var active_loadout_id: String = "balanced"
 var _control_enabled: bool = true
 var _is_dying: bool = false
 
@@ -97,6 +99,7 @@ var _smoothed_strafe: float = 0.0
 # Node references
 static var instance: PlayerHelicopter = null
 var _magnet_fallback_timer: float = 0.0
+var _hull_full_notify_cooldown: float = 0.0
 
 func _enter_tree() -> void:
 	instance = self
@@ -175,8 +178,8 @@ func _on_xp_collect_area_entered(area: Area3D) -> void:
 	if area.has_method("can_collect") and not area.can_collect(self):
 		return
 
-	# State guard: Items with a state machine must first be attracted/magnetized and travel to the helicopter cabin,
-	# unless they are already directly within cabin reach.
+	# State guard: Items with a state machine must first be magnetized and travel to the cabin,
+	# unless they are already directly within close-range cabin reach.
 	if "current_state" in area:
 		var state = area.get("current_state")
 		if state == 0: # State.IDLE == 0
@@ -185,8 +188,17 @@ func _on_xp_collect_area_entered(area: Area3D) -> void:
 				var marker: Node3D = get_node("StableTrackingPoint") as Node3D
 				if marker:
 					tracking_pos = marker.global_position
-			var d := area.global_position.distance_to(tracking_pos)
-			if d > 3.8:
+			var to_pickup := area.global_position - tracking_pos
+			var flat_d := Vector2(to_pickup.x, to_pickup.z).length()
+			# Close-range skid hover: collect immediately
+			if flat_d <= 3.8 and to_pickup.y >= -2.0 and to_pickup.y <= 5.5:
+				pass # Fall through to collect below
+			else:
+				# Not close enough for direct collection: magnetize instead of silently dropping
+				if area.has_method("magnetize_to"):
+					area.magnetize_to(self)
+				elif area.has_method("set_magnet_target"):
+					area.set_magnet_target(self)
 				return
 
 	if area.has_method("collect"):
@@ -197,13 +209,16 @@ func _on_xp_collect_area_entered(area: Area3D) -> void:
 		area._collect()
 
 func _apply_hangar_upgrades() -> void:
+	var loadout_id := SaveSystem.get_selected_loadout()
+	_apply_loadout(loadout_id)
+
 	var data := SaveSystem.load_data()
 	var upgrades: Dictionary = data.get("upgrades", {})
 	var armor_lvl := int(upgrades.get("rotor_armor", 0))
 	var extra_hp := float(armor_lvl) * 20.0
 	max_health += extra_hp
 	current_health = max_health
-	armor_reduction = clampf(float(armor_lvl) * 0.05, 0.0, 0.25)
+	armor_reduction = clampf(armor_reduction + float(armor_lvl) * 0.05, 0.0, 0.40)
 
 	var extra_magnet := int(upgrades.get("magnet_radius", 0)) * 6.0
 	magnet_radius += extra_magnet
@@ -212,13 +227,69 @@ func _apply_hangar_upgrades() -> void:
 		if col and col.shape is CylinderShape3D:
 			(col.shape as CylinderShape3D).radius = magnet_radius
 
-func heal(amount: float) -> void:
-	if not is_alive or _is_dying or amount <= 0.0:
+func _apply_loadout(loadout_id: String) -> void:
+	active_loadout_id = loadout_id
+	var loadout := LoadoutDefinition.get_loadout(loadout_id)
+	max_health = loadout.max_health
+	current_health = max_health
+	max_forward_speed = loadout.forward_speed
+	strafe_speed = loadout.strafe_speed
+	active_velocity_response = loadout.active_response
+
+	if chaingun:
+		chaingun.fire_rate = loadout.chaingun_fire_rate
+		chaingun.damage_per_shot = loadout.chaingun_damage
+	if missile_pod:
+		missile_pod.fire_cooldown = loadout.missile_cooldown
+	if flare_dispenser:
+		flare_dispenser.recharge_time = loadout.flare_recharge
+
+	if loadout.passive_repair_rate > 0.0:
+		repair_drone_enabled = true
+		repair_rate = loadout.passive_repair_rate
+
+	if loadout.starts_with_wingman:
+		_spawn_starting_wingman.call_deferred()
+
+func _spawn_starting_wingman() -> void:
+	var mini_scene: PackedScene = load("res://scenes/companions/mini_helicopter.tscn")
+	if not mini_scene:
 		return
-	current_health = clampf(current_health + amount, 0.0, max_health)
+	var spawn_parent: Node = get_parent() if get_parent() else get_tree().current_scene
+	if not spawn_parent:
+		spawn_parent = get_tree().root
+
+	var offset := Vector3(-8.2, 0.6, 3.8)
+	var drone: MiniHelicopter = mini_scene.instantiate() as MiniHelicopter
+	if drone:
+		drone.slot_id = "left"
+		drone.player_target = self
+		drone.set_formation_slot(offset, "left")
+		spawn_parent.add_child(drone)
+		var yaw_basis: Basis = MiniHelicopter.get_player_yaw_basis(self)
+		var start_pos: Vector3 = global_position + (yaw_basis * Vector3(offset.x, 0.0, offset.z)) + Vector3(0.0, offset.y, 0.0)
+		drone.global_position = start_pos
+
+func heal(amount: float) -> float:
+	if not is_alive or _is_dying or amount <= 0.0:
+		return 0.0
+	if current_health >= max_health:
+		if _hull_full_notify_cooldown <= 0.0 and EventBus and EventBus.has_signal("hull_full_notified"):
+			EventBus.hull_full_notified.emit()
+			_hull_full_notify_cooldown = 2.0
+		return 0.0
+	var actual_heal: float = minf(amount, max_health - current_health)
+	current_health = clampf(current_health + actual_heal, 0.0, max_health)
 	emit_signal("health_changed", current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
+		if actual_heal > 0.0 and EventBus.has_signal("damage_number_spawned"):
+			EventBus.damage_number_spawned.emit(global_position + Vector3(0.0, 1.2, 0.0), actual_heal, false, {
+				"target_id": get_instance_id(),
+				"is_heal": true,
+				"is_player": true
+			})
+	return actual_heal
 
 func add_armor_reduction(amount: float) -> void:
 	armor_reduction = clampf(armor_reduction + amount, 0.0, 0.60)
@@ -313,6 +384,14 @@ func reset_legendaries() -> void:
 func _handle_repair_drone(delta: float) -> void:
 	_time_since_damage += delta
 	if not repair_drone_enabled or current_health >= max_health:
+		if _repair_drone_healed_accum > 0.0:
+			if EventBus and EventBus.has_signal("damage_number_spawned"):
+				EventBus.damage_number_spawned.emit(global_position + Vector3(0.0, 1.2, 0.0), _repair_drone_healed_accum, false, {
+					"target_id": get_instance_id(),
+					"is_heal": true,
+					"is_player": true
+				})
+			_repair_drone_healed_accum = 0.0
 		return
 	if is_instance_valid(chaingun) and chaingun.is_overheated:
 		return
@@ -320,10 +399,51 @@ func _handle_repair_drone(delta: float) -> void:
 	var healing_delta := minf(delta, maxf(0.0, _time_since_damage - 5.0))
 	if healing_delta <= 0.0:
 		return
-	current_health = minf(max_health, current_health + repair_rate * healing_delta)
+	var heal_amount := repair_rate * healing_delta
+	var prev_health := current_health
+	current_health = minf(max_health, current_health + heal_amount)
+	var actual_healed := current_health - prev_health
+	_repair_drone_healed_accum += actual_healed
+	if _repair_drone_healed_accum >= 2.0 or current_health >= max_health:
+		if EventBus and EventBus.has_signal("damage_number_spawned"):
+			EventBus.damage_number_spawned.emit(global_position + Vector3(0.0, 1.2, 0.0), _repair_drone_healed_accum, false, {
+				"target_id": get_instance_id(),
+				"is_heal": true,
+				"is_player": true
+			})
+		_repair_drone_healed_accum = 0.0
 	health_changed.emit(current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
+
+## Periodic magnet fallback polling: catches pickups that spawned inside the magnet area
+## after the initial area_entered signal, or that became eligible after initial rejection.
+func _handle_magnet() -> void:
+	_magnet_fallback_timer -= get_physics_process_delta_time()
+	if _hull_full_notify_cooldown > 0.0:
+		_hull_full_notify_cooldown -= get_physics_process_delta_time()
+	if _magnet_fallback_timer > 0.0:
+		return
+	_magnet_fallback_timer = 0.25
+
+	if not xp_magnet_area or not is_alive:
+		return
+
+	var overlapping: Array[Area3D] = xp_magnet_area.get_overlapping_areas()
+	for area in overlapping:
+		if not is_instance_valid(area) or area.is_queued_for_deletion():
+			continue
+		# Only magnetize idle pickups that haven't been collected
+		if "current_state" in area:
+			var state = area.get("current_state")
+			if state != 0: # Not IDLE
+				continue
+		if area.has_method("can_collect") and not area.can_collect(self):
+			continue
+		if area.has_method("magnetize_to"):
+			area.magnetize_to(self)
+		elif area.has_method("set_magnet_target"):
+			area.set_magnet_target(self)
 
 func _handle_flight_movement(delta: float) -> void:
 	# 1. Yaw turning (A turns left, D turns right)
@@ -579,42 +699,6 @@ func _handle_ground_fx() -> void:
 				else:
 					downwash_dust.emitting = false
 
-func _handle_magnet() -> void:
-	if xp_magnet_area != null:
-		var areas := xp_magnet_area.get_overlapping_areas()
-		for area in areas:
-			if not is_instance_valid(area) or area.is_queued_for_deletion():
-				continue
-			if area.has_method("can_collect") and not area.can_collect(self):
-				continue
-			if area.has_method("magnetize_to"):
-				area.magnetize_to(self)
-			elif area.has_method("set_magnet_target"):
-				area.set_magnet_target(self)
-
-	# Throttled direct fallback (4-5 times per sec instead of 60) prevents missing drops while eliminating 92% of full-tree scans
-	_magnet_fallback_timer -= get_physics_process_delta_time()
-	if _magnet_fallback_timer <= 0.0:
-		_magnet_fallback_timer = 0.22
-		var rad_sq := magnet_radius * magnet_radius
-		var pickups := get_tree().get_nodes_in_group("pickups")
-		for p in pickups:
-			if not is_instance_valid(p) or p.is_queued_for_deletion():
-				continue
-			if "is_active" in p and not p.is_active:
-				continue
-			if "_is_collected" in p and p._is_collected:
-				continue
-			var offset: Vector3 = p.global_position - global_position
-			var flat_offset := Vector2(offset.x, offset.z)
-			if flat_offset.length_squared() <= rad_sq and absf(offset.y) <= 50.0:
-				if p.has_method("can_collect") and not p.can_collect(self):
-					continue
-				if p.has_method("magnetize_to"):
-					p.magnetize_to(self)
-				elif p.has_method("set_magnet_target"):
-					p.set_magnet_target(self)
-
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		if Input.is_action_pressed("aim_override") or (event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)):
@@ -670,13 +754,18 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		return
 
 	# Emergency Aegis Countermeasure: Trigger when falling below 35% hull
+	var shield_damage: float = 0.0
 	if has_aegis_shield and _aegis_cooldown <= 0.0 and (current_health - amount) <= (max_health * 0.35):
 		_aegis_cooldown = 18.0
 		if flare_dispenser and flare_dispenser.has_method("deploy_flares"):
 			flare_dispenser.deploy_flares()
 		if EventBus and EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.6)
-		amount *= 0.5 # Shield absorbs 50% of the breach damage
+		shield_damage = amount * 0.5 # Shield absorbs 50% of the breach damage
+		amount *= 0.5
+		if EventBus and EventBus.has_signal("player_damaged_directional"):
+			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
+			EventBus.player_damaged_directional.emit(shield_damage, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, true, {"target_id": get_instance_id(), "is_shield": true})
 
 	# Activate i-frames and record source
 	_invulnerability_timer = invulnerability_duration
@@ -687,14 +776,18 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	if CombatDirector.instance:
 		CombatDirector.instance.record_player_damage(amount)
 
+	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
+	var actual_hull_damage: float = prev_hp - current_health
+	_time_since_damage = 0.0
+	_repair_drone_healed_accum = 0.0
 	_flash_hit()
 	emit_signal("health_changed", current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
 		if EventBus.has_signal("player_damaged_directional"):
 			var src_pos := (_source as Node3D).global_position if (_source is Node3D) else (_hit_pos if _hit_pos != Vector3.ZERO else global_position - global_transform.basis.z)
-			EventBus.player_damaged_directional.emit(amount, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, false, {"target_id": get_instance_id()})
+			EventBus.player_damaged_directional.emit(actual_hull_damage, _hit_pos if _hit_pos != Vector3.ZERO else global_position, src_pos, false, {"target_id": get_instance_id(), "is_hull": true})
 		if EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.25)
 

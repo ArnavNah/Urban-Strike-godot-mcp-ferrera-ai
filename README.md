@@ -84,6 +84,8 @@ Expansive 340m $\times$ 340m urban operations theater divided into 4 tactical zo
 ### ⚡ Rapid XP Vacuum & Progression
 - **High-Speed XP Magnet**: Instant Area3D detection with 3D player velocity compensation, preventing the helicopter from outrunning gems at maximum flight speed.
 - **In-Run Level Ups**: Pick up XP gems to choose build-altering weapon synergies, fire rates, damage increases, and defensive countermeasure evolutions.
+- **Support Wingmen Power-Up**: Deploy autonomous escort aircraft with independent damage interception, tactical weapon fire, and in-run restoration.
+- **Combat Feedback Hierarchy**: Exact accepted-damage popups (excluding overkill), cyan electric shield sparks vs. kinetic metal sparks, dynamic laser aiming telegraphs, enemy death spins, and off-screen HUD threat tracking.
 - **Hangar Meta-Progression**: Bank collected salvage across runs to permanently upgrade Hull Armor, Engine Thrust, Weapon Capacities, and Magnet Reach.
 
 ---

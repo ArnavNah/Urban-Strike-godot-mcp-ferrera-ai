@@ -50,3 +50,11 @@ extends Resource
 @export var recycle_budget_ratio: float = 0.50
 @export var boundary_redistribution_margin: float = 25.0
 @export var budget_growth_power: float = 1.35
+
+@export_category("Early Air Threat Tuning")
+@export var early_air_enabled: bool = true
+@export var early_air_first_arrival_min: float = 3.0 ## First arrival 3-5 seconds after player control begins
+@export var early_air_first_arrival_max: float = 5.0
+@export var early_air_active_cap: int = 2 ## Initially allow 1-2 active light flying enemies
+@export var early_air_replenish_interval_min: float = 6.0 ## Replenish gradually: roughly 6-10 seconds between replacement arrivals
+@export var early_air_replenish_interval_max: float = 10.0

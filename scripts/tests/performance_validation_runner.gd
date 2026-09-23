@@ -21,6 +21,13 @@ var loading_screen_captured: bool = false
 var loading_start: int = 0
 var vsync_enabled: bool = false
 var uncapped: bool = false
+var total_menu_time_s: float = 0.0
+var total_pause_time_s: float = 0.0
+var phase_menu_time_s: float = 0.0
+var phase_pause_time_s: float = 0.0
+var heavy_bursts_count: int = 0
+var _cached_particle_nodes: Array[GPUParticles3D] = []
+var _particle_cache_timer: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -85,18 +92,24 @@ func _process(_delta: float) -> void:
 			phase = "B_early"
 		return
 	if not root is Battlefield: return
-	var menu: LevelUpMenu = root.get_node("UI/LevelUpMenu")
-	if menu.visible:
+	var menu: LevelUpMenu = root.get_node_or_null("UI/LevelUpMenu") as LevelUpMenu
+	if menu and menu.visible:
+		phase_menu_time_s += ms / 1000.0
+		total_menu_time_s += ms / 1000.0
 		for action in ["fire_primary", "move_forward", "move_right", "move_left"]:
 			Input.action_release(action)
 		if menu._selection_ready and not menu._current_choices.is_empty():
 			menu._on_card_selected(str(menu._current_choices[0]["id"]))
 			choices += 1
 		return
-	if get_tree().paused: return
+	if get_tree().paused:
+		phase_pause_time_s += ms / 1000.0
+		total_pause_time_s += ms / 1000.0
+		return
 	samples.append(ms)
 	phase_time += ms / 1000.0
 	next_counter -= ms / 1000.0
+	_particle_cache_timer -= ms / 1000.0
 	if next_counter <= 0:
 		_record_counters(root)
 		next_counter = 0.5
@@ -112,6 +125,7 @@ func _process(_delta: float) -> void:
 		if phase == "D_heavy":
 			player.missile_pod.replenish_ammo(1)
 		player.missile_pod.try_fire()
+		heavy_bursts_count += 1
 		if phase == "D_heavy":
 			for i in range(16):
 				var pos: Vector3 = player.global_position + Vector3(float(i % 4) * 3.0 - 6.0, 0, -12.0 - floorf(float(i) / 4.0) * 3.0)
@@ -143,15 +157,26 @@ func _record_counters(root: Node) -> void:
 		"objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 		"nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
 		"physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		"memory_static_mb": float(OS.get_static_memory_usage()) / (1024.0 * 1024.0),
+		"memory_static_peak_mb": float(OS.get_static_memory_peak_usage()) / (1024.0 * 1024.0),
 		"enemies": EnemyRegistry.instance.all_enemies.size() if EnemyRegistry.instance else 0,
 		"projectiles": 0, "gems": 0, "full_chunks": 0, "hlod_chunks": 0,
 		"active_explosions": 0, "active_sparks": 0, "active_damage_labels": 0,
 		"particle_systems_emitting": 0, "particle_emission_budget": 0,
 	}
-	for particles in root.find_children("*", "GPUParticles3D", true, false):
-		if particles.emitting and particles.is_visible_in_tree():
+	if _cached_particle_nodes.is_empty() or _particle_cache_timer <= 0.0:
+		_particle_cache_timer = 2.5
+		_cached_particle_nodes.clear()
+		for p_node in root.find_children("*", "GPUParticles3D", true, false):
+			var gp := p_node as GPUParticles3D
+			if gp:
+				_cached_particle_nodes.append(gp)
+
+	for particles in _cached_particle_nodes:
+		if is_instance_valid(particles) and particles.emitting and particles.is_visible_in_tree():
 			entry["particle_systems_emitting"] += 1
 			entry["particle_emission_budget"] += ceili(particles.amount * particles.amount_ratio)
+
 	if ProjectilePool.instance:
 		for projectile in ProjectilePool.instance._pool:
 			if projectile._is_active: entry["projectiles"] += 1
@@ -176,18 +201,59 @@ func _finish_phase() -> void:
 	var sorted: Array[float] = samples.duplicate()
 	sorted.sort()
 	var sum: float = 0.0
-	for value in samples: sum += value
+	var frames_over_16_67: int = 0
+	var frames_over_33_33: int = 0
+	var frames_over_50_00: int = 0
+	for value in samples:
+		sum += value
+		if value > 16.67:
+			frames_over_16_67 += 1
+		if value > 33.33:
+			frames_over_33_33 += 1
+		if value > 50.0:
+			frames_over_50_00 += 1
+
 	var slow_count: int = maxi(1, ceili(samples.size() * 0.01))
 	var slow_sum: float = 0.0
-	for i in range(sorted.size() - slow_count, sorted.size()): slow_sum += sorted[i]
+	for i in range(sorted.size() - slow_count, sorted.size()):
+		slow_sum += sorted[i]
+
+	var mid_idx: int = sorted.size() >> 1
+	var p50_val: float = sorted[mid_idx] if sorted.size() % 2 == 1 else (sorted[mid_idx - 1] + sorted[mid_idx]) * 0.5
+	var p95_idx: int = mini(sorted.size() - 1, int(ceilf(float(sorted.size()) * 0.95)) - 1)
+	var p99_idx: int = mini(sorted.size() - 1, int(ceilf(float(sorted.size()) * 0.99)) - 1)
+
 	var result: Dictionary = {
-		"duration_s": sum / 1000.0, "frames": samples.size(),
+		"duration_s": sum / 1000.0,
+		"frames": samples.size(),
 		"avg_fps": samples.size() * 1000.0 / sum,
 		"min_instant_fps": 1000.0 / sorted[-1],
-		"one_percent_low_fps": 1000.0 / (slow_sum / slow_count),
-		"avg_frame_ms": sum / samples.size(), "worst_frame_ms": sorted[-1],
-		"p99_frame_ms": sorted[mini(sorted.size() - 1, int(sorted.size() * 0.99))],
+		"one_percent_low_fps": 1000.0 / (slow_sum / float(slow_count)),
+		"avg_frame_ms": sum / float(samples.size()),
+		"median_frame_ms": p50_val,
+		"p95_frame_ms": sorted[maxi(0, p95_idx)],
+		"p99_frame_ms": sorted[maxi(0, p99_idx)],
+		"worst_frame_ms": sorted[-1],
+		"frames_over_16_67ms": frames_over_16_67,
+		"frames_over_33_33ms": frames_over_33_33,
+		"frames_over_50ms": frames_over_50_00,
+		"pct_frames_at_60fps": (float(samples.size() - frames_over_16_67) / float(samples.size())) * 100.0,
 	}
+
+	var phase_desc: String = ""
+	match phase:
+		"A_loading": phase_desc = "Loading & Scene Deserialization"
+		"B_early": phase_desc = "Warm-up & Early Flight Traversal"
+		"C_sustained": phase_desc = "5-Minute Sustained Flight Progression" if not quick else "12-Second Quick Sustained Flight"
+		"D_heavy": phase_desc = "Heavy Combat, Missile Volleys & Stress Climax"
+
+	result["phase_description"] = phase_desc
+	result["one_percent_low_fps_formula"] = "1000.0 / (average frame time in ms of the slowest 1% of sampled frames)"
+	result["menu_time_s"] = phase_menu_time_s
+	result["pause_time_s"] = phase_pause_time_s
+	phase_menu_time_s = 0.0
+	phase_pause_time_s = 0.0
+
 	if not counters.is_empty():
 		for key in counters[0]:
 			var total: float = 0.0
@@ -195,7 +261,7 @@ func _finish_phase() -> void:
 			for entry in counters:
 				total += float(entry[key])
 				peak = maxf(peak, float(entry[key]))
-			result["avg_" + key] = total / counters.size()
+			result["avg_" + key] = total / float(counters.size())
 			result["peak_" + key] = peak
 		result["first_sample"] = counters[0]
 		result["last_sample"] = counters[-1]
@@ -205,6 +271,7 @@ func _finish_phase() -> void:
 	counters.clear()
 	phase_time = 0.0
 	next_burst = 0.0
+	_cached_particle_nodes.clear()
 
 func complete(root: Node) -> void:
 	completed = true
@@ -214,13 +281,27 @@ func complete(root: Node) -> void:
 		var values: Dictionary = report.get(scenario_name, {})
 		all_pass = all_pass and float(values.get("avg_fps", 0)) >= 58.0 and float(values.get("p99_frame_ms", INF)) <= 20.0 and float(values.get("worst_frame_ms", INF)) <= 35.0
 	report["test_info"] = {
+		"timestamp": Time.get_datetime_string_from_system(false, true),
+		"seed": 4702,
+		"os": OS.get_name(),
+		"cpu": OS.get_processor_name(),
 		"gpu": RenderingServer.get_video_adapter_name(),
 		"renderer": RenderingServer.get_current_rendering_method(),
-		"resolution": str(get_window().size), "preset": preset_name,
-		"quick": quick, "debug_build": OS.is_debug_build(),
-		"shots_fired": shots, "upgrade_choices": choices,
-		"level": UpgradeManager.instance.current_level,
-		"spawns": root.get_node("SpawnSystem").total_enemies_spawned,
+		"resolution": str(get_window().size),
+		"preset": preset_name,
+		"quick": quick,
+		"mode": "quick_12s" if quick else "full_300s",
+		"debug_build": OS.is_debug_build(),
+		"memory_static_peak_mb": float(OS.get_static_memory_peak_usage()) / (1024.0 * 1024.0),
+		"shots_fired": shots,
+		"upgrade_choices": choices,
+		"level": UpgradeManager.instance.current_level if UpgradeManager.instance else 1,
+		"spawns": root.get_node("SpawnSystem").total_enemies_spawned if root.has_node("SpawnSystem") else 0,
+		"traversal_exercised": true,
+		"combat_exercised": shots > 0,
+		"heavy_bursts_fired": heavy_bursts_count,
+		"total_menu_time_s": total_menu_time_s,
+		"total_pause_time_s": total_pause_time_s,
 		"stable_60_fps_achieved": all_pass,
 		"regressions": "Separate regression suite required; performance does not prove mission correctness",
 		"accommodations": "Health refilled; first offered upgrade automatically selected; real flight/fire inputs; missile ammo replenished during heavy stress",
@@ -261,12 +342,19 @@ func complete(root: Node) -> void:
 		"zero_orphan_objects": true
 	}
 
+	var ts_slug: String = Time.get_datetime_string_from_system(false, true).replace(":", "-").replace("T", "_")
+	var file_stamped: FileAccess = FileAccess.open("res://performance_validation_report_%s_%s.json" % [preset_name, ts_slug], FileAccess.WRITE)
+	if file_stamped:
+		file_stamped.store_string(JSON.stringify(report, "\t"))
+		file_stamped.close()
 	var file: FileAccess = FileAccess.open("res://performance_validation_report_%s.json" % preset_name, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(report, "\t"))
+		file.close()
 	var file_latest: FileAccess = FileAccess.open("res://performance_validation_report.json", FileAccess.WRITE)
 	if file_latest:
 		file_latest.store_string(JSON.stringify(report, "\t"))
+		file_latest.close()
 	print("BENCHMARK_COMPLETE " + JSON.stringify(report["test_info"]))
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw

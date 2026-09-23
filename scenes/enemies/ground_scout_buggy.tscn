@@ -26,7 +26,7 @@ weapon_type = 1
 damage_per_shot = 2.0
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_r2q5x"]
-size = Vector3(3.5, 2.15, 4.95)
+size = Vector3(2.6, 1.6, 3.7)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mb185"]
 resource_name = "Color_G05"
@@ -351,11 +351,11 @@ script = ExtResource("1_gw5ex")
 archetype = SubResource("Resource_qjn7s")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1292996399]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("BoxShape3D_r2q5x")
 
 [node name="Body" type="Node3D" parent="." unique_id=683567359]
-transform = Transform3D(1.45, 0, 0, 0, 1.45, 0, 0, 0, 1.45, 0, 0, 0)
+transform = Transform3D(1.08, 0, 0, 0, 1.08, 0, 0, 0, 1.08, 0, 0, 0)
 
 [node name="ChassisMesh" type="MeshInstance3D" parent="Body" unique_id=868761467]
 transform = Transform3D(0, 0, -0.026, 0, 0.026, 0, 0.026, 0, 0, 0, 0.30708677, 0)

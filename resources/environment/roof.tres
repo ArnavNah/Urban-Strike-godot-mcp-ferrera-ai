@@ -2,5 +2,5 @@
 
 [resource]
 resource_name = "Roof"
-albedo_color = Color(0.28, 0.3, 0.34, 1)
-roughness = 0.78
+albedo_color = Color(0.24, 0.26, 0.29, 1)
+roughness = 0.8

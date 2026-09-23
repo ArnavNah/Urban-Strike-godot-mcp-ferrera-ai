@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c208po0rl48j4"
-path="res://.godot/imported/windmill.png-e036ffd97bf7980b792a6784c42b115e.ctex"
+path="res://.godot/imported/windmill.png-61838cca6e3f8cd03818b8d7400a9b03.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/previews/windmill.png"
-dest_files=["res://.godot/imported/windmill.png-e036ffd97bf7980b792a6784c42b115e.ctex"]
+source_file="res://assets/Previews/windmill.png"
+dest_files=["res://.godot/imported/windmill.png-61838cca6e3f8cd03818b8d7400a9b03.ctex"]
 
 [params]
 

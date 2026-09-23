@@ -37,9 +37,21 @@ func play(scale_mult: float = 1.0) -> void:
 		_visual_tween.tween_property(fireball, "scale", Vector3.ONE * 0.01, 0.14)
 		_visual_tween.tween_callback(func() -> void: fireball.visible = false)
 	if flash_light:
-		flash_light.light_energy = 2.4 * s
-		_light_tween = create_tween()
-		_light_tween.tween_property(flash_light, "light_energy", 0.0, 0.16)
+		var flash_enabled: bool = bool(SaveSystem.get_setting("damage_flash_enabled", true))
+		var reduced_flash: bool = bool(SaveSystem.get_setting("reduced_flashing", false))
+		if not flash_enabled:
+			flash_light.visible = false
+			flash_light.light_energy = 0.0
+		elif reduced_flash:
+			flash_light.visible = true
+			flash_light.light_energy = 0.8 * s
+			_light_tween = create_tween()
+			_light_tween.tween_property(flash_light, "light_energy", 0.0, 0.10)
+		else:
+			flash_light.visible = true
+			flash_light.light_energy = 2.4 * s
+			_light_tween = create_tween()
+			_light_tween.tween_property(flash_light, "light_energy", 0.0, 0.16)
 
 func _process(delta: float) -> void:
 	_remaining -= delta
