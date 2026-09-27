@@ -59,9 +59,42 @@ var _road_path: PackedVector3Array = PackedVector3Array()
 var _road_path_index: int = 0
 var _road_path_timer: float = 0.0
 var _stuck_sample_timer: float = 0.0
+var _burst_timer: float = 0.0
+var _burst_shots_fired: int = 0
+var _los_lost_timer: float = 0.0
 var debug_last_blocked_reason: String = ""
 var debug_shots_fired: int = 0
 var _visual_meshes: Array[MeshInstance3D] = []
+@export var debug_combat_telemetry: bool = false
+
+func _log_combat(stage: String, detail: String = "") -> void:
+	if debug_combat_telemetry:
+		print("[Tank %s#%d] %s%s" % [name, get_instance_id(), stage, (" - " + detail) if not detail.is_empty() else ""])
+
+func on_projectile_hit(target: Node, hit_pos: Vector3) -> void:
+	_log_combat("target_hit", "Target: %s at %s" % [target.name, str(hit_pos)])
+
+func on_projectile_miss() -> void:
+	_log_combat("target_miss")
+
+func on_attack_slot_revoked() -> void:
+	_log_combat("slot_revoked", "Lease expired by CombatDirector")
+	_has_attack_slot = false
+	if charge_light:
+		charge_light.visible = false
+	if current_state == State.AIMING or current_state == State.CHARGING:
+		_start_new_reposition()
+
+func has_valid_attack_slot() -> bool:
+	if not _has_attack_slot:
+		return false
+	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+	if not dir and CombatDirector.instance:
+		dir = CombatDirector.instance
+	if dir and not dir.has_attack_permission(self):
+		_has_attack_slot = false
+		return false
+	return true
 
 @onready var turret: Node3D = get_node_or_null("Body/Turret") if has_node("Body/Turret") else get_node_or_null(NodePath("Turret"))
 @onready var barrel: Node3D = (turret.get_node_or_null("Barrel") if turret else null)
@@ -71,6 +104,15 @@ var _visual_meshes: Array[MeshInstance3D] = []
 @onready var charge_light: OmniLight3D = (barrel.get_node_or_null("ChargeLight") if barrel else null)
 @onready var anim_player: AnimationPlayer = get_node_or_null("AnimationPlayer")
 @onready var body_node: Node3D = get_node_or_null("Body")
+
+static var _burnt_mat: StandardMaterial3D = null
+
+static func _get_burnt_mat() -> StandardMaterial3D:
+	if not _burnt_mat:
+		_burnt_mat = StandardMaterial3D.new()
+		_burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
+		_burnt_mat.roughness = 0.95
+	return _burnt_mat
 
 func _ready() -> void:
 	if archetype:
@@ -249,7 +291,7 @@ func _physics_process(delta: float) -> void:
 		State.CHARGING:
 			_tick_charging(step_delta, has_los)
 		State.FIRING:
-			_tick_firing()
+			_tick_firing(step_delta)
 		State.RELOADING:
 			_tick_reloading(step_delta, flat_dist, dist, has_los)
 
@@ -370,8 +412,8 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 		var target_yaw := atan2(-move_dir.x, -move_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 4.0 * delta)
 
-	# Check for transition into combat engagement (healthy standoff distance 14-38m)
-	if not is_scattered and _arming_timer <= 0.0 and flat_dist <= preferred_range and flat_dist >= 14.0 and has_los and dist <= 60.0:
+	# Check for transition into combat engagement (healthy standoff distance 3-38m)
+	if not is_scattered and _arming_timer <= 0.0 and flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= 60.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
@@ -386,7 +428,7 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 			var angle := randf() * TAU
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
 			_state_timer = 1.0
-		elif not is_scattered and _arming_timer <= 0.0 and flat_dist <= threat_range and flat_dist >= 12.0 and has_los and dist <= 60.0:
+		elif not is_scattered and _arming_timer <= 0.0 and flat_dist <= threat_range and dist >= 3.0 and has_los and dist <= 60.0:
 			if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
 				_deploy_troops()
 			_transition_to(State.ACQUIRE)
@@ -396,10 +438,11 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 func _tick_acquire(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if not has_los or flat_dist > threat_range or flat_dist < 12.0 or dist > 65.0:
+	if not has_los or flat_dist > threat_range or dist < 3.0 or dist > 65.0:
 		_start_new_reposition()
 		return
 
+	_log_combat("acquire", "dist: %.1fm, flat: %.1fm" % [dist, flat_dist])
 	_track_player(delta)
 	_state_timer -= delta
 	if _state_timer <= 0.0:
@@ -411,7 +454,21 @@ func _tick_acquire(delta: float, flat_dist: float, dist: float, has_los: bool) -
 func _tick_aiming(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if not has_los or flat_dist > threat_range or dist > 65.0:
+	if not is_instance_valid(_player) or ("is_alive" in _player and not _player.is_alive):
+		_release_slot()
+		_start_new_reposition()
+		return
+
+	if not has_los:
+		_los_lost_timer += delta
+		if _los_lost_timer >= 1.5:
+			_release_slot()
+			_start_new_reposition()
+			return
+	else:
+		_los_lost_timer = 0.0
+
+	if flat_dist > threat_range or dist > 65.0 or not has_valid_attack_slot():
 		_release_slot()
 		_start_new_reposition()
 		return
@@ -424,7 +481,25 @@ func _tick_aiming(delta: float, flat_dist: float, dist: float, has_los: bool) ->
 func _tick_charging(delta: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
+	if not is_instance_valid(_player) or ("is_alive" in _player and not _player.is_alive):
+		_release_slot()
+		if charge_light:
+			charge_light.visible = false
+		_start_new_reposition()
+		return
+
 	if not has_los:
+		_los_lost_timer += delta
+		if _los_lost_timer >= 1.5:
+			_release_slot()
+			if charge_light:
+				charge_light.visible = false
+			_start_new_reposition()
+			return
+	else:
+		_los_lost_timer = 0.0
+
+	if not has_valid_attack_slot():
 		_release_slot()
 		if charge_light:
 			charge_light.visible = false
@@ -434,36 +509,59 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 	_track_player(delta * 0.6)
 	_state_timer -= delta
 	if charge_light:
+		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))
+		var max_energy := 1.2 if reduced_flash else 4.0
 		charge_light.visible = true
-		charge_light.light_energy = (1.0 - (_state_timer / charge_time)) * 4.0
+		charge_light.light_energy = (1.0 - (_state_timer / charge_time)) * max_energy
 
 	if _state_timer <= 0.0:
 		_transition_to(State.FIRING)
 
-func _tick_firing() -> void:
+func _tick_firing(delta: float) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 	if charge_light:
 		charge_light.visible = false
 
+	if _burst_timer > 0.0:
+		_burst_timer -= delta
+		return
+
+	if not is_instance_valid(_player) or ("is_alive" in _player and not _player.is_alive):
+		_finish_firing()
+		return
+
 	if archetype:
 		match archetype.weapon_type:
 			GroundEnemyArchetype.WeaponType.CANNON:
-				_fire_cannon()
-				_finish_firing()
+				if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+					CombatDirector.instance.telemetry_attack_attempts += 1
+				var spawned := _fire_cannon()
+				if spawned:
+					_finish_firing()
+				else:
+					_burst_timer = 0.08 # Bounded retry delay
 			GroundEnemyArchetype.WeaponType.RAPID_MG, GroundEnemyArchetype.WeaponType.JAMMER_ECM:
-				_fire_rapid_mg()
+				_tick_burst_mg()
 			GroundEnemyArchetype.WeaponType.ROCKET_BURST:
-				_fire_rocket_burst()
+				_tick_burst_rockets()
 			GroundEnemyArchetype.WeaponType.MORTAR_SHELL:
+				if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+					CombatDirector.instance.telemetry_attack_attempts += 1
 				_fire_mortar_shell()
 				_finish_firing()
 			GroundEnemyArchetype.WeaponType.TROOP_DEPLOY:
-				_deploy_troops()
-				_fire_rapid_mg()
+				if not _troops_deployed:
+					_deploy_troops()
+				_tick_burst_mg()
 	else:
-		_fire_cannon()
-		_finish_firing()
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_attack_attempts += 1
+		var spawned := _fire_cannon()
+		if spawned:
+			_finish_firing()
+		else:
+			_burst_timer = 0.08
 
 func _finish_firing() -> void:
 	_release_slot()
@@ -484,12 +582,15 @@ func _tick_reloading(delta: float, flat_dist: float, dist: float, has_los: bool)
 	if _state_timer <= 0.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		if flat_dist <= preferred_range and flat_dist >= 14.0 and has_los and dist <= 60.0:
+		if flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= 60.0:
 			_transition_to(State.ACQUIRE)
 		else:
 			_start_new_reposition()
 
 func _transition_to(new_state: State) -> void:
+	if current_state == State.AIMING or current_state == State.CHARGING or current_state == State.FIRING:
+		if new_state != State.AIMING and new_state != State.CHARGING and new_state != State.FIRING:
+			_release_slot()
 	current_state = new_state
 	match new_state:
 		State.REPOSITIONING:
@@ -501,7 +602,8 @@ func _transition_to(new_state: State) -> void:
 		State.CHARGING:
 			_state_timer = charge_time
 		State.FIRING:
-			pass
+			_burst_timer = 0.0
+			_burst_shots_fired = 0
 		State.RELOADING:
 			_state_timer = reload_time
 			_pick_tactical_reposition_dir()
@@ -687,10 +789,10 @@ func _track_player(delta: float) -> void:
 	var to_target := target_pos - barrel_origin
 	var flat_dist := Vector2(to_target.x, to_target.z).length()
 	var target_pitch := atan2(to_target.y, flat_dist)
-	target_pitch = clampf(target_pitch, deg_to_rad(-5.0), deg_to_rad(55.0))
+	target_pitch = clampf(target_pitch, deg_to_rad(-5.0), deg_to_rad(68.0))
 	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, 5.0 * delta)
 
-func _fire_cannon() -> void:
+func _fire_cannon() -> bool:
 	var muzzle_positions: Array[Vector3] = []
 	if muzzle_left and muzzle_right:
 		muzzle_positions.append(muzzle_left.global_position)
@@ -703,6 +805,17 @@ func _fire_cannon() -> void:
 		muzzle_positions.append(global_position + Vector3.UP)
 
 	var ref_pos: Vector3 = muzzle_positions[0] if not muzzle_positions.is_empty() else global_position
+
+	var space := get_world_3d().direct_space_state
+	if space:
+		var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.8, 0), ref_pos, 1)
+		q.exclude = [get_rid()]
+		var cl_hit := space.intersect_ray(q)
+		if not cl_hit.is_empty():
+			debug_last_blocked_reason = "muzzle_occluded_by_world"
+			_log_combat("shot_failed", "muzzle occluded by world")
+			return false
+
 	var fire_dir: Vector3
 	if is_instance_valid(_player):
 		var to_player := (_player.global_position - ref_pos).normalized()
@@ -726,12 +839,14 @@ func _fire_cannon() -> void:
 	for m_pos in muzzle_positions:
 		var proj: Projectile = null
 		if pool:
-			proj = pool.spawn_projectile(m_pos, fire_dir, false, dmg_per_shot)
+			proj = pool.spawn_projectile(m_pos, fire_dir, false, dmg_per_shot, 0, 0, 1.0, "cannon", self)
 			if proj:
 				any_spawned = true
 				debug_shots_fired += 1
 				if CombatDirector.instance:
 					CombatDirector.instance.transfer_danger_to_projectile(self, proj, 2.0)
+					if CombatDirector.instance.telemetry_enabled:
+						CombatDirector.instance.telemetry_projectiles_created += 1
 
 		if proj != null:
 			if VfxPool.instance:
@@ -748,6 +863,11 @@ func _fire_cannon() -> void:
 		EventBus.enemy_fired_weapon.emit(self, first_pos, fire_dir, true)
 
 	_trigger_recoil()
+	if any_spawned:
+		_log_combat("shot_spawned", "cannon round active")
+	else:
+		_log_combat("shot_failed", "projectile pool allocation failed")
+	return any_spawned
 
 func _trigger_recoil() -> void:
 	if not barrel:
@@ -758,19 +878,23 @@ func _trigger_recoil() -> void:
 		tween.tween_property(barrel, "position:z", orig_z + 0.15, 0.05).set_ease(Tween.EASE_OUT)
 		tween.tween_property(barrel, "position:z", orig_z, 0.22).set_ease(Tween.EASE_IN_OUT)
 
-func _fire_rapid_mg() -> void:
+func _tick_burst_mg() -> void:
 	var count: int = archetype.burst_count if archetype else 4
 	var interval: float = archetype.burst_interval if archetype else 0.11
 	var dmg: float = archetype.damage_per_shot if archetype else 2.5
-	for i in range(count):
-		if not is_instance_valid(self) or not is_alive:
-			return
-		_spawn_single_bullet(dmg)
-		if i < count - 1:
-			await get_tree().create_timer(interval).timeout
-	_finish_firing()
+	var spawned := _spawn_single_bullet(dmg)
+	if spawned:
+		_burst_shots_fired += 1
+		_log_combat("shot_spawned", "mg round %d/%d" % [_burst_shots_fired, count])
+		if _burst_shots_fired >= count:
+			_finish_firing()
+		else:
+			_burst_timer = interval
+	else:
+		_log_combat("shot_failed", "mg projectile failed, retry in 0.08s")
+		_burst_timer = 0.08
 
-func _spawn_single_bullet(dmg: float) -> void:
+func _spawn_single_bullet(dmg: float) -> bool:
 	var muzzle_pos: Vector3
 	if muzzle_left and muzzle_right:
 		muzzle_pos = muzzle_left.global_position if randf() > 0.5 else muzzle_right.global_position
@@ -780,6 +904,15 @@ func _spawn_single_bullet(dmg: float) -> void:
 		muzzle_pos = turret.global_position
 	else:
 		muzzle_pos = global_position + Vector3.UP
+
+	var space := get_world_3d().direct_space_state
+	if space:
+		var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.8, 0), muzzle_pos, 1)
+		q.exclude = [get_rid()]
+		var cl_hit := space.intersect_ray(q)
+		if not cl_hit.is_empty():
+			debug_last_blocked_reason = "muzzle_occluded_by_world"
+			return false
 
 	var fire_dir: Vector3
 	if is_instance_valid(_player):
@@ -794,10 +927,12 @@ func _spawn_single_bullet(dmg: float) -> void:
 		pool = ProjectilePool.instance
 	var proj: Projectile = null
 	if pool:
-		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, dmg * CombatDirector.get_damage_multiplier())
+		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, dmg * CombatDirector.get_damage_multiplier(), 0, 0, 1.0, "chaingun", self)
 
 	if proj != null:
 		debug_shots_fired += 1
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_projectiles_created += 1
 		if VfxPool.instance:
 			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
 		else:
@@ -811,40 +946,56 @@ func _spawn_single_bullet(dmg: float) -> void:
 
 		if EventBus:
 			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
+		_trigger_recoil()
+		return true
 
 	_trigger_recoil()
+	return false
 
-func _fire_rocket_burst() -> void:
+func _spawn_single_rocket(shot_index: int) -> bool:
+	if not is_instance_valid(self) or not is_alive or not is_instance_valid(_player):
+		return false
 	var rocket_scene := preload("res://scenes/weapons/unguided_rocket.tscn")
-	var count: int = archetype.burst_count if archetype else 3
-	for i in range(count):
-		if not is_instance_valid(self) or not is_alive or not is_instance_valid(_player):
-			return
-		var muzzle_pos: Vector3
-		if muzzle_left and muzzle_right:
-			muzzle_pos = muzzle_left.global_position if (i % 2 == 0) else muzzle_right.global_position
-		elif muzzle:
-			muzzle_pos = muzzle.global_position
-		elif turret:
-			muzzle_pos = turret.global_position
-		else:
-			muzzle_pos = global_position + Vector3.UP
+	var muzzle_pos: Vector3
+	if muzzle_left and muzzle_right:
+		muzzle_pos = muzzle_left.global_position if (shot_index % 2 == 0) else muzzle_right.global_position
+	elif muzzle:
+		muzzle_pos = muzzle.global_position
+	elif turret:
+		muzzle_pos = turret.global_position
+	else:
+		muzzle_pos = global_position + Vector3.UP
 
-		var fire_dir := (_player.global_position - muzzle_pos).normalized()
-		var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
-		fire_dir = (fire_dir + spread).normalized()
-		var rocket: UnguidedRocket = rocket_scene.instantiate() as UnguidedRocket
-		if rocket:
-			rocket.damage = 16.0 * CombatDirector.get_damage_multiplier()
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(rocket)
-			rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
-			if CombatDirector.instance and i == 0:
-				CombatDirector.instance.transfer_danger_to_projectile(self, rocket, 3.0)
+	var fire_dir := (_player.global_position - muzzle_pos).normalized()
+	var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
+	fire_dir = (fire_dir + spread).normalized()
+	var rocket: UnguidedRocket = rocket_scene.instantiate() as UnguidedRocket
+	if rocket:
+		rocket.damage = 16.0 * CombatDirector.get_damage_multiplier()
+		var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+		p.add_child.call_deferred(rocket)
+		rocket.call_deferred("launch", muzzle_pos, fire_dir, 42.0)
+		if CombatDirector.instance and shot_index == 0:
+			CombatDirector.instance.transfer_danger_to_projectile(self, rocket, 3.0)
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_projectiles_created += 1
 		_trigger_recoil()
-		if i < count - 1:
-			await get_tree().create_timer(0.18).timeout
-	_finish_firing()
+		return true
+	_trigger_recoil()
+	return false
+
+func _tick_burst_rockets() -> void:
+	var count: int = archetype.burst_count if archetype else 3
+	var interval: float = 0.18
+	var spawned := _spawn_single_rocket(_burst_shots_fired)
+	if spawned:
+		_burst_shots_fired += 1
+		if _burst_shots_fired >= count:
+			_finish_firing()
+		else:
+			_burst_timer = interval
+	else:
+		_burst_timer = 0.08
 
 func _fire_mortar_shell() -> void:
 	if not is_instance_valid(_player):
@@ -990,13 +1141,19 @@ func _request_slot() -> bool:
 					danger_cost = CombatDirector.DANGER_COST_BULLET
 					attack_name = "troop_deploy"
 
+		_log_combat("slot_requested", attack_name)
 		var granted: bool = dir.request_attack_permission(self, token_cost, false, is_heavy, false, danger_cost, attack_name)
 		_has_attack_slot = granted
 		debug_last_blocked_reason = "active" if granted else "token_denied"
+		if granted:
+			_log_combat("slot_granted", attack_name)
+		else:
+			_log_combat("slot_denied", attack_name)
 		return granted
 
 	_has_attack_slot = true
 	debug_last_blocked_reason = "active_no_director"
+	_log_combat("slot_granted", "no_director")
 	return true
 
 func _release_slot() -> void:
@@ -1006,6 +1163,7 @@ func _release_slot() -> void:
 			dir = CombatDirector.instance
 		if dir:
 			dir.release_attack_permission(self)
+		_log_combat("slot_released")
 	_has_attack_slot = false
 
 func _get_damage_number_y_offset() -> float:
@@ -1108,9 +1266,7 @@ func _die() -> void:
 	velocity = Vector3.ZERO
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	var burnt_mat := StandardMaterial3D.new()
-	burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
-	burnt_mat.roughness = 0.95
+	var burnt_mat := _get_burnt_mat()
 	for m in _visual_meshes:
 		if is_instance_valid(m):
 			m.material_override = burnt_mat

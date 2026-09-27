@@ -1,0 +1,28 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://drpb03wllhln3"]
+
+[ext_resource type="Material" uid="uid://rtssk5qa7o4v" path="res://resources/materials/outline_enemy_air.tres" id="1_od83h"]
+[ext_resource type="Shader" uid="uid://beavdf4ginxjl" path="res://resources/shaders/toon.gdshader" id="2_sbv3k"]
+[ext_resource type="Texture2D" uid="uid://bdkuv22b3crq2" path="res://assets/vehicles/enemies/air/enemy_scout_texture_car.png" id="3_s1b1m"]
+
+[resource]
+render_priority = 0
+next_pass = ExtResource("1_od83h")
+shader = ExtResource("2_sbv3k")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/albedo_texture = ExtResource("3_s1b1m")
+shader_parameter/use_texture = true
+shader_parameter/shadow_factor = 0.38
+shader_parameter/midtone_factor = 0.45
+shader_parameter/shadow_threshold = 0.25
+shader_parameter/midtone_threshold = 0.65
+shader_parameter/step_smoothness = 0.03
+shader_parameter/specular_size = 0.08
+shader_parameter/specular_intensity = 0.18
+shader_parameter/specular_smoothness = 0.02
+shader_parameter/rim_size = 0.5
+shader_parameter/rim_intensity = 0.0
+shader_parameter/rim_smoothness = 0.08
+shader_parameter/emission_color = Color(0, 0, 0, 1)
+shader_parameter/emission_energy = 0.0
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/uv1_offset = Vector3(0, 0, 0)

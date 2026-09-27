@@ -13,7 +13,7 @@ enum State {
 }
 
 @export var max_health: float = 45.0
-@export var threat_range: float = 46.0
+@export var threat_range: float = 58.0
 @export var aim_speed: float = 4.8
 @export var aim_prep_time: float = 0.35
 @export var burst_count: int = 5
@@ -23,6 +23,7 @@ enum State {
 @export var bullet_damage: float = 6.5
 @export var xp_reward: int = 12
 @export var arming_delay: float = 1.5
+@export var debug_combat_telemetry: bool = false
 
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
@@ -45,7 +46,47 @@ var chunk_coord: Vector2i = Vector2i.ZERO
 var debug_last_blocked_reason: String = ""
 var debug_shots_fired: int = 0
 
+func _log_combat(event_name: String, details: String = "") -> void:
+	if not debug_combat_telemetry:
+		return
+	var time_sec := Time.get_ticks_msec() / 1000.0
+	var msg := "[%.2fs][Turret:%d][%s] %s" % [time_sec, get_instance_id(), event_name, details]
+	print(msg)
+
+func on_projectile_hit(target: Node, hit_pos: Vector3) -> void:
+	var target_name: String = str(target.name) if target else "null"
+	_log_combat("target_hit", "target: %s, pos: %s" % [target_name, str(hit_pos)])
+
+func on_projectile_miss() -> void:
+	_log_combat("target_miss", "burst shot missed")
+
+func on_attack_slot_revoked() -> void:
+	_has_attack_slot = false
+	_log_combat("slot_revoked")
+	if current_state == State.AIMING or current_state == State.FIRING:
+		_set_telegraph(false)
+		_transition_to(State.IDLE)
+
+func has_valid_attack_slot() -> bool:
+	if not _has_attack_slot:
+		return false
+	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+	if not dir and CombatDirector.instance:
+		dir = CombatDirector.instance
+	if dir:
+		return dir.has_attack_permission(self)
+	return true
+
 var _telegraph_mesh: MeshInstance3D = null
+
+static var _burnt_mat: StandardMaterial3D = null
+
+static func _get_burnt_mat() -> StandardMaterial3D:
+	if not _burnt_mat:
+		_burnt_mat = StandardMaterial3D.new()
+		_burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
+		_burnt_mat.roughness = 0.95
+	return _burnt_mat
 
 @onready var head: Node3D = $TurretHead
 @onready var barrel: Node3D = $TurretHead/Barrel
@@ -150,11 +191,13 @@ func _physics_process(delta: float) -> void:
 	match current_state:
 		State.IDLE:
 			if _arming_timer <= 0.0 and dist_to_player <= threat_range and has_los:
+				_log_combat("acquire", "dist: %.1fm" % dist_to_player)
 				_transition_to(State.AIMING)
 
 		State.AIMING:
-			if dist_to_player > threat_range or not has_los:
+			if not is_instance_valid(_player_node) or ("is_alive" in _player_node and not _player_node.is_alive) or dist_to_player > threat_range or not has_los:
 				_set_telegraph(false)
+				_release_slot()
 				_transition_to(State.IDLE)
 				return
 
@@ -166,6 +209,7 @@ func _physics_process(delta: float) -> void:
 			if _state_timer <= 0.0:
 				var can_attack: bool = _request_slot()
 				if can_attack:
+					_log_combat("aim_aligned", "slot confirmed, starting burst")
 					_set_telegraph(false)
 					_shots_fired_in_burst = 0
 					_burst_timer = 0.0
@@ -175,21 +219,27 @@ func _physics_process(delta: float) -> void:
 					_state_timer = 0.2
 
 		State.FIRING:
-			# If player broke LoS behind building, stop firing burst and release slot
-			if not has_los:
+			# If player broke LoS behind building, destroyed, or lease revoked, stop firing burst and release slot
+			if not is_instance_valid(_player_node) or ("is_alive" in _player_node and not _player_node.is_alive) or not has_los or not has_valid_attack_slot():
 				_release_slot()
 				_transition_to(State.IDLE)
 				return
 
-			# Snapshot aim locked from AIMING state - do not track player mid-burst
+			# Track player smoothly during burst to prevent rounds trailing behind moving targets
+			_track_player(step_delta * 0.5)
+
 			_burst_timer -= delta
 			if _burst_timer <= 0.0:
-				_burst_timer = burst_interval
-				_fire_shot()
-				_shots_fired_in_burst += 1
-				if _shots_fired_in_burst >= burst_count:
-					_release_slot()
-					_transition_to(State.RELOADING)
+				var spawned := _fire_shot()
+				if spawned:
+					_burst_timer = burst_interval
+					_shots_fired_in_burst += 1
+					if _shots_fired_in_burst >= burst_count:
+						_release_slot()
+						_transition_to(State.RELOADING)
+				else:
+					# On projectile pool failure, retry after short delay without consuming burst round
+					_burst_timer = 0.08
 
 		State.RELOADING:
 			_state_timer -= delta
@@ -205,6 +255,9 @@ func _physics_process(delta: float) -> void:
 					_transition_to(State.IDLE)
 
 func _transition_to(new_state: State) -> void:
+	if (current_state == State.AIMING or current_state == State.FIRING) and new_state != State.AIMING and new_state != State.FIRING:
+		_release_slot()
+		_set_telegraph(false)
 	current_state = new_state
 	match new_state:
 		State.IDLE:
@@ -259,11 +312,22 @@ func _track_player(delta: float) -> void:
 	var local_barrel_target := head.to_local(target_pos)
 	var flat_dist := Vector2(local_barrel_target.x, local_barrel_target.z).length()
 	var target_pitch := atan2(local_barrel_target.y, flat_dist)
-	target_pitch = clampf(target_pitch, deg_to_rad(-10.0), deg_to_rad(65.0))
+	target_pitch = clampf(target_pitch, deg_to_rad(-45.0), deg_to_rad(65.0))
 	barrel.rotation.x = lerp_angle(barrel.rotation.x, target_pitch, aim_speed * delta)
 
-func _fire_shot() -> void:
-	var muzzle_pos: Vector3 = muzzle.global_position if muzzle else head.global_position
+func _fire_shot() -> bool:
+	# Barrel extends 2.05m forward locally (-z). Calculate muzzle point at actual barrel tip
+	# to clear the turret collision cylinder (radius 2.1m) and building rooftop edges.
+	var muzzle_pos: Vector3
+	if barrel:
+		muzzle_pos = barrel.global_position + (-barrel.global_transform.basis.z * 2.15)
+	elif muzzle:
+		muzzle_pos = muzzle.global_position
+	elif head:
+		muzzle_pos = head.global_position + (-head.global_transform.basis.z * 2.15)
+	else:
+		muzzle_pos = global_position + Vector3.UP
+
 	var fire_dir: Vector3
 	if is_instance_valid(_player_node):
 		var to_player := (_player_node.global_position - muzzle_pos).normalized()
@@ -272,19 +336,33 @@ func _fire_shot() -> void:
 	else:
 		fire_dir = (-barrel.global_transform.basis.z if barrel else -head.global_transform.basis.z).normalized()
 
-	var spawn_pos: Vector3 = muzzle_pos + fire_dir * 0.45
+	_log_combat("shot_attempted", "burst %d/%d" % [_shots_fired_in_burst + 1, burst_count])
+
+	# Check muzzle clearance against Layer 1 (World) with a short forward probe to prevent false occlusion by rooftop parapets
+	var space := get_world_3d().direct_space_state
+	var clear_query := PhysicsRayQueryParameters3D.create(muzzle_pos, muzzle_pos + fire_dir * 0.35, 1) # Layer 1 = World
+	clear_query.exclude = [get_rid()]
+	var clear_hit := space.intersect_ray(clear_query)
+	if not clear_hit.is_empty():
+		_log_combat("shot_failed", "muzzle obstructed by %s" % str(clear_hit.collider))
+		return false
+
+	var spawn_pos: Vector3 = muzzle_pos + fire_dir * 0.20
 	var scaled_damage: float = bullet_damage * CombatDirector.get_damage_multiplier()
 
 	# Spawn projectile from pool
 	var proj: Projectile = null
 	var pool_node := get_tree().get_first_node_in_group("projectile_pool")
 	if pool_node and pool_node.has_method("spawn_projectile"):
-		proj = pool_node.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage)
+		proj = pool_node.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage, 0, 0, 1.0, "turret", self)
 	elif ProjectilePool.instance:
-		proj = ProjectilePool.instance.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage)
+		proj = ProjectilePool.instance.spawn_projectile(spawn_pos, fire_dir, false, scaled_damage, 0, 0, 1.0, "turret", self)
 
 	if proj != null:
 		debug_shots_fired += 1
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_projectiles_created += 1
+		_log_combat("shot_spawned", "id: %d" % proj.get_instance_id())
 		# Directional enemy muzzle flash
 		if VfxPool.instance:
 			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
@@ -299,22 +377,35 @@ func _fire_shot() -> void:
 
 		if EventBus:
 			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, false)
+		return true
+
+	_log_combat("shot_failed", "projectile pool exhausted")
+	return false
 
 func _request_slot() -> bool:
 	if _arming_timer > 0.0:
 		debug_last_blocked_reason = "arming_delay"
 		return false
 
+	if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+		CombatDirector.instance.telemetry_attack_attempts += 1
+
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
 	if not dir and CombatDirector.instance:
 		dir = CombatDirector.instance
 	if dir:
+		_log_combat("slot_requested", "turret")
 		var granted: bool = dir.request_attack_permission(self, CombatDirector.TOKEN_COST_TURRET, false, false, false, CombatDirector.DANGER_COST_BULLET, "turret")
 		_has_attack_slot = granted
 		debug_last_blocked_reason = "active" if granted else "token_denied"
+		if granted:
+			_log_combat("slot_granted", "turret")
+		else:
+			_log_combat("slot_denied", "turret")
 		return granted
 	_has_attack_slot = true
 	debug_last_blocked_reason = "active_no_director"
+	_log_combat("slot_granted", "no_director")
 	return true
 
 func _release_slot() -> void:
@@ -324,6 +415,7 @@ func _release_slot() -> void:
 			dir = CombatDirector.instance
 		if dir:
 			dir.release_attack_permission(self)
+		_log_combat("slot_released")
 	_has_attack_slot = false
 
 func _check_line_of_sight() -> bool:
@@ -427,9 +519,7 @@ func _die() -> void:
 	set_process(false)
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	var burnt_mat := StandardMaterial3D.new()
-	burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
-	burnt_mat.roughness = 0.95
+	var burnt_mat := _get_burnt_mat()
 	for m in _visual_meshes:
 		if is_instance_valid(m):
 			m.material_override = burnt_mat

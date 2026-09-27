@@ -21,6 +21,8 @@ var ricochet_remaining: int = 0
 var armor_damage_multiplier: float = 1.0
 var has_danger_reservation: bool = false
 var weapon_source: String = "chaingun"
+var shooter_node: Node = null
+var has_hit_target: bool = false
 
 static var _player_mat: StandardMaterial3D = null
 static var _enemy_mat: StandardMaterial3D = null
@@ -37,12 +39,14 @@ func _ready() -> void:
 	if raycast:
 		raycast.enabled = false
 
-func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0, weapon_src: String = "chaingun") -> void:
+func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_damage: float = 6.0, pierce_count: int = 0, ricochet_count: int = 0, armor_mult: float = 1.0, weapon_src: String = "chaingun", shooter: Node = null) -> void:
 	global_position = start_pos
 	_direction = dir.normalized()
 	_is_player_projectile = from_player
 	damage = proj_damage
 	weapon_source = weapon_src
+	shooter_node = shooter
+	has_hit_target = false
 	# A pooled round starts with neutral upgrade state on every launch.
 	armored_damage_multiplier = 1.0
 	air_damage_multiplier = 1.0
@@ -94,6 +98,8 @@ func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_dam
 		else:
 			# Enemy bullets hit World (Layer 1) and Player (Layer 2)
 			raycast.collision_mask = (1 << 0) | (1 << 1)
+			if is_instance_valid(shooter_node) and shooter_node is CollisionObject3D:
+				raycast.add_exception(shooter_node as CollisionObject3D)
 		raycast.enabled = true
 		raycast.target_position = Vector3(0, 0, -speed * (1.0 / 60.0) * 1.5)
 
@@ -155,9 +161,16 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 	if can_pierce:
 		raycast.add_exception(collider as CollisionObject3D)
 	if target_obj and (not siege_round or not already_hit):
+		has_hit_target = true
+		if is_instance_valid(shooter_node) and shooter_node.has_method("on_projectile_hit"):
+			shooter_node.on_projectile_hit(target_obj, hit_pos)
 		var source_node: Node = null
 		if _is_player_projectile:
 			source_node = PlayerHelicopter.instance if is_instance_valid(PlayerHelicopter.instance) else get_tree().get_first_node_in_group("player")
+		else:
+			source_node = self
+			if is_player_unit and CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+				CombatDirector.instance.telemetry_player_collisions += 1
 		if siege_round and is_enemy:
 			_hit_target_ids.append(target_obj.get_instance_id())
 		var applied_dmg: float = _damage_for_target(target_obj)
@@ -244,6 +257,10 @@ func _spawn_spark(pos: Vector3, norm: Vector3, is_armor: bool = false, is_shield
 			target_parent.add_child.call_deferred(spark)
 
 func deactivate() -> void:
+	if not has_hit_target and is_instance_valid(shooter_node) and shooter_node.has_method("on_projectile_miss"):
+		shooter_node.on_projectile_miss()
+	shooter_node = null
+	has_hit_target = false
 	if has_danger_reservation and CombatDirector.instance:
 		CombatDirector.instance.release_danger_capacity(self, 1)
 		has_danger_reservation = false

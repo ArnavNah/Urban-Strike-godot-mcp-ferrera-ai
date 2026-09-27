@@ -1,15 +1,24 @@
-[gd_resource type="Resource" script_class="DifficultyProfile" format=3]
+[gd_resource type="Resource" script_class="DifficultyProfile" format=3 uid="uid://cqws7cj8qni0"]
 
-[ext_resource type="Script" path="res://scripts/resources/difficulty_profile.gd" id="1_nehxx"]
-[ext_resource type="Script" path="res://scripts/resources/wave_population_target.gd" id="2_a2nrq"]
+[ext_resource type="Script" uid="uid://csfk4h6oa3wja" path="res://scripts/resources/difficulty_profile.gd" id="1_nehxx"]
+[ext_resource type="Script" uid="uid://ccgxau0csv4it" path="res://scripts/resources/wave_population_target.gd" id="2_a2nrq"]
 
 [sub_resource type="Resource" id="Resource_jbjs7"]
 script = ExtResource("2_a2nrq")
 announcement = "WAVE 1 // HOSTILE INFANTRY CONTACT"
+composition_weights = {
+"air_scout": 0.15,
+"fodder": 0.7,
+"light_shooter": 0.15
+}
+allowed_roles = ["fodder", "light_shooter", "air_scout"]
+max_air = 2
+formation_interval_min = 18.0
 
 [sub_resource type="Resource" id="Resource_wmsyp"]
 script = ExtResource("2_a2nrq")
 wave_number = 2
+duration = 25.0
 announcement = "WAVE 2 // ARMORED PATROL INBOUND"
 visual_crowd_min = 12
 visual_crowd_max = 16
@@ -22,6 +31,7 @@ composition_weights = {
 [sub_resource type="Resource" id="Resource_funh5"]
 script = ExtResource("2_a2nrq")
 wave_number = 3
+duration = 25.0
 announcement = "WAVE 3 // SUSTAINED GROUND ASSAULT"
 visual_crowd_min = 16
 visual_crowd_max = 22
@@ -37,6 +47,7 @@ max_medium_armored = 1
 [sub_resource type="Resource" id="Resource_h25km"]
 script = ExtResource("2_a2nrq")
 wave_number = 4
+duration = 25.0
 announcement = "WAVE 4 // HEAVY ARMOR CONVOY INBOUND"
 visual_crowd_min = 20
 visual_crowd_max = 26
@@ -54,6 +65,7 @@ spawn_interval_max = 2.0
 [sub_resource type="Resource" id="Resource_e5c6y"]
 script = ExtResource("2_a2nrq")
 wave_number = 5
+duration = 30.0
 announcement = "WAVE 5 // SAM & MORTAR FIRE SUPPORT DETECTED"
 visual_crowd_min = 24
 visual_crowd_max = 30
@@ -74,6 +86,7 @@ spawn_interval_max = 2.0
 [sub_resource type="Resource" id="Resource_4y872"]
 script = ExtResource("2_a2nrq")
 wave_number = 6
+duration = 25.0
 announcement = "WAVE 6 // AIR THREAT: RECON SQUADRONS CONTACT"
 visual_crowd_min = 24
 visual_crowd_max = 32
@@ -92,6 +105,7 @@ spawn_interval_max = 2.0
 [sub_resource type="Resource" id="Resource_tgwge"]
 script = ExtResource("2_a2nrq")
 wave_number = 7
+duration = 25.0
 announcement = "WAVE 7 // COMBINED AIR & ARMORED PRESSURE"
 visual_crowd_min = 26
 visual_crowd_max = 34
@@ -111,6 +125,7 @@ spawn_interval_max = 1.7
 [sub_resource type="Resource" id="Resource_vcvbm"]
 script = ExtResource("2_a2nrq")
 wave_number = 8
+duration = 25.0
 announcement = "WAVE 8 // AIR STRIKE & ADVANCED FORMATIONS"
 visual_crowd_min = 28
 visual_crowd_max = 36
@@ -133,6 +148,7 @@ spawn_interval_max = 1.7
 [sub_resource type="Resource" id="Resource_lwwqe"]
 script = ExtResource("2_a2nrq")
 wave_number = 9
+duration = 30.0
 announcement = "WAVE 9 // MAXIMUM THREAT SATURATION"
 visual_crowd_min = 30
 visual_crowd_max = 40
@@ -155,7 +171,6 @@ spawn_interval_max = 1.7
 [sub_resource type="Resource" id="Resource_b0fam"]
 script = ExtResource("2_a2nrq")
 wave_number = 10
-duration = 60.0
 announcement = "WAVE 10 // WARNING: ARCHON HEAVY GUNSHIP ENGAGEMENT"
 node_cap = 11
 composition_weights = {

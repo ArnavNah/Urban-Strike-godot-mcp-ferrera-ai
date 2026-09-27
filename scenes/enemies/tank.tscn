@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://crce8ribxgcrl" path="res://scripts/enemies/tank.gd" id="1_tank"]
 [ext_resource type="Texture2D" uid="uid://duiaun2tgejon" path="res://assets/vehicles/enemies/ground/textures/tank_a_texture.png" id="2_o2lwj"]
+[ext_resource type="Material" uid="uid://c70s3dwajvvtf" path="res://resources/materials/toon_ground_buggy.tres" id="3_mxdtq"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_o2lwj"]
 size = Vector3(3.9, 2.44, 5.8)
@@ -337,22 +338,27 @@ transform = Transform3D(1.22, 0, 0, 0, 1.22, 0, 0, 0, 1.22, 0, 0, 0)
 [node name="ChassisMesh" type="MeshInstance3D" parent="Body" unique_id=2117164995]
 transform = Transform3D(0, 0, -0.035, 0, 0.035, 0, 0.035, 0, 0, 0, 0.41338605, 0)
 mesh = SubResource("ArrayMesh_gsx6v")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="TreadR1" type="MeshInstance3D" parent="Body" unique_id=1186416356]
 transform = Transform3D(0, 0, 0.035, 0, 0.035, 0, 0.035, 0, 0, 1.225, 0, 0)
 mesh = SubResource("ArrayMesh_sx2fh")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="TreadR2" type="MeshInstance3D" parent="Body" unique_id=59358426]
 transform = Transform3D(0, 0, 0.035, 0, 0.035, 0, 0.035, 0, 0, 1.225, 0, 0)
 mesh = SubResource("ArrayMesh_21nk2")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="TreadL1" type="MeshInstance3D" parent="Body" unique_id=1103733450]
 transform = Transform3D(0, 0, -0.035, 0, 0.035, 0, 0.035, 0, 0, -1.225, 0, 0)
 mesh = SubResource("ArrayMesh_w5qte")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="TreadL2" type="MeshInstance3D" parent="Body" unique_id=1264796783]
 transform = Transform3D(0, 0, -0.035, 0, 0.035, 0, 0.035, 0, 0, -1.225, 0, 0)
 mesh = SubResource("ArrayMesh_qa8rb")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="Turret" type="Node3D" parent="Body" unique_id=294184291]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8820885, 0.61960256)
@@ -360,6 +366,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8820885, 0.61960256)
 [node name="TurretMesh" type="MeshInstance3D" parent="Body/Turret" unique_id=1337607688]
 transform = Transform3D(0, 0, -0.035, 0, 0.035, 0, 0.035, 0, 0, 0, 0, 0)
 mesh = SubResource("ArrayMesh_w8pr5")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="Barrel" type="Node3D" parent="Body/Turret" unique_id=432891387]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5658839, -0.60614663)
@@ -367,6 +374,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5658839, -0.60614663)
 [node name="BarrelMesh" type="MeshInstance3D" parent="Body/Turret/Barrel" unique_id=1541217058]
 transform = Transform3D(0, 0, -0.035, 0, 0.035, 0, 0.035, 0, 0, 0, 0, 0)
 mesh = SubResource("ArrayMesh_4cs4e")
+surface_material_override/0 = ExtResource("3_mxdtq")
 
 [node name="Muzzle" type="Marker3D" parent="Body/Turret/Barrel" unique_id=1341666968]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.934555)

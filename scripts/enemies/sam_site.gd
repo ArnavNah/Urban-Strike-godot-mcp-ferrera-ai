@@ -42,6 +42,15 @@ var _los_timer: float = 0.0
 var debug_last_blocked_reason: String = ""
 var debug_shots_fired: int = 0
 
+static var _burnt_mat: StandardMaterial3D = null
+
+static func _get_burnt_mat() -> StandardMaterial3D:
+	if not _burnt_mat:
+		_burnt_mat = StandardMaterial3D.new()
+		_burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
+		_burnt_mat.roughness = 0.95
+	return _burnt_mat
+
 @onready var radar_dish: Node3D = get_node_or_null("TurretMount/Dish")
 @onready var missile_launcher: Node3D = get_node_or_null("TurretMount/Launcher")
 @onready var muzzle: Marker3D = get_node_or_null("TurretMount/Launcher/Muzzle")
@@ -55,6 +64,7 @@ func _ready() -> void:
 	current_health = max_health
 	_player = get_tree().get_first_node_in_group("player")
 	_stagger_offset = randi() % 60
+
 	if not missile_scene:
 		missile_scene = preload("res://scenes/weapons/guided_missile.tscn")
 	var eb: Node = get_node_or_null("/root/EventBus")
@@ -334,9 +344,7 @@ func _die() -> void:
 	set_process(false)
 	if _visual_meshes.is_empty():
 		_collect_visual_meshes(self)
-	var burnt_mat := StandardMaterial3D.new()
-	burnt_mat.albedo_color = Color(0.12, 0.10, 0.10, 1.0)
-	burnt_mat.roughness = 0.95
+	var burnt_mat := _get_burnt_mat()
 	for m in _visual_meshes:
 		if is_instance_valid(m):
 			m.material_override = burnt_mat

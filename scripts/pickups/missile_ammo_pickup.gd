@@ -13,9 +13,9 @@ enum State {
 @export var bob_speed: float = 3.2
 @export var bob_amplitude: float = 0.22
 @export var rotation_speed: float = 1.8
-@export var collection_radius: float = 4.0
-@export var collection_radius_xz: float = 4.5
-@export var collection_height: float = 35.0
+@export var collection_radius: float = 3.5
+@export var collection_radius_xz: float = 3.8
+@export var collection_height: float = 3.5
 @export var initial_magnet_speed: float = 35.0
 @export var max_magnet_speed: float = 95.0
 @export var magnet_accel: float = 240.0
@@ -88,12 +88,14 @@ func _on_missile_ammo_changed(_current: int, _maximum: int) -> void:
 	var player := get_tree().get_first_node_in_group("player") as Node3D if is_inside_tree() else null
 	if not is_instance_valid(player) or player.is_queued_for_deletion():
 		return
+	if "is_alive" in player and not player.is_alive:
+		return
 	var to_p := player.global_position - global_position
 	var flat_d := Vector2(to_p.x, to_p.z).length()
 	var rad: float = 18.0
 	if "magnet_radius" in player:
 		rad = float(player.get("magnet_radius"))
-	if flat_d <= rad and absf(to_p.y) <= 40.0:
+	if flat_d <= rad and absf(to_p.y) <= 45.0:
 		if can_collect(player) and _is_line_of_sight_clear(player.global_position):
 			magnetize_to(player)
 
@@ -139,6 +141,8 @@ func collect(player: Node3D = null) -> bool:
 	if not pod:
 		return false
 
+	_is_collected = true
+
 	var gained: int = 0
 	if pod.has_method("replenish_ammo"):
 		gained = pod.call("replenish_ammo", refill_amount)
@@ -147,11 +151,16 @@ func collect(player: Node3D = null) -> bool:
 		var max_m: int = int(pod.get("max_missiles"))
 		gained = mini(refill_amount, max_m - cur)
 		pod.set("current_missiles", cur + gained)
+		if pod.has_signal("ammo_changed"):
+			pod.emit_signal("ammo_changed", cur + gained, max_m)
+		var eb: Node = get_node_or_null("/root/EventBus")
+		if eb and eb.has_signal("missile_ammo_changed"):
+			eb.emit_signal("missile_ammo_changed", cur + gained, max_m)
 
 	if gained <= 0:
+		_is_collected = false
 		return false
 
-	_is_collected = true
 	set_deferred("monitoring", false)
 	set_deferred("monitorable", false)
 	_play_pickup_feedback(gained)
@@ -209,7 +218,13 @@ func _physics_process(delta: float) -> void:
 		beacon.light_energy = 1.8 + sin(_bob_timer * 2.0) * 0.6
 
 	# Idle state: hover check for flying player overhead
-	if current_state == State.IDLE or not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+	var target_invalid: bool = false
+	if not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+		target_invalid = true
+	elif "is_alive" in _target_player and not _target_player.is_alive:
+		target_invalid = true
+
+	if current_state == State.IDLE or target_invalid:
 		if current_state == State.MAGNETIZED:
 			current_state = State.IDLE
 			_target_player = null
@@ -219,12 +234,13 @@ func _physics_process(delta: float) -> void:
 		if not is_instance_valid(active_player) and is_inside_tree():
 			active_player = get_tree().get_first_node_in_group("player") as Node3D
 		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
-			var to_p := active_player.global_position - global_position
-			var flat_d := Vector2(to_p.x, to_p.z).length()
-			# Hovering directly overhead within horizontal reach and flight altitude
-			if flat_d <= collection_radius_xz and to_p.y >= -2.0 and to_p.y <= collection_height:
-				if _is_line_of_sight_clear(active_player.global_position):
-					collect(active_player)
+			if not ("is_alive" in active_player and not active_player.is_alive):
+				var to_p := active_player.global_position - global_position
+				var flat_d := Vector2(to_p.x, to_p.z).length()
+				# Skid hover check: directly hovering close-range within cabin reach
+				if to_p.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_p.y) <= collection_height):
+					if _is_line_of_sight_clear(active_player.global_position):
+						collect(active_player)
 		return
 
 	# Magnetized state: homing toward player cabin with accelerated catch-up

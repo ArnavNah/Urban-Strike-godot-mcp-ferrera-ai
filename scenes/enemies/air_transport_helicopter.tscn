@@ -39,13 +39,29 @@ roughness = 0.7
 material = SubResource("StandardMaterial3D_tcf42")
 size = Vector3(1.7, 1.4, 4.8)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_85x86"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wdnoe"]
+albedo_color = Color(0.25, 0.35, 0.22, 1)
+metallic = 0.3
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="BoxMesh_nqgl6"]
+material = SubResource("StandardMaterial3D_wdnoe")
+size = Vector3(5.6, 0.12, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lqjmg"]
 albedo_color = Color(0.12, 0.12, 0.12, 1)
 metallic = 0.8
 
-[sub_resource type="BoxMesh" id="BoxMesh_g26c1"]
-material = SubResource("StandardMaterial3D_85x86")
-size = Vector3(9.8, 0.06, 0.38)
+[sub_resource type="CylinderMesh" id="CylinderMesh_kwing"]
+material = SubResource("StandardMaterial3D_lqjmg")
+top_radius = 0.28
+bottom_radius = 0.28
+height = 1.6
+radial_segments = 12
+
+[sub_resource type="BoxMesh" id="BoxMesh_tcf42"]
+material = SubResource("StandardMaterial3D_wdnoe")
+size = Vector3(0.12, 1.1, 1)
 
 [node name="AirTransportHelicopter" type="CharacterBody3D" unique_id=338967523]
 collision_layer = 4
@@ -62,25 +78,21 @@ transform = Transform3D(2.65, 0, 0, 0, 2.65, 0, 0, 0, 2.65, 0, 0, 0)
 [node name="FuselageMesh" type="MeshInstance3D" parent="Visuals" unique_id=1447105239]
 mesh = SubResource("BoxMesh_jq0xl")
 
-[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=2013884585]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.8)
+[node name="TransportWings" type="MeshInstance3D" parent="Visuals" unique_id=1751427670]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+mesh = SubResource("BoxMesh_nqgl6")
 
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=2143708334]
-mesh = SubResource("BoxMesh_g26c1")
+[node name="LeftJetEngine" type="MeshInstance3D" parent="Visuals" unique_id=1583686100]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -2, -0.05, 0)
+mesh = SubResource("CylinderMesh_kwing")
 
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1651102111]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
-mesh = SubResource("BoxMesh_g26c1")
+[node name="RightJetEngine" type="MeshInstance3D" parent="Visuals" unique_id=1949974490]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 2, -0.05, 0)
+mesh = SubResource("CylinderMesh_kwing")
 
-[node name="AftRotor" type="Node3D" parent="Visuals" unique_id=1363171624]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 1.8)
-
-[node name="Blade3" type="MeshInstance3D" parent="Visuals/AftRotor" unique_id=424787570]
-mesh = SubResource("BoxMesh_g26c1")
-
-[node name="Blade4" type="MeshInstance3D" parent="Visuals/AftRotor" unique_id=937563292]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
-mesh = SubResource("BoxMesh_g26c1")
+[node name="TailFin" type="MeshInstance3D" parent="Visuals" unique_id=555719477]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 2)
+mesh = SubResource("BoxMesh_tcf42")
 
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=2133198298]
 target_position = Vector3(0, 0, -45)

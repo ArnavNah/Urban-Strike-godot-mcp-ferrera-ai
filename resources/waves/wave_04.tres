@@ -28,6 +28,7 @@ minimum_wave = 4
 [resource]
 script = ExtResource("2_nn2wf")
 wave_number = 4
+duration = 25.0
 spawn_interval = 2.4
 spawn_budget = 12
 maximum_alive = 8

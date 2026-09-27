@@ -39,6 +39,7 @@ minimum_wave = 9
 [resource]
 script = ExtResource("2_ccivq")
 wave_number = 9
+duration = 30.0
 spawn_interval = 1.55
 spawn_budget = 26
 maximum_alive = 14

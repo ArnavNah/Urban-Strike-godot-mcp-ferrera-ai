@@ -1403,18 +1403,16 @@ func _retry_missing_initial_encounter() -> void:
 		_initial_retry_timer = 0.6
 
 func get_survival_stage() -> int:
-	if elapsed_survival_time < 120.0:
-		return 1 # 0-2 min: Opening
+	if elapsed_survival_time < 45.0:
+		return 1 # 0:00-0:45: Opening / Air scouts & infantry
+	elif elapsed_survival_time < 150.0:
+		return 2 # 0:45-2:30: Build-Up / Ground vehicles & rooftop turrets
+	elif elapsed_survival_time < 255.0:
+		return 3 # 2:30-4:15: Pressure / Combined arms & tactical peaks
 	elif elapsed_survival_time < 300.0:
-		return 2 # 2-5 min: Build-Up
-	elif elapsed_survival_time < 480.0:
-		return 3 # 5-8 min: Pressure
-	elif elapsed_survival_time < 720.0:
-		return 4 # 8-12 min: Escalation
-	elif elapsed_survival_time < 900.0:
-		return 5 # 12-15 min: Crisis
+		return 4 # 4:15-5:00: Climax / Archon boss encounter
 	else:
-		return 6 # 15+ min: Extreme
+		return 5 # 5:00+: Endless Overdrive / Extreme Survival
 
 func get_population_band() -> Vector2i:
 	match current_wave:
@@ -2481,7 +2479,7 @@ func _process_offscreen_cleanup() -> void:
 				continue
 
 		var dist := player_pos.distance_to(enemy.global_position)
-		var spawn_time: float = float(enemy.get_meta("spawn_time", 0.0)) if enemy.has_meta("spawn_time") else 0.0
+		var _spawn_time: float = float(enemy.get_meta("spawn_time", 0.0)) if enemy.has_meta("spawn_time") else 0.0
 
 		# Immediate hard recycle for enemies far away (> 150m) and not viewable
 		if dist > 150.0 and not is_viewable:
@@ -2529,8 +2527,8 @@ func _despawn_enemy_quietly(enemy: Node3D) -> void:
 	_notify_progress()
 
 func _check_scheduled_events() -> void:
-	# 1. Transport Reinforcement Drop at ~150s (2.5m)
-	if elapsed_survival_time >= 150.0 and not _scheduled_events_triggered.get("transport_drop", false):
+	# 1. Transport Reinforcement Drop at ~100s (Stage 4, 1:40)
+	if elapsed_survival_time >= 100.0 and not _scheduled_events_triggered.get("transport_drop", false):
 		var player := _get_player()
 		var p_pos := player.global_position if player else Vector3.ZERO
 		var entry := get_air_corridor_entry(p_pos, 48.0, 75.0)
@@ -2540,8 +2538,8 @@ func _check_scheduled_events() -> void:
 			if EventBus:
 				EventBus.wave_started.emit(current_wave, "⚠ INCOMING AIRBORNE REINFORCEMENT CONVOY ⚠")
 
-	# 1b. Fast Jet / Heavy Air Strike Pass at ~180s (3.0m)
-	if elapsed_survival_time >= 180.0 and not _scheduled_events_triggered.get("jet_heavy_strike", false):
+	# 1b. Fast Jet / Heavy Air Strike Pass at ~155s (Stage 6, 2:35)
+	if elapsed_survival_time >= 155.0 and not _scheduled_events_triggered.get("jet_heavy_strike", false):
 		var player := _get_player()
 		var p_pos := player.global_position if player else Vector3.ZERO
 		var entry := get_air_corridor_entry(p_pos, 70.0, 100.0)
@@ -2552,15 +2550,15 @@ func _check_scheduled_events() -> void:
 			if EventBus:
 				EventBus.wave_started.emit(current_wave, "⚠ FAST JET AIR STRIKE INBOUND // MIG-17 CONTACT ⚠")
 
-	# 2. Radar Station at ~270s (4.5m)
-	if elapsed_survival_time >= 270.0 and not _scheduled_events_triggered.get("radar_station", false):
+	# 2. Radar Station at ~125s (Stage 5, 2:05)
+	if elapsed_survival_time >= 125.0 and not _scheduled_events_triggered.get("radar_station", false):
 		_scheduled_events_triggered["radar_station"] = true
 		_spawn_radar_objective()
 		if EventBus:
 			EventBus.wave_started.emit(current_wave, "⚠ MISSION OBJECTIVE: DESTROY RADAR STATION ⚠")
 
-	# 3. Ace Gunship at ~420s (7.0m)
-	if elapsed_survival_time >= 420.0 and not _scheduled_events_triggered.get("ace_gunship", false):
+	# 3. Ace Gunship at ~205s (Stage 8, 3:25)
+	if elapsed_survival_time >= 205.0 and not _scheduled_events_triggered.get("ace_gunship", false):
 		var player := _get_player()
 		var p_pos := player.global_position if player else Vector3.ZERO
 		var entry := get_air_corridor_entry(p_pos, 50.0, 80.0)
@@ -2570,8 +2568,8 @@ func _check_scheduled_events() -> void:
 			if EventBus:
 				EventBus.wave_started.emit(current_wave, "⚠ ELITE AIR CONTACT: ACE GUNSHIP ⚠")
 
-	# 4. Archon Boss at ~600s (10.0m)
-	if elapsed_survival_time >= 600.0 and not _scheduled_events_triggered.get("archon_boss", false):
+	# 4. Archon Boss at ~255s (Stage 10, 4:15)
+	if elapsed_survival_time >= 255.0 and not _scheduled_events_triggered.get("archon_boss", false):
 		_scheduled_events_triggered["archon_boss"] = true
 		_spawn_archon_boss()
 		if EventBus:
@@ -5144,14 +5142,43 @@ func _spawn_radar_objective() -> void:
 		_register_spawned_node(radar)
 
 func _spawn_archon_boss() -> void:
+	if not _scene_archon or not _scene_archon.can_instantiate():
+		return
 	var boss: Node3D = _scene_archon.instantiate() as Node3D
-	if boss:
-		var player := _get_player()
-		var p_y := player.global_position.y if player else 14.0
-		boss.transform.origin = Vector3(0.0, p_y, -70.0)
-		var parent := _get_spawn_parent()
-		parent.add_child.call_deferred(boss)
-		_register_spawned_node(boss)
+	if not boss:
+		return
+
+	var player := _get_player()
+	var p_pos := player.global_position if is_instance_valid(player) else Vector3.ZERO
+	var p_y: float = p_pos.y if is_instance_valid(player) else 14.0
+	var spawn_pos: Vector3 = Vector3.ZERO
+
+	# Find valid loaded airspace 48-62m standoff near player
+	var entry := get_air_corridor_entry(p_pos, 48.0, 62.0)
+	if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
+		spawn_pos = entry["position"]
+	else:
+		# Fallback: standoff relative to camera orientation
+		var cam := get_viewport().get_camera_3d() if get_viewport() else null
+		var cam_fwd := -cam.global_transform.basis.z if is_instance_valid(cam) else Vector3.FORWARD
+		cam_fwd.y = 0.0
+		if cam_fwd.length_squared() < 0.01:
+			cam_fwd = Vector3.FORWARD
+		else:
+			cam_fwd = cam_fwd.normalized()
+		var offset_dir := cam_fwd.rotated(Vector3.UP, deg_to_rad(140.0)).normalized()
+		spawn_pos = p_pos + offset_dir * 55.0
+
+	spawn_pos.y = clampf(p_y + 2.0, 14.0, 22.0)
+	boss.transform.origin = spawn_pos
+
+	var parent := _get_spawn_parent()
+	parent.add_child.call_deferred(boss)
+	_register_spawned_node(boss)
+	record_spawn_event("BossArchon", spawn_pos)
+
+	if EventBus and EventBus.has_signal("boss_spawned"):
+		EventBus.boss_spawned.emit(boss)
 
 func _on_enemy_destroyed(enemy: Node3D, _points: int) -> void:
 	if _is_air_enemy(enemy) and _early_air_active and current_wave <= 2:

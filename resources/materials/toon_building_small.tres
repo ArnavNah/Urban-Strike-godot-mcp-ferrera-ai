@@ -1,0 +1,26 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://denuru133mb1"]
+
+[ext_resource type="Shader" uid="uid://beavdf4ginxjl" path="res://resources/shaders/toon.gdshader" id="2_l62qj"]
+[ext_resource type="Texture2D" uid="uid://bsyd5hlhkgrx6" path="res://assets/environment/vegetation/Textures/colormap.png" id="3_d0dkv"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("2_l62qj")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/albedo_texture = ExtResource("3_d0dkv")
+shader_parameter/use_texture = true
+shader_parameter/shadow_factor = 0.4
+shader_parameter/midtone_factor = 0.75
+shader_parameter/shadow_threshold = 0.2
+shader_parameter/midtone_threshold = 0.55
+shader_parameter/step_smoothness = 0.12
+shader_parameter/specular_size = 0.05
+shader_parameter/specular_intensity = 0.0
+shader_parameter/specular_smoothness = 0.04
+shader_parameter/rim_size = 0.5
+shader_parameter/rim_intensity = 0.0
+shader_parameter/rim_smoothness = 0.08
+shader_parameter/emission_color = Color(0, 0, 0, 1)
+shader_parameter/emission_energy = 0.0
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/uv1_offset = Vector3(0, 0, 0)

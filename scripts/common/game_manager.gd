@@ -75,7 +75,7 @@ func _on_enemy_destroyed(_enemy: Node, _score: int) -> void:
 func _on_missile_fired() -> void:
 	missiles_fired += 1
 
-func add_salvage(amount: int) -> void:
+func add_salvage(amount: int) -> int:
 	var data := SaveSystem.load_data()
 	var upgrades: Dictionary = data.get("upgrades", {})
 	var scavenger_lvl := int(upgrades.get("scavenger_rig", 0))
@@ -86,6 +86,7 @@ func add_salvage(amount: int) -> void:
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("salvage_updated"):
 		eb.emit_signal("salvage_updated", run_salvage)
+	return gained
 
 func get_run_telemetry(status: String = "IN_PROGRESS") -> Dictionary:
 	return {
@@ -161,7 +162,3 @@ func _on_player_died() -> void:
 func _on_boss_defeated() -> void:
 	bosses_killed += 1
 	add_salvage(300)
-	await get_tree().create_timer(2.5).timeout
-	var victory_screen := get_tree().get_first_node_in_group("victory_screen")
-	if victory_screen and victory_screen.has_method("display_victory"):
-		victory_screen.display_victory(run_salvage)

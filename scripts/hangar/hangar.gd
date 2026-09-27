@@ -95,6 +95,8 @@ func _resolve_3d_nodes() -> void:
 		bg_cam = find_child("Camera3D", true, false) as Camera3D
 	if not bg_skyline:
 		bg_skyline = find_child("Skyline", true, false) as Node3D
+	if bg_skyline:
+		CityChunk.apply_toon_material_to_building(bg_skyline)
 	if not bg_heli:
 		bg_heli = find_child("HeliModel", true, false) as Node3D
 	if bg_heli:

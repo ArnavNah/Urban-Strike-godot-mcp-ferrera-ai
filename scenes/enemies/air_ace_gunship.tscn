@@ -67,14 +67,6 @@ top_radius = 0.22
 bottom_radius = 0.22
 height = 1.0
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y54e0"]
-albedo_color = Color(0.12, 0.12, 0.12, 1)
-metallic = 0.85
-
-[sub_resource type="BoxMesh" id="BoxMesh_d6puc"]
-material = SubResource("StandardMaterial3D_y54e0")
-size = Vector3(9.6, 0.06, 0.36)
-
 [node name="AirAceGunship" type="CharacterBody3D" unique_id=390544546]
 collision_layer = 4
 script = ExtResource("1_wqtpq")
@@ -112,16 +104,6 @@ mesh = SubResource("CylinderMesh_e7cjm")
 [node name="MissilePodR" type="MeshInstance3D" parent="Visuals" unique_id=1340788546]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.35, -0.05, 0)
 mesh = SubResource("CylinderMesh_e7cjm")
-
-[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=714613946]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
-
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=839637066]
-mesh = SubResource("BoxMesh_d6puc")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1395472062]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
-mesh = SubResource("BoxMesh_d6puc")
 
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=559952112]
 target_position = Vector3(0, 0, -55)

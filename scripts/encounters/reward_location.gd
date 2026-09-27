@@ -83,12 +83,13 @@ func _process_repair(player: PlayerHelicopter, delta: float) -> void:
 		var amount: float = minf(transfer_rate * delta, current_resource_pool)
 		amount = minf(amount, player.max_health - player.current_health)
 		if amount > 0.0:
-			player.heal(amount)
-			current_resource_pool -= amount
-			if current_resource_pool <= 0.0:
-				complete_encounter()
-				if _halo_light:
-					_halo_light.light_energy = 0.0
+			var healed: float = player.heal(amount)
+			if healed > 0.0:
+				current_resource_pool -= healed
+				if current_resource_pool <= 0.0:
+					complete_encounter()
+					if _halo_light:
+						_halo_light.light_energy = 0.0
 	elif player.current_health >= player.max_health and current_resource_pool > 0.0:
 		player.heal(1.0) # Emits rate-limited hull_full_notified via player
 
@@ -99,7 +100,7 @@ func _process_ammo(player: PlayerHelicopter, delta: float) -> void:
 		if player.missile_pod and player.missile_pod.has_method("replenish_ammo"):
 			var gained: int = player.missile_pod.replenish_ammo(1)
 			if gained > 0:
-				current_resource_pool -= 1.0
+				current_resource_pool -= float(gained)
 				if current_resource_pool <= 0.0:
 					complete_encounter()
 					if _halo_light:
@@ -124,11 +125,15 @@ func _process_exploration_cache(_player: PlayerHelicopter) -> void:
 					gem.set("xp_value", 20)
 				parent.add_child(gem)
 
-	# Direct banked salvage grant
-	var data := SaveSystem.load_data()
-	var cur: int = int(data.get("salvage", 0))
-	data["salvage"] = cur + 60
-	SaveSystem.save_data(data)
+	# Direct salvage grant through GameManager (with offline save fallback)
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_method("add_salvage"):
+		gm.call("add_salvage", 60)
+	else:
+		var data := SaveSystem.load_data()
+		var cur: int = int(data.get("salvage", 0))
+		data["salvage"] = cur + 60
+		SaveSystem.save_data(data)
 
 	if _halo_light:
 		_halo_light.light_energy = 0.0

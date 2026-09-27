@@ -39,6 +39,7 @@ minimum_wave = 8
 [resource]
 script = ExtResource("2_523lx")
 wave_number = 8
+duration = 25.0
 spawn_interval = 1.7
 spawn_budget = 22
 maximum_alive = 12

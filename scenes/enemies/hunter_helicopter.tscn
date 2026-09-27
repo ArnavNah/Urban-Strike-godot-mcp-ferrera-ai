@@ -2,18 +2,11 @@
 
 [ext_resource type="Script" uid="uid://bj86yo65rbhtg" path="res://scripts/enemies/hunter_helicopter.gd" id="1_hunter"]
 [ext_resource type="PackedScene" uid="uid://bgh6fug8dsm5v" path="res://assets/vehicles/enemies/air/enemy_gunship.glb" id="2_4rah2"]
+[ext_resource type="Material" uid="uid://18bftv74c50j" path="res://resources/materials/toon_enemy_gunship.tres" id="2_ht3ec"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_Hunter"]
 radius = 2.05
 height = 8.2
-
-[sub_resource type="StandardMaterial3D" id="Mat_Black"]
-albedo_color = Color(0.12, 0.12, 0.12, 1)
-metallic = 0.8
-
-[sub_resource type="BoxMesh" id="Mesh_RotorBlade"]
-material = SubResource("Mat_Black")
-size = Vector3(8.2, 0.06, 0.36)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4rah2"]
 shading_mode = 0
@@ -34,16 +27,6 @@ shape = SubResource("CapsuleShape3D_Hunter")
 [node name="Visuals" type="Node3D" parent="." unique_id=718449696]
 transform = Transform3D(2.25, 0, 0, 0, 2.25, 0, 0, 0, 2.25, 0, 0, 0)
 
-[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=334904063]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=15223260]
-mesh = SubResource("Mesh_RotorBlade")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1162494892]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
-mesh = SubResource("Mesh_RotorBlade")
-
 [node name="CockpitVisor" type="MeshInstance3D" parent="Visuals" unique_id=810912078]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -1.35)
 mesh = SubResource("BoxMesh_ht3ec")
@@ -51,5 +34,10 @@ mesh = SubResource("BoxMesh_ht3ec")
 [node name="Model" parent="Visuals" unique_id=693790032 instance=ExtResource("2_4rah2")]
 transform = Transform3D(-1.6610327e-08, 0, 0.38, 0, 0.38, 0, -0.38, 0, -1.6610327e-08, 0, -0.25, 0.25)
 
+[node name="Cube_100" parent="Visuals/Model" index="0" unique_id=1310606665]
+surface_material_override/0 = ExtResource("2_ht3ec")
+
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1974755436]
 target_position = Vector3(0, 0, -45)
+
+[editable path="Visuals/Model"]

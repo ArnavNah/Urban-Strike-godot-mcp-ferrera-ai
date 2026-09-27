@@ -30,10 +30,10 @@ minimum_wave = 6
 [resource]
 script = ExtResource("2_2d7xi")
 wave_number = 6
+duration = 25.0
 spawn_interval = 2.0
 spawn_budget = 16
 maximum_alive = 10
 enemy_entries = Array[ExtResource("1_o8ma0")]([SubResource("Resource_5pgyu"), SubResource("Resource_f7jax"), SubResource("Resource_wjnjw")])
 announcement = "WAVE 6 // AIR CONTACT: HUNTER HELICOPTER DETECTED"
 ground_attack_slots = 3
-air_attack_slots = 1

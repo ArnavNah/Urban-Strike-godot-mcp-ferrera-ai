@@ -27,6 +27,7 @@ category = 1
 [resource]
 script = ExtResource("2_xdnx0")
 wave_number = 3
+duration = 25.0
 spawn_interval = 2.6
 spawn_budget = 10
 maximum_alive = 7

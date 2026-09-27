@@ -25,16 +25,48 @@ var _last_impact_armor_time: float = 0.0
 var _last_impact_terrain_time: float = 0.0
 var _last_player_hit_time: float = 0.0
 var _last_missile_impact_time: float = 0.0
+var _cached_camera: Camera3D = null
+
+func _get_active_camera() -> Camera3D:
+	if is_instance_valid(_cached_camera) and (_cached_camera.current or not is_inside_tree()):
+		return _cached_camera
+	if is_inside_tree():
+		var vp := get_viewport()
+		if vp:
+			_cached_camera = vp.get_camera_3d()
+	return _cached_camera
+
+func _calc_distance_volume_mult(pos: Vector3, max_dist: float = 140.0) -> float:
+	if pos == Vector3.ZERO:
+		return 1.0
+	var cam := _get_active_camera()
+	if not cam:
+		return 1.0
+	var dist := cam.global_position.distance_to(pos)
+	if dist >= max_dist:
+		return 0.0
+	return clampf(1.0 - (dist / max_dist), 0.12, 1.0)
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Initialize round-robin voice pool to prevent rapid sound dropouts
+	var sfx_bus_exists := AudioServer.get_bus_index("SFX") >= 0
 	for i in range(SFX_POOL_SIZE):
 		var p := AudioStreamPlayer.new()
 		p.name = "SfxVoice_%d" % i
+		if sfx_bus_exists:
+			p.bus = "SFX"
 		add_child(p)
 		_sfx_pool.append(p)
+
+	if sfx_bus_exists:
+		if chaingun_player:
+			chaingun_player.bus = "SFX"
+		if alert_player:
+			alert_player.bus = "SFX"
+		if explosion_player:
+			explosion_player.bus = "SFX"
 
 	if EventBus:
 		EventBus.chaingun_heat_changed.connect(_on_heat_changed)
@@ -130,50 +162,56 @@ func _on_player_fired_primary(_muzzle_pos: Vector3, _dir: Vector3) -> void:
 	if now - _last_player_shot_time < 0.05:
 		return
 	_last_player_shot_time = now
-	_play_sweep(190.0, 95.0, 0.04, 0.26)
+	var p_var := randf_range(0.96, 1.04)
+	_play_sweep(190.0 * p_var, 95.0 * p_var, 0.04, 0.26)
 
-func _on_enemy_fired_weapon(_enemy: Node3D, _muzzle_pos: Vector3, _dir: Vector3, is_heavy: bool) -> void:
+func _on_enemy_fired_weapon(_enemy: Node3D, muzzle_pos: Vector3, _dir: Vector3, is_heavy: bool) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - _last_enemy_shot_time < 0.06:
 		return
 	_last_enemy_shot_time = now
+	var dist_mult := _calc_distance_volume_mult(muzzle_pos)
+	if dist_mult <= 0.0:
+		return
+	var p_var := randf_range(0.95, 1.05)
 	if is_heavy:
 		# Heavy cannon / mortar: low menacing launch thump
-		_play_sweep(105.0, 36.0, 0.12, 0.42, true)
-		_play_tone(alert_player, 65.0, 0.15)
+		_play_sweep(105.0 * p_var, 36.0 * p_var, 0.12, 0.42 * dist_mult, true)
+		_play_tone(alert_player, 65.0 * p_var, 0.15, 0.40 * dist_mult)
 	else:
-		_play_sweep(135.0, 62.0, 0.06, 0.30)
+		_play_sweep(135.0 * p_var, 62.0 * p_var, 0.06, 0.30 * dist_mult)
 
-func _on_combat_impact(_hit_pos: Vector3, _normal: Vector3, is_armored: bool, _is_lethal: bool) -> void:
-	# Distance culling if camera is present and hit is beyond 140m
-	if _hit_pos != Vector3.ZERO and is_inside_tree() and get_viewport():
-		var camera := get_viewport().get_camera_3d()
-		if camera and camera.global_position.distance_squared_to(_hit_pos) > 140.0 * 140.0:
-			return
+func _on_combat_impact(hit_pos: Vector3, _normal: Vector3, is_armored: bool, _is_lethal: bool) -> void:
+	var dist_mult := _calc_distance_volume_mult(hit_pos)
+	if dist_mult <= 0.0:
+		return
 
 	var now := Time.get_ticks_msec() / 1000.0
 	if is_armored:
 		if now - _last_impact_armor_time < 0.04:
 			return
 		_last_impact_armor_time = now
-		var pitch_var := randf_range(0.95, 1.05)
-		_play_sweep(1500.0 * pitch_var, 950.0 * pitch_var, 0.035, 0.22)
+		var pitch_var := randf_range(0.94, 1.06)
+		# Crisp metallic deflection/penetration: sharp high click + metal ring
+		_play_sweep(1650.0 * pitch_var, 880.0 * pitch_var, 0.032, 0.24 * dist_mult)
 	else:
 		if now - _last_impact_terrain_time < 0.05:
 			return
 		_last_impact_terrain_time = now
 		var pitch_var := randf_range(0.93, 1.07)
-		_play_sweep(105.0 * pitch_var, 45.0 * pitch_var, 0.04, 0.18, true)
+		# Low dull thud with filtered noise sweep
+		_play_sweep(95.0 * pitch_var, 40.0 * pitch_var, 0.045, 0.18 * dist_mult, true)
 
 func _on_player_damaged_directional(_amount: float, _hit_pos: Vector3, _source_pos: Vector3, is_shield_hit: bool, _metadata: Dictionary = {}) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - _last_player_hit_time < 0.06:
 		return
 	_last_player_hit_time = now
+	var p_var := randf_range(0.95, 1.05)
 	if is_shield_hit:
-		_play_sweep(1850.0, 1100.0, 0.12, 0.35)
+		_play_sweep(1850.0 * p_var, 1100.0 * p_var, 0.12, 0.35)
 	else:
-		_play_sweep(115.0, 45.0, 0.15, 0.42)
+		_play_sweep(115.0 * p_var, 45.0 * p_var, 0.15, 0.42)
 
 func _on_upgrade_applied(_upgrade_id: String) -> void:
 	_play_arpeggio(alert_player, [587.33, 880.0, 1174.66], 0.07)
@@ -191,34 +229,44 @@ func _on_health_changed(current_health: float, max_health: float) -> void:
 			_play_tone(alert_player, 240.0, 0.12)
 	_prev_player_health = current_health
 
-func _on_missile_impact(_impact_pos: Vector3, _is_player: bool) -> void:
+func _on_missile_impact(impact_pos: Vector3, _is_player: bool) -> void:
+	var dist_mult := _calc_distance_volume_mult(impact_pos)
+	if dist_mult <= 0.0:
+		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - _last_missile_impact_time < 0.05:
 		return
 	_last_missile_impact_time = now
-	_play_sweep(145.0, 42.0, 0.26, 0.40)
+	var p_var := randf_range(0.94, 1.06)
+	_play_sweep(145.0 * p_var, 38.0 * p_var, 0.28, 0.42 * dist_mult)
 
 func _on_enemy_destroyed(enemy: Node3D, points: int) -> void:
+	var pos := enemy.global_position if is_instance_valid(enemy) else Vector3.ZERO
+	var dist_mult := _calc_distance_volume_mult(pos)
+	if dist_mult <= 0.0:
+		return
+
 	var is_air := false
 	if is_instance_valid(enemy):
 		if enemy.is_in_group("air_enemies") or enemy is AirEnemyController or enemy is HunterHelicopter or enemy is Mig17Striker:
 			is_air = true
 
+	var p_var := randf_range(0.94, 1.06)
 	if is_air:
 		# Aircraft destruction: descending airframe decompression whine / screech + secondary explosion pop
-		_play_sweep(340.0, 85.0, 0.38, 0.40)
-		_play_tone(explosion_player, 70.0, 0.45)
+		_play_sweep(340.0 * p_var, 80.0 * p_var, 0.38, 0.40 * dist_mult)
+		_play_tone(explosion_player, 70.0 * p_var, 0.45, 0.45 * dist_mult)
 	elif points >= 150:
-		# Major destruction (command unit, boss, radar, high-threat elite)
-		_play_tone(explosion_player, 48.0, 0.85)
-		_play_sweep(75.0, 28.0, 0.48, 0.48, true)
+		# Major destruction (command unit, boss, radar, high-threat elite): deep rumble + crunch
+		_play_tone(explosion_player, 48.0 * p_var, 0.85, 0.85 * dist_mult)
+		_play_sweep(75.0 * p_var, 26.0 * p_var, 0.50, 0.48 * dist_mult, true)
 	elif points >= 25:
 		# Standard ground armor / turret destruction: deep mechanical bass rumble + crunch
-		_play_tone(explosion_player, 55.0, 0.60)
-		_play_sweep(90.0, 35.0, 0.35, 0.38, true)
+		_play_tone(explosion_player, 55.0 * p_var, 0.60, 0.60 * dist_mult)
+		_play_sweep(90.0 * p_var, 32.0 * p_var, 0.36, 0.38 * dist_mult, true)
 	else:
 		# Light unit destruction
-		_play_tone(explosion_player, 95.0, 0.35)
+		_play_tone(explosion_player, 95.0 * p_var, 0.35, 0.35 * dist_mult)
 
 func _on_missile_lock(progress: float, _target: Node3D, is_locked: bool) -> void:
 	if is_locked and not _was_missile_locked:
@@ -336,7 +384,7 @@ func _play_sweep(freq_start: float, freq_end: float, duration: float, volume: fl
 			if phase >= 1.0:
 				phase -= 1.0
 
-func _play_tone(player: AudioStreamPlayer, freq: float, duration: float) -> void:
+func _play_tone(player: AudioStreamPlayer, freq: float, duration: float, volume: float = 0.4) -> void:
 	if not player:
 		return
 	var sample_hz := 22050.0
@@ -354,7 +402,7 @@ func _play_tone(player: AudioStreamPlayer, freq: float, duration: float) -> void
 		for i in range(frames):
 			var t := float(i) / float(frames)
 			var env := (1.0 - t) * (1.0 - t)
-			var sample := sin(phase * TAU) * env * 0.4
+			var sample := sin(phase * TAU) * env * volume
 			playback.push_frame(Vector2(sample, sample))
 			phase += phase_inc
 			if phase >= 1.0:

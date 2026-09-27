@@ -44,6 +44,7 @@ var _remaining_budget: int = 0
 var _countdown_seconds: int = 0
 var _active_enemies: Array[Node] = []
 var _spawn_markers: Array[Marker3D] = []
+var _is_boss_defeated: bool = false
 
 @onready var wave_timer: Timer = $WaveTimer
 @onready var intermission_timer: Timer = $IntermissionTimer
@@ -55,6 +56,9 @@ func _ready() -> void:
 	_setup_timers()
 	_load_default_definitions_if_empty()
 	_collect_spawn_points()
+
+	if EventBus and EventBus.has_signal("boss_defeated"):
+		EventBus.boss_defeated.connect(_on_boss_defeated)
 
 	if not spawn_director:
 		spawn_director = get_node_or_null("../SpawnSystem") as SpawnDirector
@@ -393,18 +397,58 @@ func _on_wave_timer_timeout() -> void:
 		var mult: float = 2.0 if current_wave_index > total_waves else 1.0
 		gm.add_salvage(int(current_wave_index * 50 * mult))
 
-	var is_endless: bool = gm.is_endless_mode if gm else false
-	if current_wave_index >= total_waves:
+	if current_wave_index == total_waves:
+		# Wave 10 is the boss climax!
+		# If the Archon boss has not been defeated yet, hold Wave 10 in overtime.
+		if not _is_boss_defeated:
+			# Do not advance to wave 11, do not pop victory modal yet.
+			return
+		else:
+			_finalize_run_victory()
+			return
+
+	if current_wave_index > total_waves:
+		# Endless Overdrive: after each endless wave, offer extraction
 		if EventBus:
 			EventBus.extraction_decision_requested.emit(gm.run_salvage if gm else 0)
-	elif is_endless and EventBus:
-		EventBus.extraction_decision_requested.emit(gm.run_salvage if gm else 0)
 
 	# Continuous survival escalation: advance to next stage without clearing enemies
 	start_wave(current_wave_index + 1)
 
+func _on_boss_defeated() -> void:
+	_is_boss_defeated = true
+	# If on wave 10 (standard run climax), defeat of Archon triggers authoritative run victory!
+	if current_wave_index == total_waves and current_state != State.RUN_COMPLETE:
+		_finalize_run_victory()
+
+func _finalize_run_victory() -> void:
+	current_state = State.RUN_COMPLETE
+	wave_timer.stop()
+	spawn_timer.stop()
+	if spawn_director and spawn_director.has_method("stop_spawning"):
+		spawn_director.stop_spawning()
+
+	# Suppress any lingering enemy attacks across the battlefield
+	if CombatDirector.instance:
+		CombatDirector.instance.set_wave_limits(0, 0)
+
+	# Clean up surviving minor fodder enemies so player is safe
+	_cleanup_surviving_enemies()
+
+	# 2.2s delay for the Archon death explosion, salvage crates, and XP collection to settle
+	get_tree().create_timer(2.2, false).timeout.connect(func():
+		emit_signal("run_completed")
+		if EventBus:
+			if EventBus.has_signal("run_completed"):
+				EventBus.run_completed.emit()
+			var gm := get_tree().get_first_node_in_group("game_manager") as GameManager
+			var cur_salvage: int = gm.run_salvage if gm else 0
+			EventBus.extraction_decision_requested.emit(cur_salvage)
+	)
+
 func enter_endless_mode() -> void:
-	current_state = State.INTERMISSION
+	_is_boss_defeated = false
+	current_state = State.ACTIVE_WAVE
 	start_wave(total_waves + 1)
 
 func _cleanup_surviving_enemies() -> void:

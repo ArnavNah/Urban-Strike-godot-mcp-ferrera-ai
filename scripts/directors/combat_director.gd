@@ -61,6 +61,40 @@ var last_rejection_reasons: Dictionary = {
 	"danger": 0
 }
 
+# Combat Pipeline Telemetry (disabled by default)
+var telemetry_enabled: bool = false
+var telemetry_attack_attempts: int = 0
+var telemetry_projectiles_created: int = 0
+var telemetry_player_collisions: int = 0
+
+func get_pipeline_telemetry_summary() -> Dictionary:
+	var player := get_tree().get_first_node_in_group("player")
+	var player_telemetry: Dictionary = {}
+	if is_instance_valid(player) and player.has_method("get_damage_telemetry_summary"):
+		player_telemetry = player.get_damage_telemetry_summary()
+	return {
+		"attack_attempts": telemetry_attack_attempts,
+		"rejection_reasons": last_rejection_reasons.duplicate(),
+		"projectiles_created": telemetry_projectiles_created,
+		"player_collisions": telemetry_player_collisions,
+		"active_leases": _active_leases.size(),
+		"danger_used": current_danger_used,
+		"player_damage": player_telemetry,
+	}
+
+func is_player_target_valid() -> bool:
+	var player := get_tree().get_first_node_in_group("player")
+	if not is_instance_valid(player) or player.is_queued_for_deletion():
+		return false
+	if "is_alive" in player and not player.is_alive:
+		return false
+	if "_control_enabled" in player and not player._control_enabled:
+		return false
+	var wm := get_tree().get_first_node_in_group("wave_manager")
+	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
+		return false
+	return true
+
 # Active token leases: Dictionary[Node3D, Dictionary]
 # Structure: {
 #   "tokens": int,
@@ -313,6 +347,9 @@ func has_attack_slot(enemy: Node3D, _is_air: bool = false) -> bool:
 func has_attack_permission(enemy: Node3D) -> bool:
 	return _active_leases.has(enemy)
 
+func has_attack_lease(enemy: Node3D) -> bool:
+	return _active_leases.has(enemy)
+
 ## Standalone projectile danger capacity reservation (for projectiles launched or telegraph zones)
 func reserve_danger_capacity(source: Variant, amount: int = 1, timeout: float = 4.0) -> bool:
 	if (current_danger_used + amount) > max_projectile_danger:
@@ -408,16 +445,21 @@ func _cleanup_expired(_delta: float) -> void:
 	var now := _gameplay_time
 
 	# 1. Clean token leases
+	var player_valid := is_player_target_valid()
 	var expired_leases: Array[Node3D] = []
 	for e in _active_leases.keys():
 		if not is_instance_valid(e) or e.is_queued_for_deletion():
 			expired_leases.append(e)
 		elif "is_alive" in e and not e.is_alive:
 			expired_leases.append(e)
+		elif not player_valid:
+			expired_leases.append(e)
 		elif now > _active_leases[e].get("expiry", 0.0):
 			expired_leases.append(e)
 
 	for exp_e in expired_leases:
+		if is_instance_valid(exp_e) and exp_e.has_method("on_attack_slot_revoked"):
+			exp_e.on_attack_slot_revoked()
 		release_attack_permission(exp_e)
 		watchdog_reclaimed_leases += 1
 

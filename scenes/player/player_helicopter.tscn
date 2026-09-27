@@ -114,6 +114,7 @@ transform = Transform3D(6.3392, 0, 0, 0, 6.3392, 0, 0, 0, 6.3392, 0, 0, 0)
 
 [node name="RotorBlurDisc" type="MeshInstance3D" parent="FlightTiltPivot/VisualRig/MainRotorPivot" unique_id=609163453]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+cast_shadow = 0
 mesh = SubResource("CylinderMesh_savs3")
 
 [node name="TailRotorPivot" type="Node3D" parent="FlightTiltPivot/VisualRig" unique_id=1244027535]
@@ -179,6 +180,7 @@ target_position = Vector3(0, -60, 0)
 
 [node name="GroundShadow" type="MeshInstance3D" parent="." unique_id=586650901]
 top_level = true
+cast_shadow = 0
 mesh = SubResource("Mesh_Shadow")
 
 [node name="DownwashDust" type="GPUParticles3D" parent="." unique_id=772618470]
@@ -208,3 +210,8 @@ shape = SubResource("CylinderShape3D_a8x1g")
 
 [connection signal="body_entered" from="TargetingSystem/DetectionArea" to="TargetingSystem" method="_on_detection_area_body_entered"]
 [connection signal="body_exited" from="TargetingSystem/DetectionArea" to="TargetingSystem" method="_on_detection_area_body_exited"]
+
+[editable path="FlightTiltPivot/VisualRig/MainRotorPivot/TopProp"]
+[editable path="FlightTiltPivot/VisualRig/TailRotorPivot/BackProp"]
+[editable path="FlightTiltPivot/VisualRig/ModelOrientation/Body"]
+[editable path="FlightTiltPivot/VisualRig/GunMount/GunYawPivot/GunPitchPivot/Chaingun"]

@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://d6tuumdx50sg" path="res://scripts/enemies/air_enemy_controller.gd" id="1_u3l3o"]
 [ext_resource type="Script" uid="uid://cdmjb8xvr0ldh" path="res://scripts/resources/air_enemy_archetype.gd" id="2_xt4kw"]
 [ext_resource type="PackedScene" uid="uid://c7hvr4ed6dmux" path="res://assets/vehicles/enemies/air/enemy_scout.glb" id="3_xt4kw"]
+[ext_resource type="Material" uid="uid://drpb03wllhln3" path="res://resources/materials/toon_enemy_scout.tres" id="4_uytkb"]
 
 [sub_resource type="Resource" id="Resource_uytkb"]
 script = ExtResource("2_xt4kw")
@@ -31,14 +32,6 @@ fire_rate = 9.0
 radius = 1.55
 height = 6.2
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ifcng"]
-albedo_color = Color(0.12, 0.12, 0.12, 1)
-metallic = 0.8
-
-[sub_resource type="BoxMesh" id="BoxMesh_dfmdl"]
-material = SubResource("StandardMaterial3D_ifcng")
-size = Vector3(6.2, 0.04, 0.28)
-
 [node name="AirScoutHelicopter" type="CharacterBody3D" unique_id=686393404]
 collision_layer = 4
 script = ExtResource("1_u3l3o")
@@ -51,18 +44,13 @@ shape = SubResource("CapsuleShape3D_uytkb")
 [node name="Visuals" type="Node3D" parent="." unique_id=1249754934]
 transform = Transform3D(2.1, 0, 0, 0, 2.1, 0, 0, 0, 2.1, 0, 0, 0)
 
-[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=785295983]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
-
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1631610459]
-mesh = SubResource("BoxMesh_dfmdl")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1715389081]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
-mesh = SubResource("BoxMesh_dfmdl")
-
 [node name="Model" parent="Visuals" unique_id=1997999516 instance=ExtResource("3_xt4kw")]
 transform = Transform3D(-9.616506e-09, 0, 0.22, 0, 0.22, 0, -0.22, 0, -9.616506e-09, 0, -0.12, 0.74)
 
+[node name="Cube_008" parent="Visuals/Model" index="0" unique_id=701850247]
+surface_material_override/0 = ExtResource("4_uytkb")
+
 [node name="LOSRayCast" type="RayCast3D" parent="." unique_id=1573159423]
 target_position = Vector3(0, 0, -45)
+
+[editable path="Visuals/Model"]

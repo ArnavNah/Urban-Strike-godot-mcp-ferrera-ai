@@ -1,0 +1,26 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://btp5p5h87oo20"]
+
+[ext_resource type="Shader" uid="uid://beavdf4ginxjl" path="res://resources/shaders/toon.gdshader" id="1_awcyb"]
+[ext_resource type="Texture2D" uid="uid://dg7wa7ca2qy7r" path="res://assets/vehicles/player/top_propeller_base_color.jpg" id="2_me5i5"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_awcyb")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/albedo_texture = ExtResource("2_me5i5")
+shader_parameter/use_texture = true
+shader_parameter/shadow_factor = 0.38
+shader_parameter/midtone_factor = 0.72
+shader_parameter/shadow_threshold = 0.2
+shader_parameter/midtone_threshold = 0.55
+shader_parameter/step_smoothness = 0.12
+shader_parameter/specular_size = 0.05
+shader_parameter/specular_intensity = 0.05
+shader_parameter/specular_smoothness = 0.04
+shader_parameter/rim_size = 0.5
+shader_parameter/rim_intensity = 0.0
+shader_parameter/rim_smoothness = 0.08
+shader_parameter/emission_color = Color(0, 0, 0, 1)
+shader_parameter/emission_energy = 0.0
+shader_parameter/uv1_scale = Vector3(1, 1, 1)
+shader_parameter/uv1_offset = Vector3(0, 0, 0)

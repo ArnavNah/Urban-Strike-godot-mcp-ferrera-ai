@@ -157,6 +157,7 @@ func _build_ui() -> void:
 	# 1. VISUALS & ACCESSIBILITY
 	_build_section_header(content_vbox, "01. VISUALS & ACCESSIBILITY")
 	_add_graphics_preset_option(content_vbox, "graphics_preset", "Graphics Quality", ["Low (Performance)", "Medium (Balanced)", "High (Fidelity)"], "medium")
+	_add_checkbox(content_vbox, "outlines_enabled", "Selective Silhouettes (Toon Outlines)", true)
 	_add_camera_mode_option(content_vbox, "camera_mode", "Camera View", ["Chase", "Classic"], "chase")
 	_add_damage_numbers_option(content_vbox, "damage_numbers", "Damage Numbers", ["All Numbers", "Important Only", "Off"], "all")
 	_add_checkbox(content_vbox, "screen_shake_enabled", "Screen Shake Enabled", true)

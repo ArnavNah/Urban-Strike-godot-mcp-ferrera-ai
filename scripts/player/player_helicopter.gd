@@ -98,13 +98,42 @@ var _smoothed_strafe: float = 0.0
 
 # Node references
 static var instance: PlayerHelicopter = null
+static var _player_flash_normal_mat: StandardMaterial3D = null
+static var _player_flash_reduced_mat: StandardMaterial3D = null
+var _damage_flash_timer: float = 0.0
+var _cached_body_mesh: MeshInstance3D = null
 var _magnet_fallback_timer: float = 0.0
 var _hull_full_notify_cooldown: float = 0.0
+
+# Combat Pipeline Telemetry (disabled by default)
+var telemetry_enabled: bool = false
+var telemetry_hits_received: int = 0
+var telemetry_damage_accepted: int = 0
+var telemetry_damage_rejected: Dictionary = {
+	"dead_or_dying": 0,
+	"control_disabled": 0,
+	"deployment_safety": 0,
+	"zero_damage": 0,
+	"iframes": 0,
+	"same_source": 0,
+}
+var telemetry_shield_absorbed: float = 0.0
+var telemetry_hull_taken: float = 0.0
+
+func get_damage_telemetry_summary() -> Dictionary:
+	return {
+		"hits_received": telemetry_hits_received,
+		"damage_accepted": telemetry_damage_accepted,
+		"damage_rejected": telemetry_damage_rejected.duplicate(),
+		"shield_absorbed": telemetry_shield_absorbed,
+		"hull_taken": telemetry_hull_taken,
+	}
 
 func _enter_tree() -> void:
 	instance = self
 
 func _exit_tree() -> void:
+	_clear_damage_flash()
 	if instance == self:
 		instance = null
 
@@ -130,6 +159,12 @@ func _ready() -> void:
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 	current_health = max_health
 	_apply_hangar_upgrades()
+
+	if ground_shadow:
+		ground_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var rotor_blur := get_node_or_null("FlightTiltPivot/VisualRig/MainRotorPivot/RotorBlurDisc") as MeshInstance3D
+	if rotor_blur:
+		rotor_blur.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	if flight_tilt_pivot:
 		_base_tilt_rotation = flight_tilt_pivot.rotation
@@ -157,13 +192,15 @@ func _ready() -> void:
 	if xp_collect_area:
 		var col_shape := xp_collect_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if col_shape and col_shape.shape is CylinderShape3D:
-			(col_shape.shape as CylinderShape3D).height = 40.0
-			(col_shape.shape as CylinderShape3D).radius = 3.5
+			(col_shape.shape as CylinderShape3D).height = 6.0
+			(col_shape.shape as CylinderShape3D).radius = 3.8
 		if not xp_collect_area.area_entered.is_connected(_on_xp_collect_area_entered):
 			xp_collect_area.area_entered.connect(_on_xp_collect_area_entered)
 
 func _on_xp_magnet_area_entered(area: Area3D) -> void:
 	if not is_instance_valid(area) or area.is_queued_for_deletion():
+		return
+	if not is_alive or _is_dying:
 		return
 	if area.has_method("can_collect") and not area.can_collect(self):
 		return
@@ -175,31 +212,29 @@ func _on_xp_magnet_area_entered(area: Area3D) -> void:
 func _on_xp_collect_area_entered(area: Area3D) -> void:
 	if not is_instance_valid(area) or area.is_queued_for_deletion():
 		return
+	if not is_alive or _is_dying:
+		return
 	if area.has_method("can_collect") and not area.can_collect(self):
 		return
 
-	# State guard: Items with a state machine must first be magnetized and travel to the cabin,
-	# unless they are already directly within close-range cabin reach.
-	if "current_state" in area:
-		var state = area.get("current_state")
-		if state == 0: # State.IDLE == 0
-			var tracking_pos := global_position + Vector3(0.0, 1.2, 0.0)
-			if has_node("StableTrackingPoint"):
-				var marker: Node3D = get_node("StableTrackingPoint") as Node3D
-				if marker:
-					tracking_pos = marker.global_position
-			var to_pickup := area.global_position - tracking_pos
-			var flat_d := Vector2(to_pickup.x, to_pickup.z).length()
-			# Close-range skid hover: collect immediately
-			if flat_d <= 3.8 and to_pickup.y >= -2.0 and to_pickup.y <= 5.5:
-				pass # Fall through to collect below
-			else:
-				# Not close enough for direct collection: magnetize instead of silently dropping
-				if area.has_method("magnetize_to"):
-					area.magnetize_to(self)
-				elif area.has_method("set_magnet_target"):
-					area.set_magnet_target(self)
-				return
+	# Explicit reach verification: collection occurs only when reaching cabin/skids
+	var tracking_pos := global_position + Vector3(0.0, 1.2, 0.0)
+	if has_node("StableTrackingPoint"):
+		var marker: Node3D = get_node("StableTrackingPoint") as Node3D
+		if marker:
+			tracking_pos = marker.global_position
+	var to_pickup := area.global_position - tracking_pos
+	var flat_d := Vector2(to_pickup.x, to_pickup.z).length()
+	var vertical_d := absf(to_pickup.y)
+
+	var in_cabin_reach := (to_pickup.length() <= 3.5) or (flat_d <= 3.8 and vertical_d <= 3.5)
+	if not in_cabin_reach:
+		# If not yet within cabin reach, ensure it is magnetized so it flies toward the helicopter
+		if area.has_method("magnetize_to"):
+			area.magnetize_to(self)
+		elif area.has_method("set_magnet_target"):
+			area.set_magnet_target(self)
+		return
 
 	if area.has_method("collect"):
 		area.collect(self)
@@ -332,6 +367,11 @@ func _handle_rotor_animations(delta: float) -> void:
 		tail_rotor.rotate_x(_current_tail_speed * delta)
 
 func _physics_process(delta: float) -> void:
+	if _damage_flash_timer > 0.0:
+		_damage_flash_timer -= delta
+		if _damage_flash_timer <= 0.0:
+			_clear_damage_flash()
+
 	if not is_alive or not _control_enabled or _is_dying:
 		return
 
@@ -713,12 +753,23 @@ func _unhandled_input(event: InputEvent) -> void:
 					targeting_system.trigger_manual_aim(hit_point)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
-	if not is_alive or _is_dying or not _control_enabled:
+	if telemetry_enabled:
+		telemetry_hits_received += 1
+
+	if not is_alive or _is_dying:
+		if telemetry_enabled:
+			telemetry_damage_rejected["dead_or_dying"] += 1
+		return
+	if not _control_enabled:
+		if telemetry_enabled:
+			telemetry_damage_rejected["control_disabled"] += 1
 		return
 
 	# Deployment safety: invulnerable during opening countdown
 	var wm := get_tree().get_first_node_in_group("wave_manager")
 	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
+		if telemetry_enabled:
+			telemetry_damage_rejected["deployment_safety"] += 1
 		return
 
 	# Armor damage reduction (capped strictly at 60%)
@@ -727,14 +778,20 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 	# Zero damage and invalid/friendly hits do not consume protection or trigger i-frames
 	if amount <= 0.0:
+		if telemetry_enabled:
+			telemetry_damage_rejected["zero_damage"] += 1
 		return
 
 	# Phase 10B: Post-hit invulnerability (0.35s i-frames)
 	if _invulnerability_timer > 0.0:
+		if telemetry_enabled:
+			telemetry_damage_rejected["iframes"] += 1
 		return
 
 	# Same-projectile / same-source repeat hit protection
 	if _source != null and _recent_damaging_sources.has(_source):
+		if telemetry_enabled:
+			telemetry_damage_rejected["same_source"] += 1
 		return
 
 	_time_since_damage = 0.0
@@ -745,6 +802,9 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 		_invulnerability_timer = invulnerability_duration
 		if _source != null:
 			_recent_damaging_sources[_source] = 0.5
+		if telemetry_enabled:
+			telemetry_damage_accepted += 1
+			telemetry_shield_absorbed += amount
 		_flash_hit()
 		if EventBus and EventBus.has_signal("camera_shake_requested"):
 			EventBus.camera_shake_requested.emit(0.15)
@@ -779,6 +839,10 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	var prev_hp: float = current_health
 	current_health = maxf(0.0, current_health - amount)
 	var actual_hull_damage: float = prev_hp - current_health
+	if telemetry_enabled:
+		telemetry_damage_accepted += 1
+		telemetry_shield_absorbed += shield_damage
+		telemetry_hull_taken += actual_hull_damage
 	_time_since_damage = 0.0
 	_repair_drone_healed_accum = 0.0
 	_flash_hit()
@@ -806,31 +870,38 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 			return
 		_die()
 
+func _clear_damage_flash() -> void:
+	_damage_flash_timer = 0.0
+	if is_instance_valid(_cached_body_mesh):
+		_cached_body_mesh.material_override = null
+
 func _flash_hit() -> void:
 	var target_vis: Node3D = flight_tilt_pivot if flight_tilt_pivot else visuals
 	if target_vis:
 		var tween := create_tween()
 		tween.tween_property(target_vis, "scale", Vector3(1.10, 1.10, 1.10), 0.05)
 		tween.tween_property(target_vis, "scale", Vector3(1.0, 1.0, 1.0), 0.05)
-	var body_node: Node = find_child("Body", true, false)
-	var body_mesh: MeshInstance3D = body_node.get_node_or_null("Mesh0") as MeshInstance3D if body_node else null
-	if body_mesh and is_inside_tree():
+	if not _cached_body_mesh:
+		var body_node: Node = find_child("Body", true, false)
+		_cached_body_mesh = body_node.get_node_or_null("Mesh0") as MeshInstance3D if body_node else null
+	if _cached_body_mesh and is_inside_tree():
 		var flash_enabled := bool(SaveSystem.get_setting("damage_flash_enabled", true))
 		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))
 		if flash_enabled:
-			var flash_mat := StandardMaterial3D.new()
 			if reduced_flash:
-				flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-				flash_mat.albedo_color = Color(0.9, 0.45, 0.45, 1.0)
+				if not _player_flash_reduced_mat:
+					_player_flash_reduced_mat = StandardMaterial3D.new()
+					_player_flash_reduced_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+					_player_flash_reduced_mat.albedo_color = Color(0.9, 0.45, 0.45, 1.0)
+				_cached_body_mesh.material_override = _player_flash_reduced_mat
+				_damage_flash_timer = 0.040
 			else:
-				flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-				flash_mat.albedo_color = Color(1.8, 0.3, 0.3, 1.0)
-			var orig_mat := body_mesh.material_override
-			body_mesh.material_override = flash_mat
-			get_tree().create_timer(0.06, false).timeout.connect(func():
-				if is_instance_valid(body_mesh) and body_mesh.material_override == flash_mat:
-					body_mesh.material_override = orig_mat
-			)
+				if not _player_flash_normal_mat:
+					_player_flash_normal_mat = StandardMaterial3D.new()
+					_player_flash_normal_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+					_player_flash_normal_mat.albedo_color = Color(1.8, 0.3, 0.3, 1.0)
+				_cached_body_mesh.material_override = _player_flash_normal_mat
+				_damage_flash_timer = 0.055
 
 func _die() -> void:
 	if _is_dying:
@@ -838,6 +909,7 @@ func _die() -> void:
 	_is_dying = true
 	is_alive = false
 	_control_enabled = false
+	_clear_damage_flash()
 	if ground_shadow:
 		ground_shadow.visible = false
 	if downwash_dust:

@@ -13,9 +13,9 @@ enum State {
 @export var initial_magnet_speed: float = 36.0
 @export var max_magnet_speed: float = 95.0
 @export var magnet_accel: float = 250.0
-@export var collection_radius: float = 2.8
-@export var collection_radius_xz: float = 3.5
-@export var collection_height: float = 4.0
+@export var collection_radius: float = 3.5
+@export var collection_radius_xz: float = 3.8
+@export var collection_height: float = 3.5
 
 var current_state: State = State.IDLE
 var _target_player: Node3D = null
@@ -170,19 +170,22 @@ func collect(player: Node3D = null) -> bool:
 		return false
 
 	_is_collected = true
-	set_deferred("monitoring", false)
-	set_deferred("monitorable", false)
 
 	var mgr: UpgradeManager = UpgradeManager.instance
 	if not mgr and is_inside_tree():
 		mgr = get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
-	if mgr and mgr.has_method("add_xp"):
-		mgr.add_xp(xp_value)
+	if not mgr or not mgr.has_method("add_xp"):
+		_is_collected = false
+		return false
+
+	mgr.add_xp(xp_value)
 
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb and eb.has_signal("xp_collected"):
 		eb.emit_signal("xp_collected", xp_value)
 
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
 	_play_collection_fx()
 	return true
 
@@ -255,7 +258,13 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# Idle state or lost player target
-	if current_state == State.IDLE or not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+	var target_invalid: bool = false
+	if not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+		target_invalid = true
+	elif "is_alive" in _target_player and not _target_player.is_alive:
+		target_invalid = true
+
+	if current_state == State.IDLE or target_invalid:
 		if current_state == State.MAGNETIZED:
 			current_state = State.IDLE
 			_target_player = null
@@ -276,9 +285,12 @@ func _physics_process(delta: float) -> void:
 		if not is_instance_valid(active_player) and is_inside_tree():
 			active_player = get_tree().get_first_node_in_group("player") as Node3D
 		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
-			var to_player := active_player.global_position - global_position
-			if to_player.length() <= collection_radius:
-				collect(active_player)
+			if not ("is_alive" in active_player and not active_player.is_alive):
+				var to_player := active_player.global_position - global_position
+				var flat_d := Vector2(to_player.x, to_player.z).length()
+				if to_player.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_player.y) <= collection_height):
+					if _is_line_of_sight_clear(active_player.global_position):
+						collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with full relative velocity feed-forward

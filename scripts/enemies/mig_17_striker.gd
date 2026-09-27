@@ -260,6 +260,9 @@ func _die() -> void:
 	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
+	if warning_light:
+		warning_light.visible = false
+	_telegraph_active = false
 	_release_attack_token()
 
 	if EnemyRegistry.instance:

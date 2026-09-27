@@ -10,5 +10,6 @@ enemy_scene = ExtResource("2_w1mr1")
 
 [resource]
 script = ExtResource("2_2l0um")
+duration = 45.0
 enemy_entries = Array[ExtResource("1_we5xl")]([SubResource("Resource_wl762")])
 announcement = "WAVE 1 // HOSTILE INFANTRY CONTACT"

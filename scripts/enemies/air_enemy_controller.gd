@@ -62,8 +62,37 @@ var _air_steer_timer: float = 0.0
 var _is_telegraphing: bool = false
 var _burst_shots_remaining: int = 0
 var _evasion_cooldown: float = 0.0
+var _los_lost_timer: float = 0.0
 var debug_last_blocked_reason: String = ""
 var debug_shots_fired: int = 0
+@export var debug_combat_telemetry: bool = false
+
+func _log_combat(stage: String, detail: String = "") -> void:
+	if debug_combat_telemetry:
+		print("[AirEnemy %s#%d] %s%s" % [name, get_instance_id(), stage, (" - " + detail) if not detail.is_empty() else ""])
+
+func on_projectile_hit(target: Node, hit_pos: Vector3) -> void:
+	_log_combat("target_hit", "Target: %s at %s" % [target.name, str(hit_pos)])
+
+func on_projectile_miss() -> void:
+	_log_combat("target_miss")
+
+func on_attack_slot_revoked() -> void:
+	_log_combat("slot_revoked", "Lease expired by CombatDirector")
+	_has_air_slot = false
+	if current_state == State.ATTACK or current_state == State.STRAFE:
+		_transition_to(State.BREAK_AWAY if randf() < 0.6 else State.ORBIT)
+
+func has_valid_air_slot() -> bool:
+	if not _has_air_slot:
+		return false
+	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
+	if not dir and CombatDirector.instance:
+		dir = CombatDirector.instance
+	if dir and not dir.has_attack_permission(self):
+		_has_air_slot = false
+		return false
+	return true
 
 # Steering physics & 3D altitude banding
 var _instance_alt_offset: float = 0.0
@@ -79,7 +108,7 @@ var _avoidance_bias: float = 0.0
 var _avoidance_timer: float = 0.0
 
 @onready var visuals: Node3D = get_node_or_null("Visuals")
-@onready var main_rotor: Node3D = get_node_or_null("Visuals/MainRotor")
+var main_rotor: Node3D = null
 @onready var los_ray: RayCast3D = get_node_or_null("LOSRayCast")
 @onready var muzzle_flash_scene: PackedScene = preload("res://scenes/vfx/muzzle_flash.tscn")
 @onready var guided_missile_scene: PackedScene = preload("res://scenes/weapons/guided_missile.tscn")
@@ -95,25 +124,6 @@ func _ready() -> void:
 
 	if visuals:
 		_base_visual_scale = visuals.scale
-
-	if EnemyRegistry.instance:
-		EnemyRegistry.instance.register_enemy(self, true)
-
-	_instance_alt_offset = (float(get_instance_id() % 7) - 3.0) * 0.75
-	_last_stuck_pos = global_position
-	_stagger_offset = randi() % 60
-
-	_player = get_tree().get_first_node_in_group("player")
-	if is_instance_valid(_player):
-		var init_y: float = clampf(_get_preferred_altitude() + _instance_alt_offset, _get_alt_min(), _get_alt_max())
-		global_position.y = init_y
-		_current_target_y = init_y
-
-	_orbit_direction = 1.0 if randf() > 0.5 else -1.0
-	_orbit_angle = randf() * TAU
-	_missile_cooldown_timer = randf_range(2.0, 4.0)
-
-	_transition_to(State.APPROACH)
 
 	# If Jammer, notify active jamming
 	if archetype and archetype.weapon_type == AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
@@ -133,6 +143,25 @@ func _ready() -> void:
 		beacon.mesh = sph
 		beacon.position = Vector3(0.0, 0.2, -1.2)
 		visuals.add_child(beacon)
+
+	if EnemyRegistry.instance:
+		EnemyRegistry.instance.register_enemy(self, true)
+
+	_instance_alt_offset = (float(get_instance_id() % 7) - 3.0) * 0.75
+	_last_stuck_pos = global_position
+	_stagger_offset = randi() % 60
+
+	_player = get_tree().get_first_node_in_group("player")
+	if is_instance_valid(_player):
+		var init_y: float = clampf(_get_preferred_altitude() + _instance_alt_offset, _get_alt_min(), _get_alt_max())
+		global_position.y = init_y
+		_current_target_y = init_y
+
+	_orbit_direction = 1.0 if randf() > 0.5 else -1.0
+	_orbit_angle = randf() * TAU
+	_missile_cooldown_timer = randf_range(2.0, 4.0)
+
+	_transition_to(State.APPROACH)
 
 func _exit_tree() -> void:
 	_warn_incoming_missile(false)
@@ -209,6 +238,9 @@ func _physics_process(delta: float) -> void:
 	# Stuck detection against obstacles or buildings
 	_check_stuck_condition(delta)
 
+	if _shot_cooldown > 0.0:
+		_shot_cooldown -= delta
+
 	match current_state:
 		State.ENTER:
 			_tick_enter(delta, flat_dist)
@@ -273,8 +305,8 @@ func _update_altitude(delta: float) -> void:
 	var highest_obstacle: float = maxf(_cached_ground_y, _cached_forward_roof_y)
 	var min_clearance_y: float = highest_obstacle + 4.5
 	var target_y: float = maxf(base_alt + _instance_alt_offset, min_clearance_y)
-	if min_clearance_y <= _get_alt_max() + 4.0:
-		target_y = clampf(target_y, _get_alt_min(), _get_alt_max() + 8.0)
+	if min_clearance_y <= _get_alt_max() + 8.0:
+		target_y = clampf(target_y, _get_alt_min(), _get_alt_max() + 12.0)
 	_current_target_y = target_y
 
 	# Vertical velocity approach with bounded climb/descent rate
@@ -300,23 +332,26 @@ func _query_ground_or_roof_height(offset: Vector3 = Vector3.ZERO) -> float:
 	return hit.get("position", Vector3.ZERO).y
 
 func _get_preferred_altitude() -> float:
+	var player_y: float = _player.global_position.y if is_instance_valid(_player) else 18.0
 	if not archetype:
-		return 14.0
+		return clampf(player_y, 12.0, 24.0)
+	var alt_min: float = archetype.altitude_min
+	var alt_max: float = archetype.altitude_max
 	match archetype.weapon_type:
 		AirEnemyArchetype.WeaponType.MACHINE_GUN:
-			return archetype.altitude_min + 1.5
+			return clampf(player_y + 1.0, alt_min, alt_max + 8.0)
 		AirEnemyArchetype.WeaponType.ROCKET_SALVO:
-			return archetype.altitude_min + 3.0
+			return clampf(player_y + 2.0, alt_min + 2.0, alt_max + 8.0)
 		AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
-			return archetype.altitude_min + 2.5
+			return clampf(player_y + 1.5, alt_min + 1.5, alt_max + 8.0)
 		AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
-			return archetype.altitude_max - 1.0
+			return clampf(maxf(player_y + 4.0, alt_max - 1.0), alt_min, alt_max + 10.0)
 		AirEnemyArchetype.WeaponType.ACE_ARSENAL:
-			return archetype.altitude_min + 3.0
+			return clampf(player_y + 1.5, alt_min + 2.0, alt_max + 8.0)
 		AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
-			return archetype.altitude_min + 2.0
+			return alt_min + 2.0
 		_:
-			return (archetype.altitude_min + archetype.altitude_max) * 0.5
+			return clampf(player_y, alt_min, alt_max + 8.0)
 
 func _raycast_world(from_pos: Vector3, to_pos: Vector3) -> Dictionary:
 	var space := get_world_3d().direct_space_state
@@ -519,10 +554,12 @@ func _tick_approach(delta: float, flat_dist: float) -> void:
 	if flat_dist <= archetype.preferred_distance + 3.0:
 		match archetype.weapon_type:
 			AirEnemyArchetype.WeaponType.TRANSPORT_DEPLOY:
+				_log_combat("acquire", "flat_dist: %.1fm" % flat_dist)
 				_transition_to(State.ATTACK_SETUP)
 			AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
 				_transition_to(State.ORBIT)
 			_:
+				_log_combat("acquire", "flat_dist: %.1fm" % flat_dist)
 				_transition_to(State.ATTACK_SETUP)
 	elif _state_timer <= 0.0:
 		_state_timer = archetype.approach_timeout
@@ -587,7 +624,6 @@ func _tick_orbit(delta: float, flat_dist: float) -> void:
 
 func _tick_strafe(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
-	_shot_cooldown -= delta
 
 	# Strafe pass across the player's front
 	var to_player := (_player.global_position - global_position)
@@ -606,7 +642,6 @@ func _tick_strafe(delta: float, flat_dist: float) -> void:
 
 func _tick_attack(delta: float, flat_dist: float) -> void:
 	_attack_timer -= delta
-	_shot_cooldown -= delta
 
 	if archetype.weapon_type == AirEnemyArchetype.WeaponType.ROCKET_SALVO:
 		# Standoff hover/lateral drift
@@ -632,7 +667,7 @@ func _tick_attack(delta: float, flat_dist: float) -> void:
 		velocity.z = move_toward(velocity.z, atk_vec.z * archetype.attack_speed, _max_horizontal_accel * delta)
 		match archetype.weapon_type:
 			AirEnemyArchetype.WeaponType.MACHINE_GUN:
-				_exec_machine_gun_attack(delta)
+				pass # Authoritatively processed once in _physics_process
 			AirEnemyArchetype.WeaponType.HEAVY_CANNON_AND_MISSILES:
 				_exec_gunship_attack(delta)
 			AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
@@ -647,7 +682,9 @@ func _tick_attack(delta: float, flat_dist: float) -> void:
 		_transition_to(State.ORBIT if randf() < 0.6 else State.BREAK_AWAY)
 
 func _process_machine_gun_fire(delta: float, flat_dist: float) -> void:
-	_shot_cooldown -= delta
+	if not is_instance_valid(_player) or ("is_alive" in _player and not _player.is_alive):
+		_release_air_slot()
+		return
 
 	var in_combat_state: bool = (
 		current_state == State.ATTACK or
@@ -660,6 +697,7 @@ func _process_machine_gun_fire(delta: float, flat_dist: float) -> void:
 		return
 
 	if _arming_timer > 0.0:
+		debug_last_blocked_reason = "arming_delay"
 		return
 
 	# Only fire when facing reasonably toward the player (within ~60 degrees)
@@ -670,34 +708,50 @@ func _process_machine_gun_fire(delta: float, flat_dist: float) -> void:
 		fwd.y = 0.0
 		if to_p.length_squared() > 0.1 and fwd.length_squared() > 0.1:
 			if fwd.normalized().dot(to_p.normalized()) < 0.45:
+				debug_last_blocked_reason = "angle_unaligned"
 				return
 
 	if not _check_los():
+		debug_last_blocked_reason = "los_blocked"
+		_los_lost_timer += delta
+		if _los_lost_timer >= 1.2:
+			_release_air_slot()
+			if current_state == State.ATTACK or current_state == State.STRAFE:
+				_transition_to(State.REPOSITION)
 		return
 
-	if not _has_air_slot:
+	_los_lost_timer = 0.0
+
+	if not has_valid_air_slot():
 		if not _request_air_slot():
 			return
 
-	if _burst_shots_remaining > 0:
-		if _shot_cooldown <= 0.0:
-			_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
-			_burst_shots_remaining -= 1
-			_fire_bullet(1.0)
-			if _burst_shots_remaining <= 0:
-				_shot_cooldown = randf_range(1.2, 1.8)
-	else:
-		if _shot_cooldown <= 0.0:
-			_burst_shots_remaining = maxi(3, archetype.burst_count if archetype else 3)
-			_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
-			_burst_shots_remaining -= 1
-			_fire_bullet(1.0)
+	if _shot_cooldown <= 0.0:
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_attack_attempts += 1
+		_log_combat("aim_aligned", "facing player, LoS clear")
+		_log_combat("shot_attempted", "burst remaining: %d" % _burst_shots_remaining)
+		var spawned := _fire_bullet(1.0)
+		if spawned:
+			if _burst_shots_remaining > 0:
+				_burst_shots_remaining -= 1
+				_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
+				_log_combat("shot_spawned", "burst shot spawned, %d left" % _burst_shots_remaining)
+				if _burst_shots_remaining <= 0:
+					_shot_cooldown = randf_range(1.2, 1.8)
+					_release_air_slot()
+			else:
+				var planned_burst := maxi(3, archetype.burst_count if archetype else 3)
+				_burst_shots_remaining = planned_burst - 1
+				_shot_cooldown = 1.0 / maxf(archetype.fire_rate, 1.0)
+				_log_combat("shot_spawned", "initial burst shot spawned, %d left" % _burst_shots_remaining)
+		else:
+			# Pool exhausted or spawn clearance blocked: bounded retry without consuming shot
+			_shot_cooldown = 0.08
+			_log_combat("shot_failed", "projectile spawn failed, retrying in 0.08s")
 
-func _exec_machine_gun_attack(delta: float) -> void:
-	var fd := 0.0
-	if is_instance_valid(_player):
-		fd = Vector2(global_position.x - _player.global_position.x, global_position.z - _player.global_position.z).length()
-	_process_machine_gun_fire(delta, fd)
+func _exec_machine_gun_attack(_delta: float) -> void:
+	pass # Single authoritative call in _physics_process avoids double-pumping
 
 func _exec_rocket_salvo_attack(_delta: float) -> void:
 	if _is_telegraphing:
@@ -790,6 +844,9 @@ func _tick_retreat(delta: float) -> void:
 		queue_free()
 
 func _transition_to(new_state: State) -> void:
+	if current_state == State.ATTACK or current_state == State.STRAFE:
+		if new_state != State.ATTACK and new_state != State.STRAFE:
+			_release_air_slot()
 	current_state = new_state
 	match new_state:
 		State.ENTER:
@@ -888,12 +945,22 @@ func _get_damage_number_y_offset() -> float:
 			return (col.shape as BoxShape3D).size.y * 0.5 + 0.6
 	return 1.4
 
-func _fire_bullet(damage_mult: float = 1.0) -> void:
+func _fire_bullet(damage_mult: float = 1.0) -> bool:
 	if not is_instance_valid(_player) or not _check_los():
-		return
+		return false
 
 	var reach := _get_forward_hull_reach()
 	var muzzle_pos := global_position + (-global_transform.basis.z * reach) + Vector3(0.0, -0.3, 0.0)
+
+	var space := get_world_3d().direct_space_state
+	if space:
+		var q := PhysicsRayQueryParameters3D.create(global_position, muzzle_pos, 1) # Layer 1 = World
+		q.exclude = [get_rid()]
+		var cl_hit := space.intersect_ray(q)
+		if not cl_hit.is_empty():
+			debug_last_blocked_reason = "muzzle_occluded_by_world"
+			return false
+
 	var to_player := (_player.global_position - muzzle_pos).normalized()
 	var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
 	var fire_dir := (to_player + spread).normalized()
@@ -904,10 +971,12 @@ func _fire_bullet(damage_mult: float = 1.0) -> void:
 	var proj: Projectile = null
 	if pool:
 		var scaled_dmg: float = archetype.damage_per_shot * damage_mult * CombatDirector.get_damage_multiplier()
-		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, scaled_dmg)
+		proj = pool.spawn_projectile(muzzle_pos, fire_dir, false, scaled_dmg, 0, 0, 1.0, "chaingun", self)
 
 	if proj != null:
 		debug_shots_fired += 1
+		if CombatDirector.instance and CombatDirector.instance.telemetry_enabled:
+			CombatDirector.instance.telemetry_projectiles_created += 1
 		if VfxPool.instance:
 			VfxPool.instance.spawn_muzzle_flash(muzzle_pos, fire_dir, true)
 		elif muzzle_flash_scene:
@@ -919,6 +988,10 @@ func _fire_bullet(damage_mult: float = 1.0) -> void:
 
 		if EventBus:
 			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, damage_mult >= 3.0)
+		return true
+
+	debug_last_blocked_reason = "projectile_pool_exhausted"
+	return false
 
 func _fire_rocket() -> void:
 	if not is_instance_valid(_player) or not unguided_rocket_scene:
@@ -996,8 +1069,10 @@ func _notify_jammer_state_change() -> void:
 		eb.emit_signal("jammer_status_changed", is_jammed, count)
 
 func _request_air_slot() -> bool:
+	_log_combat("slot_requested")
 	if _arming_timer > 0.0:
 		debug_last_blocked_reason = "arming_delay"
+		_log_combat("slot_denied", "arming_delay (%.2fs remaining)" % _arming_timer)
 		return false
 
 	var dir := get_tree().get_first_node_in_group("combat_director") as CombatDirector
@@ -1012,10 +1087,15 @@ func _request_air_slot() -> bool:
 		var granted: bool = dir.request_attack_permission(self, token_cost, true, false, false, danger_cost, "air_run")
 		_has_air_slot = granted
 		debug_last_blocked_reason = "active" if granted else "token_denied"
+		if granted:
+			_log_combat("slot_granted", "token_cost: %d" % token_cost)
+		else:
+			_log_combat("slot_denied", "CombatDirector rejected lease")
 		return granted
 
 	_has_air_slot = true
 	debug_last_blocked_reason = "active_no_director"
+	_log_combat("slot_granted", "standalone_no_director")
 	return true
 
 func _release_air_slot() -> void:
@@ -1025,6 +1105,7 @@ func _release_air_slot() -> void:
 			dir = CombatDirector.instance
 		if dir:
 			dir.release_attack_permission(self)
+		_log_combat("slot_released")
 	_has_air_slot = false
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

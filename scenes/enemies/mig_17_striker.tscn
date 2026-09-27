@@ -31,3 +31,5 @@ visible = false
 light_color = Color(1, 0.3, 0.1, 1)
 light_energy = 4.0
 omni_range = 10.0
+
+[editable path="Visuals/Model"]

@@ -110,7 +110,22 @@ func _ready() -> void:
 
 	_setup_model_rotors()
 	_collect_visual_meshes(self)
+	_setup_toon_materials()
 	_update_health_display()
+
+func _setup_toon_materials() -> void:
+	var drone_mat: Material = load("res://resources/materials/toon_escort_drone.tres")
+	var drone_prop_mat: Material = load("res://resources/materials/toon_escort_drone_prop.tres")
+
+	var fuselage := find_child("Cube_124", true, false) as MeshInstance3D
+	if fuselage and drone_mat:
+		fuselage.set_surface_override_material(0, drone_mat)
+
+	var blade_names: Array[String] = ["Cube_125", "Cube_126", "Cube_127", "Cube_128", "Cube_129", "Cube_130", "Cylinder_018", "Cylinder_019"]
+	for b_name in blade_names:
+		var blade := find_child(b_name, true, false) as MeshInstance3D
+		if blade and drone_prop_mat:
+			blade.set_surface_override_material(0, drone_prop_mat)
 
 func _setup_model_rotors() -> void:
 	if not main_rotor:

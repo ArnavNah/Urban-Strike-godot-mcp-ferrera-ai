@@ -38,10 +38,10 @@ minimum_wave = 7
 [resource]
 script = ExtResource("2_ha5ri")
 wave_number = 7
+duration = 25.0
 spawn_interval = 1.85
 spawn_budget = 19
 maximum_alive = 11
 enemy_entries = Array[ExtResource("1_alexh")]([SubResource("Resource_mbiw5"), SubResource("Resource_hr7md"), SubResource("Resource_osnqt"), SubResource("Resource_5p5rd")])
 announcement = "WAVE 7 // MIXED GROUND & AIR ASSAULT"
 ground_attack_slots = 3
-air_attack_slots = 1

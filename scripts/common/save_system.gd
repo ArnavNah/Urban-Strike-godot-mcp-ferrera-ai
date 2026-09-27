@@ -36,6 +36,7 @@ static func get_default_data() -> Dictionary:
 			"screen_vignette": true,
 			"camera_mode": "chase",
 			"graphics_preset": "medium",
+			"outlines_enabled": true,
 			"damage_numbers": "all"
 		},
 		"telemetry": {
@@ -112,8 +113,9 @@ static func set_setting(key: String, val: Variant) -> void:
 	var eb: Node = tree.root.get_node_or_null("EventBus") if tree and tree.root else null
 	if eb and eb.has_signal("setting_changed"):
 		eb.emit_signal("setting_changed", key, val)
-	if key == "graphics_preset" and val is String:
-		apply_graphics_preset(val, tree)
+	if (key == "graphics_preset" or key == "outlines_enabled") and val != null:
+		var cur_preset: String = str(get_setting("graphics_preset", "medium"))
+		apply_graphics_preset(cur_preset, tree)
 
 static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -> void:
 	if not tree:
@@ -201,6 +203,59 @@ static func apply_graphics_preset(preset_name: String, tree: SceneTree = null) -
 		DamageNumberManager.instance.set_preset(preset_name)
 	if tree:
 		_apply_particle_budget(tree.root, preset_name == "low")
+
+	# Selective outline quality control:
+	# High: Selective outlines on all combat subjects (player, boss, air, and ground enemies).
+	# Medium: Selective outlines on key subjects (player and boss).
+	# Low: Outlines completely disabled (zero outline pass overhead).
+	# Buildings: Outline pass permanently disabled (avoids hundreds of secondary draw calls).
+	var outlines_on: bool = bool(get_setting("outlines_enabled", true))
+	var enable_subjects: bool = outlines_on and (preset_name != "low")
+	var enable_standard_enemies: bool = outlines_on and (preset_name == "high")
+
+	_apply_outline_mat("res://resources/materials/outline_player.tres", false)
+	_apply_outline_mat("res://resources/materials/outline_boss.tres", enable_subjects)
+	_apply_outline_mat("res://resources/materials/outline_enemy_air.tres", enable_standard_enemies)
+	_apply_outline_mat("res://resources/materials/outline_enemy_ground.tres", enable_standard_enemies)
+	_apply_outline_mat("res://resources/materials/outline_building.tres", false)
+
+	# Truly eliminate second draw passes when outlines are disabled or on Low preset
+	_apply_outline_to_parent_mats(
+		["res://resources/materials/toon_player_body.tres", "res://resources/materials/toon_escort_drone.tres"],
+		"res://resources/materials/outline_player.tres",
+		false
+	)
+	_apply_outline_to_parent_mats(
+		["res://resources/materials/toon_boss_archon.tres"],
+		"res://resources/materials/outline_boss.tres",
+		enable_subjects
+	)
+	_apply_outline_to_parent_mats(
+		["res://resources/materials/toon_enemy_gunship.tres", "res://resources/materials/toon_enemy_mig17.tres", "res://resources/materials/toon_enemy_scout.tres"],
+		"res://resources/materials/outline_enemy_air.tres",
+		enable_standard_enemies
+	)
+	_apply_outline_to_parent_mats(
+		["res://resources/materials/toon_ground_buggy.tres", "res://resources/materials/toon_ground_ifv.tres"],
+		"res://resources/materials/outline_enemy_ground.tres",
+		enable_standard_enemies
+	)
+
+static func _apply_outline_mat(res_path: String, is_on: bool) -> void:
+	if ResourceLoader.exists(res_path):
+		var mat := load(res_path) as ShaderMaterial
+		if mat:
+			mat.set_shader_parameter("enabled", is_on)
+
+static func _apply_outline_to_parent_mats(parent_paths: Array[String], outline_path: String, is_on: bool) -> void:
+	var outline_mat: Material = null
+	if is_on and ResourceLoader.exists(outline_path):
+		outline_mat = load(outline_path) as Material
+	for p_path in parent_paths:
+		if ResourceLoader.exists(p_path):
+			var p_mat := load(p_path) as Material
+			if p_mat:
+				p_mat.next_pass = outline_mat if is_on else null
 
 static func _apply_particle_budget(node: Node, low: bool) -> void:
 	# Run only on preset changes/startup, never per frame.

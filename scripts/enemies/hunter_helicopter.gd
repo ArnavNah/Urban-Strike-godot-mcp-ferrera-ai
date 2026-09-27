@@ -59,7 +59,7 @@ var _avoidance_bias: float = 0.0
 var _avoidance_timer: float = 0.0
 
 @onready var visuals: Node3D = $Visuals
-@onready var main_rotor: Node3D = $Visuals/MainRotor
+var main_rotor: Node3D = null
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -67,6 +67,7 @@ func _ready() -> void:
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.register_enemy(self, true)
 	current_health = max_health
+
 	_player = get_tree().get_first_node_in_group("player")
 	if is_instance_valid(_player):
 		global_position.y = _player.global_position.y

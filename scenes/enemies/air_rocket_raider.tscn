@@ -32,14 +32,6 @@ burst_count = 3
 radius = 1.8
 height = 7.2
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lorg3"]
-albedo_color = Color(0.1, 0.1, 0.1, 1)
-metallic = 0.8
-
-[sub_resource type="BoxMesh" id="BoxMesh_p7niw"]
-material = SubResource("StandardMaterial3D_lorg3")
-size = Vector3(7.2, 0.05, 0.32)
-
 [node name="AirRocketRaider" type="CharacterBody3D" unique_id=967515329]
 collision_layer = 4
 script = ExtResource("1_dfbgx")
@@ -51,16 +43,6 @@ shape = SubResource("CapsuleShape3D_vpo71")
 
 [node name="Visuals" type="Node3D" parent="." unique_id=2014929870]
 transform = Transform3D(2.18, 0, 0, 0, 2.18, 0, 0, 0, 2.18, 0, 0, 0)
-
-[node name="MainRotor" type="Node3D" parent="Visuals" unique_id=814267856]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-
-[node name="Blade1" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=1415318855]
-mesh = SubResource("BoxMesh_p7niw")
-
-[node name="Blade2" type="MeshInstance3D" parent="Visuals/MainRotor" unique_id=687795099]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
-mesh = SubResource("BoxMesh_p7niw")
 
 [node name="Model" parent="Visuals" unique_id=1442507938 instance=ExtResource("3_kv8h6")]
 transform = Transform3D(-1.4424758e-08, 0, 0.33, 0, 0.33, 0, -0.33, 0, -1.4424758e-08, 0, -0.22, 0.63)

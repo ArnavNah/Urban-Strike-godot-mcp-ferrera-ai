@@ -5,9 +5,9 @@
 
 [resource]
 resource_name = "Asphalt"
-albedo_color = Color(0.24, 0.27, 0.31, 1)
+albedo_color = Color(0.35, 0.38, 0.41, 1)
 albedo_texture = ExtResource("1_c5y61")
-roughness = 0.84
+roughness = 0.92
 normal_enabled = true
 normal_scale = 0.5
 normal_texture = ExtResource("2_nshgo")

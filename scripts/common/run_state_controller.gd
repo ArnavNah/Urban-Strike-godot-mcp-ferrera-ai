@@ -182,11 +182,9 @@ func _on_wave_run_completed() -> void:
 			EventBus.extraction_decision_requested.emit(gm.run_salvage)
 		return
 
-	# If victory screen is present, offer extraction vs endless overdrive choice
+	# If victory screen is present, extraction / victory is handled via EventBus.extraction_decision_requested
 	var vic_screen := get_tree().get_first_node_in_group("victory_screen")
-	if vic_screen and vic_screen.has_method("display_victory"):
-		var salvage_amt: int = gm.run_salvage if gm else salvage_collected
-		vic_screen.display_victory(salvage_amt)
+	if vic_screen:
 		return
 
 	_is_ending_guarded = true

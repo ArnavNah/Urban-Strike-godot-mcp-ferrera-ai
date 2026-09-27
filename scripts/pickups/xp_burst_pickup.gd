@@ -83,6 +83,7 @@ func collect(player: Node3D = null) -> bool:
 		target = get_tree().get_first_node_in_group("player") as Node3D
 	if not can_collect(target):
 		return false
+	_is_collected = true
 	_collect(target as PlayerHelicopter)
 	return true
 
@@ -149,12 +150,18 @@ func _on_body_entered(body: Node3D) -> void:
 		collect(body as PlayerHelicopter)
 
 func _collect(player: PlayerHelicopter) -> void:
-	if _is_collected:
-		return
 	_is_collected = true
 	set_deferred("monitoring", false)
 	set_deferred("monitorable", false)
 	_target_player = player
+
+	var spark_scene: PackedScene = preload("res://scenes/vfx/impact_sparks.tscn")
+	if spark_scene and is_inside_tree():
+		var spark := spark_scene.instantiate() as Node3D
+		if spark:
+			spark.transform.origin = global_position
+			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+			p.add_child.call_deferred(spark)
 
 	# Find all idle gems in the scene tree
 	var tree := get_tree()
@@ -163,7 +170,7 @@ func _collect(player: PlayerHelicopter) -> void:
 		for node in gem_nodes:
 			if is_instance_valid(node) and not node.is_queued_for_deletion() and node is XPGem:
 				var gem: XPGem = node as XPGem
-				if gem.current_state == XPGem.State.IDLE and gem.is_active:
+				if gem.current_state == XPGem.State.IDLE and gem.is_active and not gem._is_collected:
 					_pending_gems.append(gem)
 
 	# Hide visuals
@@ -171,6 +178,10 @@ func _collect(player: PlayerHelicopter) -> void:
 		_mesh.visible = false
 	if _halo:
 		_halo.light_energy = 0.0
+
+	if _pending_gems.is_empty():
+		_target_player = null
+		queue_free()
 
 func _process_gem_batch() -> void:
 	if not is_instance_valid(_target_player) or not _target_player.is_alive:
@@ -186,7 +197,7 @@ func _process_gem_batch() -> void:
 		var gem: XPGem = _pending_gems.pop_back()
 		count += 1
 		if is_instance_valid(gem) and not gem.is_queued_for_deletion():
-			if gem.current_state == XPGem.State.IDLE:
+			if gem.current_state == XPGem.State.IDLE and gem.is_active and not gem._is_collected:
 				gem.magnetize_to(_target_player)
 
 	if _pending_gems.is_empty():

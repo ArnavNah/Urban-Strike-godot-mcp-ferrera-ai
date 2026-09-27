@@ -13,9 +13,9 @@ enum State {
 @export var initial_magnet_speed: float = 35.0
 @export var max_magnet_speed: float = 95.0
 @export var magnet_accel: float = 240.0
-@export var collection_radius: float = 2.8
-@export var collection_radius_xz: float = 3.5
-@export var collection_height: float = 35.0
+@export var collection_radius: float = 3.5
+@export var collection_radius_xz: float = 3.8
+@export var collection_height: float = 3.5
 
 var current_state: State = State.IDLE
 var _target_player: Node3D = null
@@ -85,12 +85,18 @@ func collect(player: Node3D = null) -> bool:
 		return false
 
 	_is_collected = true
-	set_deferred("monitoring", false)
-	set_deferred("monitorable", false)
 
 	var gm := get_tree().get_first_node_in_group("game_manager")
+	var gained: int = 0
 	if gm and gm.has_method("add_salvage"):
-		gm.call("add_salvage", salvage_value)
+		gained = int(gm.call("add_salvage", salvage_value))
+
+	if gained <= 0:
+		_is_collected = false
+		return false
+
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
 
 	var spark_scene: PackedScene = preload("res://scenes/vfx/impact_sparks.tscn")
 	if spark_scene and is_inside_tree():
@@ -140,7 +146,13 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# Idle visual spin & gentle hover bob
-	if current_state == State.IDLE or not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+	var target_invalid: bool = false
+	if not is_instance_valid(_target_player) or _target_player.is_queued_for_deletion():
+		target_invalid = true
+	elif "is_alive" in _target_player and not _target_player.is_alive:
+		target_invalid = true
+
+	if current_state == State.IDLE or target_invalid:
 		if current_state == State.MAGNETIZED:
 			current_state = State.IDLE
 			_target_player = null
@@ -149,16 +161,17 @@ func _physics_process(delta: float) -> void:
 		_bob_timer += delta * 3.0
 		position.y = _base_y + sin(_bob_timer) * 0.2
 
-		# Hover proximity check: if helicopter is directly hovering overhead within horizontal reach and flight altitude
+		# Skid hover proximity check: if helicopter is directly hovering close-range at cabin altitude
 		var active_player: Node3D = _target_player
 		if not is_instance_valid(active_player) and is_inside_tree():
 			active_player = get_tree().get_first_node_in_group("player") as Node3D
 		if is_instance_valid(active_player) and not active_player.is_queued_for_deletion():
-			var to_p := active_player.global_position - global_position
-			var flat_d := Vector2(to_p.x, to_p.z).length()
-			if flat_d <= collection_radius_xz and to_p.y >= -2.0 and to_p.y <= collection_height:
-				if _is_line_of_sight_clear(active_player.global_position):
-					collect(active_player)
+			if not ("is_alive" in active_player and not active_player.is_alive):
+				var to_p := active_player.global_position - global_position
+				var flat_d := Vector2(to_p.x, to_p.z).length()
+				if to_p.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_p.y) <= collection_height):
+					if _is_line_of_sight_clear(active_player.global_position):
+						collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with continuous sweep
