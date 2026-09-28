@@ -125,10 +125,23 @@ func _setup_default_inputs() -> void:
 	_add_action_key("descend", KEY_C)
 
 	_add_action_mouse("fire_primary", MOUSE_BUTTON_LEFT)
-	_add_action_mouse("aim_override", MOUSE_BUTTON_RIGHT)
-	_add_action_key("fire_secondary", KEY_F)
 	_add_action_mouse("fire_secondary", MOUSE_BUTTON_RIGHT)
+	_add_action_key("fire_secondary", KEY_F)
 	_add_action_key("countermeasure_flares", KEY_X)
+
+	# Dedicated aim_override actions (Shift key or Middle Mouse or Gamepad LT)
+	_add_action_key("aim_override", KEY_SHIFT)
+	_add_action_mouse("aim_override", MOUSE_BUTTON_MIDDLE)
+
+	# Dual-stick aim axes
+	_add_action_joypad_motion("aim_left", JOY_AXIS_RIGHT_X, -1.0)
+	_add_action_joypad_motion("aim_right", JOY_AXIS_RIGHT_X, 1.0)
+	_add_action_joypad_motion("aim_up", JOY_AXIS_RIGHT_Y, -1.0)
+	_add_action_joypad_motion("aim_down", JOY_AXIS_RIGHT_Y, 1.0)
+
+	# UI navigation with Gamepad
+	_add_action_joypad_button("ui_accept", JOY_BUTTON_A)
+	_add_action_joypad_button("ui_cancel", JOY_BUTTON_B)
 
 	_add_action_key("camera_orbit_left", KEY_J)
 	_add_action_key("camera_orbit_right", KEY_L)
@@ -138,6 +151,9 @@ func _setup_default_inputs() -> void:
 func _add_action_key(action: StringName, keycode: Key) -> void:
 	if not InputMap.has_action(action):
 		InputMap.add_action(action)
+	for existing in InputMap.action_get_events(action):
+		if existing is InputEventKey and existing.physical_keycode == keycode:
+			return
 	var ev := InputEventKey.new()
 	ev.physical_keycode = keycode
 	InputMap.action_add_event(action, ev)
@@ -145,6 +161,30 @@ func _add_action_key(action: StringName, keycode: Key) -> void:
 func _add_action_mouse(action: StringName, button_index: MouseButton) -> void:
 	if not InputMap.has_action(action):
 		InputMap.add_action(action)
+	for existing in InputMap.action_get_events(action):
+		if existing is InputEventMouseButton and existing.button_index == button_index:
+			return
 	var ev := InputEventMouseButton.new()
 	ev.button_index = button_index
+	InputMap.action_add_event(action, ev)
+
+func _add_action_joypad_button(action: StringName, button_index: JoyButton) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action)
+	for existing in InputMap.action_get_events(action):
+		if existing is InputEventJoypadButton and existing.button_index == button_index:
+			return
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = button_index
+	InputMap.action_add_event(action, ev)
+
+func _add_action_joypad_motion(action: StringName, axis: JoyAxis, axis_value: float) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action)
+	for existing in InputMap.action_get_events(action):
+		if existing is InputEventJoypadMotion and existing.axis == axis and signf(existing.axis_value) == signf(axis_value):
+			return
+	var ev := InputEventJoypadMotion.new()
+	ev.axis = axis
+	ev.axis_value = axis_value
 	InputMap.action_add_event(action, ev)

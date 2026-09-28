@@ -21,10 +21,23 @@ func _ready() -> void:
 	settings_btn = Button.new()
 	settings_btn.name = "SettingsButton"
 	settings_btn.text = "SETTINGS"
+	settings_btn.custom_minimum_size = Vector2(220, 44)
+	settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	settings_btn.add_theme_font_size_override("font_size", 18)
 	if resume_btn and is_instance_valid(resume_btn.get_parent()):
 		resume_btn.get_parent().add_child(settings_btn)
 		resume_btn.get_parent().move_child(settings_btn, resume_btn.get_index() + 1)
 	settings_btn.pressed.connect(_on_settings_pressed)
+
+	# Establish seamless vertical looping focus navigation
+	resume_btn.focus_neighbor_top = resume_btn.get_path_to(menu_btn)
+	resume_btn.focus_neighbor_bottom = resume_btn.get_path_to(settings_btn)
+	settings_btn.focus_neighbor_top = settings_btn.get_path_to(resume_btn)
+	settings_btn.focus_neighbor_bottom = settings_btn.get_path_to(restart_btn)
+	restart_btn.focus_neighbor_top = restart_btn.get_path_to(settings_btn)
+	restart_btn.focus_neighbor_bottom = restart_btn.get_path_to(menu_btn)
+	menu_btn.focus_neighbor_top = menu_btn.get_path_to(restart_btn)
+	menu_btn.focus_neighbor_bottom = menu_btn.get_path_to(resume_btn)
 
 
 func _unhandled_input(event: InputEvent) -> void:

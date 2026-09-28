@@ -461,22 +461,39 @@ func _update_target_reticle(delta: float = 0.0) -> void:
 	if not target_reticle:
 		return
 
-	if not is_instance_valid(_current_target) or _is_manual_aim:
-		target_reticle.visible = false
-		return
-
 	var cam := get_viewport().get_camera_3d()
 	if not cam:
 		target_reticle.visible = false
 		return
 
-	var target_3d_pos := _current_target.global_position + Vector3(0, 0.8, 0)
-	if cam.is_position_behind(target_3d_pos):
+	var target_3d_pos := Vector3.ZERO
+	var has_valid_pos := false
+	var is_manual := _is_manual_aim
+
+	if is_manual:
+		if not is_instance_valid(_player):
+			_player = get_tree().get_first_node_in_group("player") as Node3D
+		if is_instance_valid(_player):
+			var ts = _player.get_node_or_null("TargetingSystem")
+			if ts and ts.is_manual_aim and ts.manual_aim_point != Vector3.ZERO:
+				target_3d_pos = ts.manual_aim_point
+				has_valid_pos = true
+	elif is_instance_valid(_current_target) and not _current_target.is_queued_for_deletion():
+		target_3d_pos = _current_target.global_position + Vector3(0, 0.8, 0)
+		has_valid_pos = true
+
+	if not has_valid_pos or cam.is_position_behind(target_3d_pos):
 		target_reticle.visible = false
 		return
 
 	var screen_pos: Vector2 = cam.unproject_position(target_3d_pos)
 	var target_screen_pos: Vector2 = screen_pos - (target_reticle.size * 0.5)
+
+	# Update reticle color: Amber for manual aim, Crimson for auto-track
+	var reticle_color: Color = Color(1.0, 0.75, 0.18, 0.95) if is_manual else Color(1.0, 0.2, 0.2, 0.9)
+	for child in target_reticle.get_children():
+		if child is ColorRect:
+			(child as ColorRect).color = reticle_color
 
 	if not target_reticle.visible:
 		target_reticle.visible = true

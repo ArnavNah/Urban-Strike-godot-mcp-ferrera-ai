@@ -80,7 +80,7 @@ func get_move_input() -> Vector2:
 		"move_left",
 		"move_right",
 		"move_forward",
-		"move_back",
+		"move_backward",
 		0.0
 	)
 	return _radial_curve(raw, move_deadzone, outer_deadzone, move_exponent)

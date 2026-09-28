@@ -906,7 +906,10 @@ func _process_formation_stagger_queue(delta: float) -> void:
 					var new_cand := get_dynamic_encounter_spawn_point(is_air, p_pos, 42.0, 75.0)
 					if new_cand.get("success", false) and new_cand.get("position", Vector3.INF).is_finite():
 						var new_pos: Vector3 = new_cand["position"]
-						unit.global_position = new_pos
+						if unit.is_inside_tree():
+							unit.global_position = new_pos
+						else:
+							unit.transform.origin = new_pos
 						var new_res_id := reserve_spawn_position(
 							new_pos,
 							req_rad,
@@ -931,11 +934,11 @@ func _process_formation_stagger_queue(delta: float) -> void:
 					failed_spawn_attempts += 1
 		_formation_stagger_timer = randf_range(0.25, 0.55)
 
-func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger: bool = true, res_id: String = "") -> void:
+func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger: bool = true, res_id: String = "") -> bool:
 	if not is_instance_valid(unit) or not is_instance_valid(parent):
 		if not res_id.is_empty():
 			release_reservation(res_id)
-		return
+		return false
 	if not unit.transform.is_finite():
 		if not res_id.is_empty():
 			release_reservation(res_id)
@@ -943,7 +946,7 @@ func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger:
 			unit.free()
 		else:
 			unit.queue_free()
-		return
+		return false
 
 	var is_air := _is_air_enemy(unit)
 	var req_rad := get_enemy_clearance_radius(unit)
@@ -958,6 +961,7 @@ func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger:
 				bind_enemy_to_reservation(res_id, unit)
 			record_spawn_event(res_id if not res_id.is_empty() else "FormationUnit", unit_pos)
 			_notify_progress()
+			return true
 		else:
 			if not res_id.is_empty():
 				release_reservation(res_id)
@@ -966,6 +970,7 @@ func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger:
 			else:
 				unit.queue_free()
 			failed_spawn_attempts += 1
+			return false
 	else:
 		_formation_spawn_queue.append({
 			"unit": unit,
@@ -973,6 +978,7 @@ func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger:
 			"res_id": res_id,
 			"retries": 0
 		})
+		return true
 
 func clear_formation_queue() -> void:
 	for item in _formation_spawn_queue:
@@ -4610,8 +4616,8 @@ func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3, stagger: bool = t
 		s1.add_to_group("air_enemies")
 		s1.add_to_group("enemies")
 		s1.transform.origin = Vector3(spawn_origin.x, alt, spawn_origin.z)
-		_deploy_formation_unit(s1, parent, true, stagger)
-		spawned.append(s1)
+		if _deploy_formation_unit(s1, parent, true, stagger) and is_instance_valid(s1) and not s1.is_queued_for_deletion():
+			spawned.append(s1)
 
 	var s2 := _scene_air_scout.instantiate() as Node3D
 	if s2:
@@ -4624,8 +4630,8 @@ func spawn_air_patrol(spawn_origin: Vector3, heading: Vector3, stagger: bool = t
 			alt + 1.0,
 			clampf(pos2.z, -arena_half_extents, arena_half_extents)
 		)
-		_deploy_formation_unit(s2, parent, false, stagger)
-		spawned.append(s2)
+		if _deploy_formation_unit(s2, parent, false, stagger) and is_instance_valid(s2) and not s2.is_queued_for_deletion():
+			spawned.append(s2)
 
 	_record_formation("air_patrol")
 	return spawned
@@ -4651,8 +4657,8 @@ func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3, stagger: bo
 		raider.add_to_group("air_enemies")
 		raider.add_to_group("enemies")
 		raider.transform.origin = Vector3(spawn_origin.x, clampf(p_y, 15.0, 21.0), spawn_origin.z)
-		_deploy_formation_unit(raider, parent, true, stagger)
-		spawned.append(raider)
+		if _deploy_formation_unit(raider, parent, true, stagger) and is_instance_valid(raider) and not raider.is_queued_for_deletion():
+			spawned.append(raider)
 
 	var offsets: Array[Vector3] = [
 		-perp * 12.0 - dir * 10.0,
@@ -4670,8 +4676,8 @@ func spawn_harassment_group(spawn_origin: Vector3, heading: Vector3, stagger: bo
 				clampf(p_y, 11.0, 15.0),
 				clampf(spos.z, -arena_half_extents, arena_half_extents)
 			)
-			_deploy_formation_unit(scout, parent, false, stagger)
-			spawned.append(scout)
+			if _deploy_formation_unit(scout, parent, false, stagger) and is_instance_valid(scout) and not scout.is_queued_for_deletion():
+				spawned.append(scout)
 
 	_record_formation("harassment_group")
 	return spawned
@@ -4970,8 +4976,8 @@ func spawn_road_column(spawn_origin: Vector3, approach_direction: Vector3, count
 				if lead_tank:
 					lead_tank.register_escort(tank)
 			var res_id := reserve_spawn_position(tank.transform.origin, min_sep, "ground", "RoadColumn_%d" % i, primary_entry_sector, 4.5, "road_column")
-			_deploy_formation_unit(tank, parent, i == 0, stagger, res_id)
-			spawned.append(tank)
+			if _deploy_formation_unit(tank, parent, i == 0, stagger, res_id) and is_instance_valid(tank) and not tank.is_queued_for_deletion():
+				spawned.append(tank)
 
 	return spawned
 

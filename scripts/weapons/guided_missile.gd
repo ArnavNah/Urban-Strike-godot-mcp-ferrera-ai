@@ -114,7 +114,7 @@ func explode(impact_pos: Vector3) -> void:
 				var is_dead: bool = false
 				if "current_health" in col and float(col.get("current_health")) <= 0.0:
 					is_dead = true
-				elif "is_alive" in col and not bool(col.get("is_alive")):
+				elif "is_alive" in col and col.get("is_alive") == false:
 					is_dead = true
 				if is_dead and gm and gm.has_method("record_attributed_kill"):
 					gm.call("record_attributed_kill", "missiles")

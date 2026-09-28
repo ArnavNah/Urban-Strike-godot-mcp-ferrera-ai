@@ -393,6 +393,7 @@ func _physics_process(delta: float) -> void:
 
 	_handle_flight_movement(delta)
 	_handle_visual_tilt(delta)
+	_handle_aim_input(delta)
 	_handle_gun_aim(delta)
 	_handle_weapons()
 	_handle_ground_fx()
@@ -739,18 +740,60 @@ func _handle_ground_fx() -> void:
 				else:
 					downwash_dust.emitting = false
 
+func _get_world_aim_point_from_screen(screen_pos: Vector2) -> Vector3:
+	var cam := get_viewport().get_camera_3d()
+	if not cam:
+		return global_position + (-global_transform.basis.z * 40.0)
+	var from := cam.project_ray_origin(screen_pos)
+	var dir := cam.project_ray_normal(screen_pos)
+	if is_inside_tree() and get_world_3d():
+		var space := get_world_3d().direct_space_state
+		# Collision mask: Layer 1 (World) | Layer 3 (Enemies, bit 2 = 4)
+		var query := PhysicsRayQueryParameters3D.create(from, from + dir * 300.0, 1 | 4)
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty():
+			return hit["position"]
+
+	var ground_y := ground_ray.get_collision_point().y if (ground_ray and ground_ray.is_colliding()) else 0.0
+	var plane := Plane(Vector3.UP, -ground_y)
+	var hit_point = plane.intersects_ray(from, dir)
+	if hit_point != null:
+		return hit_point
+	return from + dir * 45.0
+
+func _handle_aim_input(_delta: float) -> void:
+	if not targeting_system or not is_alive or not _control_enabled:
+		return
+
+	# 1. Dual-Stick Gamepad Aiming (360-degree turret authority)
+	var joy_rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+	var joy_ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	var stick := Vector2(joy_rx, joy_ry)
+	if stick.length() > 0.22:
+		var cam := get_viewport().get_camera_3d()
+		var cam_basis: Basis = cam.global_transform.basis if cam else global_transform.basis
+		var cam_fwd := -cam_basis.z
+		cam_fwd.y = 0.0
+		cam_fwd = cam_fwd.normalized()
+		var cam_right := cam_basis.x
+		cam_right.y = 0.0
+		cam_right = cam_right.normalized()
+
+		# Controller right stick: X is horizontal, negative Y is forward
+		var aim_world_dir := (cam_right * stick.x + cam_fwd * (-stick.y)).normalized()
+		var aim_target := global_position + aim_world_dir * 45.0
+		targeting_system.trigger_manual_aim(aim_target)
+	elif Input.is_action_pressed("aim_override") or Input.is_action_pressed("fire_primary"):
+		var mouse_pos := get_viewport().get_mouse_position()
+		var world_aim := _get_world_aim_point_from_screen(mouse_pos)
+		targeting_system.trigger_manual_aim(world_aim)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		if Input.is_action_pressed("aim_override") or (event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)):
 			var mouse_pos: Vector2 = get_viewport().get_mouse_position()
-			var cam := get_viewport().get_camera_3d()
-			if cam:
-				var from := cam.project_ray_origin(mouse_pos)
-				var dir := cam.project_ray_normal(mouse_pos)
-				var plane := Plane(Vector3.UP, 0.0)
-				var hit_point = plane.intersects_ray(from, dir)
-				if hit_point != null:
-					targeting_system.trigger_manual_aim(hit_point)
+			var world_aim := _get_world_aim_point_from_screen(mouse_pos)
+			targeting_system.trigger_manual_aim(world_aim)
 
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if telemetry_enabled:

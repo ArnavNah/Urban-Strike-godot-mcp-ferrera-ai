@@ -9,3 +9,7 @@ test_results.txt
 *.TMP
 ~*
 tmp/
+
+# Ziva agent addon (contains binaries >100MB)
+addons/ziva_agent/
+

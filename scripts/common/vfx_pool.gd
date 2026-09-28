@@ -62,7 +62,7 @@ func _allow_effect(pos: Vector3, pool: Array[Node3D], limit: int) -> bool:
 		return false
 	var active: int = 0
 	for item in pool:
-		if bool(item.get("is_active")):
+		if item.get("is_active") == true:
 			active += 1
 	return active < limit
 
@@ -127,7 +127,7 @@ func spawn_muzzle_flash(pos: Vector3, dir: Vector3 = Vector3.ZERO, is_enemy: boo
 	for i in range(count):
 		var idx: int = (_flash_idx + i) % count
 		var item: Node3D = _flash_pool[idx]
-		if not bool(item.get("is_active")):
+		if item.get("is_active") != true:
 			_flash_idx = (idx + 1) % count
 			item.global_position = pos
 			if item.has_method("play_directional"):
@@ -156,7 +156,7 @@ func spawn_sparks(pos: Vector3, normal: Vector3 = Vector3.UP, is_armor: bool = f
 	for i in range(count):
 		var idx: int = (_spark_idx + i) % count
 		var item: Node3D = _spark_pool[idx]
-		if not bool(item.get("is_active")):
+		if item.get("is_active") != true:
 			_spark_idx = (idx + 1) % count
 			item.global_position = pos
 			if item.has_method("play_impact"):
@@ -183,7 +183,7 @@ func spawn_explosion(pos: Vector3, scale_mult: float = 1.0) -> Node3D:
 
 	var active_count: int = 0
 	for ex in _explosion_pool:
-		if bool(ex.get("is_active")):
+		if ex.get("is_active") == true:
 			active_count += 1
 
 	# Cap simultaneous active explosions to prevent overdraw and light spikes
@@ -195,7 +195,7 @@ func spawn_explosion(pos: Vector3, scale_mult: float = 1.0) -> Node3D:
 	for i in range(count):
 		var idx: int = (_explosion_idx + i) % count
 		var item: Node3D = _explosion_pool[idx]
-		if not bool(item.get("is_active")):
+		if item.get("is_active") != true:
 			_explosion_idx = (idx + 1) % count
 			item.global_position = pos
 			item.call("play", scale_mult)

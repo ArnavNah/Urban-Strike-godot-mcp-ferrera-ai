@@ -18,7 +18,6 @@ config/icon="res://icon.svg"
 [autoload]
 
 EventBus="*res://scripts/common/event_bus.gd"
-_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"
 
 [debug]
 
