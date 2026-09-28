@@ -9,7 +9,11 @@ extends Control
 @onready var missile_bar: ProgressBar = %MissileLockBar
 @onready var missile_status: Label = %MissileStatusLabel
 @onready var flares_label: Label = %FlaresLabel
+@onready var flares_bar: ProgressBar = get_node_or_null("%FlaresBar") as ProgressBar
 @onready var missile_warning_panel: Panel = %MissileWarningPanel
+@onready var evade_label: Label = get_node_or_null("%EvadeLabel") as Label
+@onready var evade_bar: ProgressBar = get_node_or_null("%EvadeBar") as ProgressBar
+@onready var passenger_label: Label = get_node_or_null("%PassengerLabel") as Label
 
 @onready var xp_bar: ProgressBar = %XPBar
 @onready var level_label: Label = %LevelLabel
@@ -78,6 +82,17 @@ var _last_speed_int: int = -999
 var _last_alt_tenth: int = -9999
 var _last_mission_dist_m: int = -999
 
+var _evade_cooldown_remaining: float = 0.0
+var _evade_cooldown_max: float = 3.5
+var _is_evading_active: bool = false
+var _evade_burst_timer: float = 0.0
+
+var _passenger_count: int = 0
+var _passenger_capacity: int = 6
+var _passenger_evac_msg_timer: float = 0.0
+var _passenger_evac_msg: String = ""
+var _hud_font: Font = null
+
 func _ready() -> void:
 	if not damage_vignette:
 		damage_vignette = ColorRect.new()
@@ -89,6 +104,7 @@ func _ready() -> void:
 		move_child(damage_vignette, 0)
 
 	_setup_upgrade_banner()
+	_setup_evade_and_passenger_ui()
 	_damage_flash_enabled = bool(SaveSystem.get_setting("damage_flash_enabled", true))
 	_damage_flash_intensity = float(SaveSystem.get_setting("damage_flash_intensity", 1.0))
 	_reduced_flashing = bool(SaveSystem.get_setting("reduced_flashing", false))
@@ -180,6 +196,14 @@ func _ready() -> void:
 			eb.ammo_full_notified.connect(_on_ammo_full_notified)
 		if eb.has_signal("hull_full_notified"):
 			eb.hull_full_notified.connect(_on_hull_full_notified)
+		if eb.has_signal("evade_cooldown_updated"):
+			eb.evade_cooldown_updated.connect(_on_evade_cooldown_updated)
+		if eb.has_signal("player_evaded"):
+			eb.player_evaded.connect(_on_player_evaded)
+		if eb.has_signal("survivor_collected"):
+			eb.survivor_collected.connect(_on_survivor_collected)
+		if eb.has_signal("survivors_evacuated"):
+			eb.survivors_evacuated.connect(_on_survivors_evacuated)
 
 	_setup_mission_card()
 
@@ -197,7 +221,28 @@ func _ready() -> void:
 	else:
 		_on_flares_updated(3, 3, true)
 
+	if _player:
+		if "passenger_count" in _player and "passenger_capacity" in _player:
+			_passenger_count = int(_player.passenger_count)
+			_passenger_capacity = int(_player.passenger_capacity)
+		if "_evade_timer" in _player and "evade_cooldown" in _player:
+			_evade_cooldown_remaining = float(_player._evade_timer)
+			_evade_cooldown_max = float(_player.evade_cooldown)
+	_update_evade_display()
+	_update_passenger_display()
+
 func _process(delta: float) -> void:
+	if _evade_burst_timer > 0.0:
+		_evade_burst_timer -= delta
+		if _evade_burst_timer <= 0.0:
+			_is_evading_active = false
+			_update_evade_display()
+
+	if _passenger_evac_msg_timer > 0.0:
+		_passenger_evac_msg_timer -= delta
+		if _passenger_evac_msg_timer <= 0.0:
+			_passenger_evac_msg = ""
+			_update_passenger_display()
 	if _upgrade_banner_timer > 0.0:
 		_upgrade_banner_timer -= delta
 		if _upgrade_banner_timer <= 0.0 and upgrade_banner:
@@ -282,6 +327,61 @@ func _process(delta: float) -> void:
 
 	queue_redraw()
 
+func _get_clamped_edge_position(dir_2d: Vector2, vp_rect: Rect2, margin: float = 38.0) -> Vector2:
+	var vp_center := vp_rect.size * 0.5
+	if dir_2d.length_squared() < 0.0001:
+		return vp_center
+
+	var dir := dir_2d.normalized()
+
+	var min_x := margin
+	var max_x := vp_rect.size.x - margin
+	var min_y := margin
+	var max_y := vp_rect.size.y - margin
+
+	var t := INF
+	if dir.x > 0.0001:
+		t = minf(t, (max_x - vp_center.x) / dir.x)
+	elif dir.x < -0.0001:
+		t = minf(t, (min_x - vp_center.x) / dir.x)
+
+	if dir.y > 0.0001:
+		t = minf(t, (max_y - vp_center.y) / dir.y)
+	elif dir.y < -0.0001:
+		t = minf(t, (min_y - vp_center.y) / dir.y)
+
+	var hit := vp_center + dir * t
+
+	# Clearance above BottomCenterCard (centered horizontally, card width 760, clearance at y = vp_rect.size.y - 118)
+	var card_half_w := 410.0
+	var card_clearance_y := vp_rect.size.y - 118.0
+	if dir.y > 0.05 and absf(hit.x - vp_center.x) <= card_half_w:
+		var t_card := (card_clearance_y - vp_center.y) / dir.y
+		if t_card > 0.0:
+			hit = vp_center + dir * t_card
+
+	hit.x = clampf(hit.x, min_x, max_x)
+	hit.y = clampf(hit.y, min_y, max_y)
+	return hit
+
+func get_screen_indicator(world_pos: Vector3, cam: Camera3D, margin: float = 45.0) -> Dictionary:
+	var vp_rect := get_viewport_rect()
+	var vp_center := vp_rect.size * 0.5
+	var is_behind := cam.is_position_behind(world_pos)
+	var scr_pos := cam.unproject_position(world_pos)
+	var is_offscreen := is_behind or scr_pos.x < margin or scr_pos.x > (vp_rect.size.x - margin) or scr_pos.y < margin or scr_pos.y > (vp_rect.size.y - margin)
+	var dir_2d := -(scr_pos - vp_center).normalized() if is_behind else (scr_pos - vp_center).normalized()
+	if dir_2d.length_squared() < 0.01:
+		dir_2d = Vector2.UP
+	var edge_pos := _get_clamped_edge_position(dir_2d, vp_rect, margin)
+	return {
+		"is_offscreen": is_offscreen,
+		"is_behind": is_behind,
+		"screen_pos": scr_pos,
+		"edge_pos": edge_pos,
+		"dir_2d": dir_2d
+	}
+
 func _draw() -> void:
 	var cam := get_viewport().get_camera_3d()
 	if not cam or not is_instance_valid(_player):
@@ -289,7 +389,7 @@ func _draw() -> void:
 
 	var vp_rect := get_viewport_rect()
 	var vp_center := vp_rect.size * 0.5
-	var margin := 45.0
+	var margin := 38.0
 
 	# Priority 1: Approaching incoming enemy missiles (immediate danger)
 	var incoming_missiles := get_tree().get_nodes_in_group("incoming_enemy_missiles")
@@ -310,7 +410,7 @@ func _draw() -> void:
 			var dir_2d: Vector2 = -(scr_pos - vp_center).normalized() if is_behind else (scr_pos - vp_center).normalized()
 			if dir_2d.length_squared() < 0.01:
 				dir_2d = Vector2.UP
-			var edge_pos: Vector2 = vp_center + dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
+			var edge_pos: Vector2 = _get_clamped_edge_position(dir_2d, vp_rect, margin)
 
 			# Pulsing red diamond alert for incoming homing missiles
 			var pulse: float = 0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.016)
@@ -377,7 +477,7 @@ func _draw() -> void:
 				dir_2d = Vector2.UP
 
 			# Clamp to edge of screen with margin
-			var edge_pos: Vector2 = vp_center + dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
+			var edge_pos: Vector2 = _get_clamped_edge_position(dir_2d, vp_rect, margin)
 
 			var col := Color(1.0, 0.35, 0.2, 0.85)
 			if th3d.is_in_group("bosses"):
@@ -407,7 +507,7 @@ func _draw() -> void:
 			var obj_dir_2d := -(obj_scr - vp_center).normalized() if obj_behind else (obj_scr - vp_center).normalized()
 			if obj_dir_2d.length_squared() < 0.01:
 				obj_dir_2d = Vector2.UP
-			var obj_edge := vp_center + obj_dir_2d * minf(vp_center.x - margin, vp_center.y - margin)
+			var obj_edge := _get_clamped_edge_position(obj_dir_2d, vp_rect, margin)
 			var d_top := obj_edge + obj_dir_2d * 14.0
 			var d_bot := obj_edge - obj_dir_2d * 6.0
 			var d_l := obj_edge + Vector2(-obj_dir_2d.y, obj_dir_2d.x) * 9.0
@@ -425,6 +525,139 @@ func _draw() -> void:
 			if _high_contrast_indicators:
 				draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), Color(0.02, 0.04, 0.06, 0.95), 3.0)
 			draw_polyline(PackedVector2Array([d_top, d_r, d_bot, d_l, d_top]), obj_col, 2.0)
+
+	# Priority 3: Stranded Survivors (Rescue Winch targets)
+	var survivors := get_tree().get_nodes_in_group("survivors")
+	for s in survivors:
+		var s_node := s as Node3D
+		if not is_instance_valid(s_node):
+			continue
+		if s_node.get("current_state") == 2: # State.RESCUED
+			continue
+
+		var s_pos := s_node.global_position + Vector3(0, 1.0, 0)
+		var s_behind := cam.is_position_behind(s_pos)
+		var s_scr := cam.unproject_position(s_pos)
+		var s_dist := _player.global_position.distance_to(s_node.global_position)
+		var is_offscreen := s_behind or s_scr.x < margin or s_scr.x > (vp_rect.size.x - margin) or s_scr.y < margin or s_scr.y > (vp_rect.size.y - margin)
+		var pulse := 0.80 + 0.20 * sin(Time.get_ticks_msec() * 0.010)
+		var s_col := Color(0.20, 0.98, 0.45, pulse)
+
+		if is_offscreen:
+			var s_dir := -(s_scr - vp_center).normalized() if s_behind else (s_scr - vp_center).normalized()
+			if s_dir.length_squared() < 0.01:
+				s_dir = Vector2.UP
+			var edge_pos := _get_clamped_edge_position(s_dir, vp_rect, margin)
+
+			var tip := edge_pos + s_dir * 14.0
+			var side_a := edge_pos - s_dir * 8.0 + Vector2(-s_dir.y, s_dir.x) * 9.0
+			var side_b := edge_pos - s_dir * 8.0 - Vector2(-s_dir.y, s_dir.x) * 9.0
+			var poly := PackedVector2Array([tip, side_a, side_b])
+
+			if _high_contrast_indicators:
+				var outline := PackedVector2Array([tip, side_a, side_b, tip])
+				draw_polyline(outline, Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_colored_polygon(poly, s_col)
+
+			var font := _get_hud_font()
+			if font:
+				var txt := "RESCUE %dm" % int(s_dist)
+				var lbl_pos := edge_pos - s_dir * 22.0
+				var box_pos := lbl_pos - Vector2(36.0, 8.0)
+				box_pos.x = clampf(box_pos.x, margin * 0.5, vp_rect.size.x - margin * 0.5 - 72.0)
+				box_pos.y = clampf(box_pos.y, margin * 0.5, vp_rect.size.y - margin * 0.5 - 16.0)
+				draw_rect(Rect2(box_pos, Vector2(72, 16)), Color(0.02, 0.05, 0.08, 0.80), true)
+				draw_string(font, box_pos + Vector2(0, 12.0), txt, HORIZONTAL_ALIGNMENT_CENTER, 72, 11, Color(0.35, 1.0, 0.6))
+		else:
+			var rad := 14.0
+			var d_top := s_scr + Vector2(0, -rad)
+			var d_r := s_scr + Vector2(rad, 0)
+			var d_bot := s_scr + Vector2(0, rad)
+			var d_l := s_scr + Vector2(-rad, 0)
+			var poly := PackedVector2Array([d_top, d_r, d_bot, d_l, d_top])
+			if _high_contrast_indicators:
+				draw_polyline(poly, Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_polyline(poly, s_col, 2.0)
+
+			draw_line(s_scr + Vector2(-4, 0), s_scr + Vector2(4, 0), s_col, 1.5)
+			draw_line(s_scr + Vector2(0, -4), s_scr + Vector2(0, 4), s_col, 1.5)
+
+			var font := _get_hud_font()
+			if font:
+				var txt := "SURVIVOR %dm" % int(s_dist)
+				var txt_pos := s_scr + Vector2(-36.0, rad + 14.0)
+				draw_rect(Rect2(txt_pos - Vector2(2, 10), Vector2(74, 15)), Color(0.02, 0.05, 0.08, 0.70))
+				draw_string(font, txt_pos, txt, HORIZONTAL_ALIGNMENT_CENTER, 70, 11, Color(0.35, 1.0, 0.6))
+
+	# Priority 4: Battlefield Crates (Salvage & Ammo Pickups)
+	var crates: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group("salvage_crates"):
+		var n3d := node as Node3D
+		if is_instance_valid(n3d) and n3d.get("_is_collected") != true:
+			crates.append(n3d)
+	for node in get_tree().get_nodes_in_group("missile_pickups"):
+		var n3d := node as Node3D
+		if is_instance_valid(n3d) and n3d.get("_is_collected") != true:
+			crates.append(n3d)
+
+	crates.sort_custom(func(a: Node3D, b: Node3D) -> bool:
+		return _player.global_position.distance_squared_to(a.global_position) < _player.global_position.distance_squared_to(b.global_position)
+	)
+
+	var drawn_crates: int = 0
+	for crate in crates:
+		if drawn_crates >= 4:
+			break
+		var c_dist := _player.global_position.distance_to(crate.global_position)
+		if c_dist > 120.0:
+			break
+
+		var is_salvage := crate.is_in_group("salvage_crates")
+		var c_col := Color(1.0, 0.80, 0.20, 0.85) if is_salvage else Color(0.30, 0.90, 1.0, 0.85)
+		var c_tag := "SALVAGE" if is_salvage else "AMMO"
+		var c_pos := crate.global_position + Vector3(0, 0.6, 0)
+		var c_behind := cam.is_position_behind(c_pos)
+		var c_scr := cam.unproject_position(c_pos)
+		var is_offscreen := c_behind or c_scr.x < margin or c_scr.x > (vp_rect.size.x - margin) or c_scr.y < margin or c_scr.y > (vp_rect.size.y - margin)
+
+		if is_offscreen:
+			var c_dir := -(c_scr - vp_center).normalized() if c_behind else (c_scr - vp_center).normalized()
+			if c_dir.length_squared() < 0.01:
+				c_dir = Vector2.UP
+			var edge_pos := _get_clamped_edge_position(c_dir, vp_rect, margin)
+
+			var tip := edge_pos + c_dir * 10.0
+			var side_a := edge_pos - c_dir * 6.0 + Vector2(-c_dir.y, c_dir.x) * 6.0
+			var side_b := edge_pos - c_dir * 6.0 - Vector2(-c_dir.y, c_dir.x) * 6.0
+			var poly := PackedVector2Array([tip, side_a, side_b])
+			if _high_contrast_indicators:
+				draw_polyline(PackedVector2Array([tip, side_a, side_b, tip]), Color(0.02, 0.04, 0.06, 0.95), 2.5)
+			draw_colored_polygon(poly, c_col)
+
+			var font := _get_hud_font()
+			if font:
+				var txt := "%s %dm" % [c_tag, int(c_dist)]
+				var lbl_pos := edge_pos - c_dir * 18.0
+				var box_pos := lbl_pos - Vector2(30.0, 7.0)
+				box_pos.x = clampf(box_pos.x, margin * 0.5, vp_rect.size.x - margin * 0.5 - 62.0)
+				box_pos.y = clampf(box_pos.y, margin * 0.5, vp_rect.size.y - margin * 0.5 - 14.0)
+				draw_rect(Rect2(box_pos, Vector2(62, 14)), Color(0.02, 0.05, 0.08, 0.75), true)
+				draw_string(font, box_pos + Vector2(0, 11.0), txt, HORIZONTAL_ALIGNMENT_CENTER, 62, 10, c_col)
+			drawn_crates += 1
+		else:
+			var half := 8.0
+			var box_rect := Rect2(c_scr - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
+			if _high_contrast_indicators:
+				draw_rect(box_rect.grow(1.0), Color(0.02, 0.04, 0.06, 0.95), false, 2.0)
+			draw_rect(box_rect, c_col, false, 1.5)
+
+			var font := _get_hud_font()
+			if font and c_dist > 6.0:
+				var txt := "%s %dm" % [c_tag, int(c_dist)]
+				var txt_pos := c_scr + Vector2(-28.0, half + 12.0)
+				draw_rect(Rect2(txt_pos - Vector2(2, 10), Vector2(60, 13)), Color(0.02, 0.05, 0.08, 0.65))
+				draw_string(font, txt_pos, txt, HORIZONTAL_ALIGNMENT_CENTER, 56, 10, c_col)
+			drawn_crates += 1
 
 	# Directional damage indicator arc wedges pointing toward damage sources
 	var cue_radius := 145.0
@@ -632,6 +865,16 @@ func _on_jammer_status_changed(is_jammed: bool, _count: int) -> void:
 	_is_jammed = is_jammed
 
 func _on_flares_updated(charges_left: int, max_charges: int, is_ready: bool) -> void:
+	if flares_bar:
+		flares_bar.max_value = max_charges
+		flares_bar.value = charges_left
+		if not is_ready and charges_left < max_charges:
+			flares_bar.modulate = Color(1.0, 0.65, 0.15)
+		elif charges_left <= 0:
+			flares_bar.modulate = Color(0.85, 0.35, 0.35)
+		else:
+			flares_bar.modulate = Color(0.30, 0.88, 0.95)
+
 	if not flares_label:
 		return
 	var pips := ""
@@ -962,3 +1205,162 @@ func _on_radar_status_changed(is_active: bool) -> void:
 			upgrade_banner.visible = true
 			upgrade_banner.modulate.a = 1.0
 		_upgrade_banner_timer = 2.4
+
+func _get_hud_font() -> Font:
+	if not _hud_font:
+		if ResourceLoader.exists("res://assets/ui/fonts/Rajdhani-Bold.ttf"):
+			_hud_font = load("res://assets/ui/fonts/Rajdhani-Bold.ttf") as Font
+		if not _hud_font:
+			_hud_font = ThemeDB.fallback_font
+	return _hud_font
+
+func _update_evade_display() -> void:
+	if not evade_label:
+		return
+	if _is_evading_active:
+		evade_label.text = "EVADE [SPACE]  BURST!"
+		evade_label.modulate = Color(1.0, 0.92, 0.25)
+		if evade_bar:
+			evade_bar.value = evade_bar.max_value
+			evade_bar.modulate = Color(1.0, 0.92, 0.25)
+		return
+
+	if _evade_cooldown_remaining <= 0.001:
+		evade_label.text = "EVADE [SPACE]  READY"
+		evade_label.modulate = Color(0.25, 0.95, 0.65)
+		if evade_bar:
+			evade_bar.max_value = maxf(0.1, _evade_cooldown_max)
+			evade_bar.value = evade_bar.max_value
+			evade_bar.modulate = Color(0.25, 0.95, 0.65)
+	else:
+		evade_label.text = "EVADE [SPACE]  %.1fs" % _evade_cooldown_remaining
+		evade_label.modulate = Color(1.0, 0.65, 0.20)
+		if evade_bar:
+			evade_bar.max_value = maxf(0.1, _evade_cooldown_max)
+			evade_bar.value = maxf(0.0, _evade_cooldown_max - _evade_cooldown_remaining)
+			evade_bar.modulate = Color(1.0, 0.65, 0.20)
+
+func _update_passenger_display() -> void:
+	if not passenger_label:
+		return
+	if not _passenger_evac_msg.is_empty():
+		passenger_label.text = _passenger_evac_msg
+		passenger_label.modulate = Color(0.30, 1.0, 0.85)
+		return
+
+	if _passenger_count <= 0:
+		passenger_label.text = "PASSENGERS  0 / %d" % _passenger_capacity
+		passenger_label.modulate = Color(0.65, 0.78, 0.88)
+	elif _passenger_count >= _passenger_capacity:
+		passenger_label.text = "PASSENGERS  %d / %d  [CABIN FULL]" % [_passenger_count, _passenger_capacity]
+		passenger_label.modulate = Color(1.0, 0.85, 0.20)
+	else:
+		passenger_label.text = "PASSENGERS  %d / %d  [RTB LZ]" % [_passenger_count, _passenger_capacity]
+		passenger_label.modulate = Color(0.25, 0.98, 0.55)
+
+func _on_evade_cooldown_updated(current: float, maximum: float) -> void:
+	_evade_cooldown_remaining = current
+	_evade_cooldown_max = maximum
+	if current <= 0.001:
+		_is_evading_active = false
+		_evade_burst_timer = 0.0
+	_update_evade_display()
+
+func _on_player_evaded() -> void:
+	_is_evading_active = true
+	_evade_burst_timer = 0.35
+	_update_evade_display()
+
+func _on_survivor_collected(current_passengers: int, max_capacity: int) -> void:
+	_passenger_count = current_passengers
+	_passenger_capacity = max_capacity
+	_update_passenger_display()
+
+func _on_survivors_evacuated(count: int, _heal_amount: float, salvage_amount: int) -> void:
+	_passenger_count = 0
+	if count > 0:
+		_passenger_evac_msg = "PASSENGERS EVACUATED! +%d SALVAGE" % salvage_amount
+		_passenger_evac_msg_timer = 3.0
+	_update_passenger_display()
+
+func _setup_evade_and_passenger_ui() -> void:
+	if not evade_label:
+		evade_label = find_child("EvadeLabel", true, false) as Label
+	if not evade_bar:
+		evade_bar = find_child("EvadeBar", true, false) as ProgressBar
+	if not flares_bar:
+		flares_bar = find_child("FlaresBar", true, false) as ProgressBar
+	if not passenger_label:
+		passenger_label = find_child("PassengerLabel", true, false) as Label
+
+	# Dynamic fallback for EvadePod
+	if not evade_label:
+		var weapons_row := find_child("WeaponsRow", true, false) as HBoxContainer
+		if weapons_row:
+			var vdiv := ColorRect.new()
+			vdiv.name = "TacticalVDivider2"
+			vdiv.custom_minimum_size = Vector2(1, 24)
+			vdiv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			vdiv.color = Color(0.22, 0.55, 0.68, 0.35)
+			weapons_row.add_child(vdiv)
+
+			var pod := VBoxContainer.new()
+			pod.name = "EvadePod"
+			pod.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pod.add_theme_constant_override("separation", 2)
+
+			evade_label = Label.new()
+			evade_label.name = "EvadeLabel"
+			var font := _get_hud_font()
+			if font:
+				evade_label.add_theme_font_override("font", font)
+			evade_label.add_theme_font_size_override("font_size", 14)
+			evade_label.text = "EVADE [SPACE]  READY"
+			evade_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			pod.add_child(evade_label)
+
+			evade_bar = ProgressBar.new()
+			evade_bar.name = "EvadeBar"
+			evade_bar.custom_minimum_size = Vector2(0, 4)
+			evade_bar.show_percentage = false
+			evade_bar.max_value = 3.5
+			evade_bar.value = 3.5
+
+			var bg_style := StyleBoxFlat.new()
+			bg_style.bg_color = Color(0.04, 0.07, 0.1, 0.9)
+			bg_style.corner_radius_top_left = 2
+			bg_style.corner_radius_top_right = 2
+			bg_style.corner_radius_bottom_right = 2
+			bg_style.corner_radius_bottom_left = 2
+			evade_bar.add_theme_stylebox_override("background", bg_style)
+
+			var fill_style := StyleBoxFlat.new()
+			fill_style.bg_color = Color(0.25, 0.95, 0.75, 1.0)
+			fill_style.corner_radius_top_left = 2
+			fill_style.corner_radius_top_right = 2
+			fill_style.corner_radius_bottom_right = 2
+			fill_style.corner_radius_bottom_left = 2
+			evade_bar.add_theme_stylebox_override("fill", fill_style)
+
+			pod.add_child(evade_bar)
+			weapons_row.add_child(pod)
+
+	# Dynamic fallback for PassengerLabel
+	if not passenger_label:
+		var top_left := find_child("TopLeft", true, false) as VBoxContainer
+		if top_left:
+			var card := find_child("TopLeftCard", true, false) as Control
+			if card and card.offset_bottom < 108.0:
+				card.offset_bottom = 108.0
+			if top_left.offset_bottom < 102.0:
+				top_left.offset_bottom = 102.0
+
+			passenger_label = Label.new()
+			passenger_label.name = "PassengerLabel"
+			var font := _get_hud_font()
+			if font:
+				passenger_label.add_theme_font_override("font", font)
+			passenger_label.add_theme_font_size_override("font_size", 13)
+			passenger_label.text = "PASSENGERS  0 / 6"
+			passenger_label.modulate = Color(0.65, 0.78, 0.88)
+			top_left.add_child(passenger_label)

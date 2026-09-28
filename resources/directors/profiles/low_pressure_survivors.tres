@@ -6,14 +6,6 @@
 [sub_resource type="Resource" id="Resource_jbjs7"]
 script = ExtResource("2_a2nrq")
 announcement = "WAVE 1 // HOSTILE INFANTRY CONTACT"
-composition_weights = {
-"air_scout": 0.15,
-"fodder": 0.7,
-"light_shooter": 0.15
-}
-allowed_roles = ["fodder", "light_shooter", "air_scout"]
-max_air = 2
-formation_interval_min = 18.0
 
 [sub_resource type="Resource" id="Resource_wmsyp"]
 script = ExtResource("2_a2nrq")

@@ -105,6 +105,8 @@ func update(delta: float, player: Node3D) -> Dictionary:
 
 		if in_bounds:
 			current_hold_time = minf(required_hold_time, current_hold_time + delta)
+			if player.has_method("evacuate_passengers") and int(player.get("passenger_count")) > 0:
+				player.call("evacuate_passengers")
 			if current_hold_time >= required_hold_time:
 				is_completed = true
 

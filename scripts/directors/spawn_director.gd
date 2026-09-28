@@ -1409,16 +1409,18 @@ func _retry_missing_initial_encounter() -> void:
 		_initial_retry_timer = 0.6
 
 func get_survival_stage() -> int:
-	if elapsed_survival_time < 45.0:
-		return 1 # 0:00-0:45: Opening / Air scouts & infantry
-	elif elapsed_survival_time < 150.0:
-		return 2 # 0:45-2:30: Build-Up / Ground vehicles & rooftop turrets
-	elif elapsed_survival_time < 255.0:
-		return 3 # 2:30-4:15: Pressure / Combined arms & tactical peaks
+	if elapsed_survival_time < 120.0:
+		return 1 # 0-2 min: Opening
 	elif elapsed_survival_time < 300.0:
-		return 4 # 4:15-5:00: Climax / Archon boss encounter
+		return 2 # 2-5 min: Build-Up
+	elif elapsed_survival_time < 480.0:
+		return 3 # 5-8 min: Pressure
+	elif elapsed_survival_time < 720.0:
+		return 4 # 8-12 min: Escalation
+	elif elapsed_survival_time < 900.0:
+		return 5 # 12-15 min: Crisis
 	else:
-		return 5 # 5:00+: Endless Overdrive / Extreme Survival
+		return 6 # 15+ min: Extreme
 
 func get_population_band() -> Vector2i:
 	match current_wave:
@@ -3530,7 +3532,9 @@ func _get_spawn_parent() -> Node:
 
 func _get_player() -> Node3D:
 	if is_inside_tree() and get_tree():
-		return get_tree().get_first_node_in_group("player") as Node3D
+		for p in get_tree().get_nodes_in_group("player"):
+			if is_instance_valid(p) and not p.is_queued_for_deletion():
+				return p as Node3D
 	return null
 
 func _get_player_altitude() -> float:

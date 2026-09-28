@@ -72,6 +72,15 @@ func _destroy_radar() -> void:
 			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 			p.add_child.call_deferred(crate)
 
+	# Spawn stranded survivor from wreckage
+	var survivor_script: GDScript = load("res://scripts/objects/survivor.gd")
+	if survivor_script:
+		var survivor: CharacterBody3D = survivor_script.new() as CharacterBody3D
+		if survivor:
+			survivor.transform.origin = global_position + Vector3(3.0, 0.5, 3.0)
+			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+			p.add_child.call_deferred(survivor)
+
 	# Spawn multiple XP pickups (60 XP total: 4 x 15 XP)
 	for i in range(4):
 		var offset := Vector3(randf_range(-2.0, 2.0), 0.5, randf_range(-2.0, 2.0))

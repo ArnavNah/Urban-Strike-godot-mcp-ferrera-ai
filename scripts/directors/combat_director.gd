@@ -83,17 +83,17 @@ func get_pipeline_telemetry_summary() -> Dictionary:
 	}
 
 func is_player_target_valid() -> bool:
-	var player := get_tree().get_first_node_in_group("player")
-	if not is_instance_valid(player) or player.is_queued_for_deletion():
-		return false
-	if "is_alive" in player and not player.is_alive:
-		return false
-	if "_control_enabled" in player and not player._control_enabled:
-		return false
 	var wm := get_tree().get_first_node_in_group("wave_manager")
 	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
 		return false
-	return true
+	for p in get_tree().get_nodes_in_group("player"):
+		if is_instance_valid(p) and not p.is_queued_for_deletion():
+			if "is_alive" in p and not p.is_alive:
+				continue
+			if "_control_enabled" in p and not p._control_enabled:
+				continue
+			return true
+	return false
 
 # Active token leases: Dictionary[Node3D, Dictionary]
 # Structure: {
@@ -204,20 +204,9 @@ func request_attack_permission(
 		last_rejection_reasons["alive"] += 1
 		return false
 
-	# Pause / player control safety: disallow enemy attack leases if player is dead or control disabled
-	var player := get_tree().get_first_node_in_group("player")
-	if is_instance_valid(player):
-		if "is_alive" in player and not player.is_alive:
-			last_rejection_reasons["control"] += 1
-			return false
-		if "_control_enabled" in player and not player._control_enabled:
-			last_rejection_reasons["control"] += 1
-			return false
-
-	# Deployment safety: disallow attack leases while deployment countdown is active
-	var wm := get_tree().get_first_node_in_group("wave_manager")
-	if is_instance_valid(wm) and wm.has_method("is_deployment_active") and wm.is_deployment_active():
-		last_rejection_reasons["deployment"] += 1
+	# Pause / player control safety: disallow enemy attack leases if player target is invalid
+	if not is_player_target_valid():
+		last_rejection_reasons["control"] += 1
 		return false
 
 	_cleanup_slots()

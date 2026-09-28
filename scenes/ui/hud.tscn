@@ -1,9 +1,10 @@
-[gd_scene format=3 uid="uid://b2k8y4m6r1wap"]
+[gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://dh8c27f50omvr" path="res://scripts/ui/hud.gd" id="1_hud"]
-[ext_resource type="FontFile" uid="uid://oqpdnawjrvdg" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="2_8qguk"]
-[ext_resource type="PackedScene" uid="uid://dm2w4r8k1v5ra" path="res://scenes/ui/minimap.tscn" id="2_map"]
-[ext_resource type="FontFile" uid="uid://e80nhsmmnttd" path="res://assets/ui/fonts/Inter-SemiBold.ttf" id="3_136eg"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="FontFile" path="res://assets/ui/fonts/Rajdhani-Bold.ttf" id="2_8qguk"]
+[ext_resource type="PackedScene" path="res://scenes/ui/minimap.tscn" id="2_map"]
+[ext_resource type="FontFile" path="res://assets/ui/fonts/Inter-SemiBold.ttf" id="3_136eg"]
+[ext_resource type="Script" path="res://scripts/ui/minimap.gd" id="5_136eg"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oj5la"]
 bg_color = Color(0.035, 0.055, 0.082, 0.9)
@@ -86,6 +87,34 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4d46k"]
+bg_color = Color(0.04, 0.07, 0.1, 0.9)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_erw67"]
+bg_color = Color(1, 0.72, 0.2, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_h022r"]
+bg_color = Color(0.04, 0.07, 0.1, 0.9)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0h1do"]
+bg_color = Color(0.25, 0.95, 0.75, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mj13f"]
 bg_color = Color(0.28, 0.85, 0.75, 1)
 corner_radius_top_left = 2
@@ -135,7 +164,7 @@ layout_mode = 0
 offset_left = 16.0
 offset_top = 16.0
 offset_right = 284.0
-offset_bottom = 86.0
+offset_bottom = 108.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_oj5la")
 
@@ -144,15 +173,15 @@ layout_mode = 0
 offset_left = 26.0
 offset_top = 22.0
 offset_right = 274.0
-offset_bottom = 80.0
+offset_bottom = 102.0
 theme_override_constants/separation = 6
 
 [node name="HealthLabel" type="Label" parent="TopLeft" unique_id=130389566]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 0.85, 0.45, 1)
 theme_override_fonts/font = ExtResource("2_8qguk")
 theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.2, 0.85, 0.45, 1)
 text = "HULL: 100 / 100"
 
 [node name="HealthBar" type="ProgressBar" parent="TopLeft" unique_id=1041639783]
@@ -171,26 +200,34 @@ theme_override_constants/separation = 16
 [node name="SpeedLabel" type="Label" parent="TopLeft/Telemetry" unique_id=804167583]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.9, 0.94, 0.9)
 theme_override_fonts/font = ExtResource("3_136eg")
 theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.85, 0.9, 0.94, 0.9)
 text = "  0 KPH"
 
 [node name="AltitudeLabel" type="Label" parent="TopLeft/Telemetry" unique_id=999717135]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.9, 0.94, 0.9)
 theme_override_fonts/font = ExtResource("3_136eg")
 theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.85, 0.9, 0.94, 0.9)
 text = "ALT: 10.0 m"
 
 [node name="AimModeLabel" type="Label" parent="TopLeft/Telemetry" unique_id=739638813]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 0.95)
 theme_override_fonts/font = ExtResource("3_136eg")
 theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 0.95)
 text = "AIM: AUTO-LOS"
+
+[node name="PassengerLabel" type="Label" parent="TopLeft" unique_id=1195548372]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.65, 0.78, 0.88, 1)
+text = "PASSENGERS  0 / 6"
 
 [node name="TopRight" type="VBoxContainer" parent="." unique_id=1571598547]
 layout_mode = 1
@@ -204,8 +241,11 @@ offset_bottom = 220.0
 grow_horizontal = 0
 theme_override_constants/separation = 6
 
-[node name="Minimap" parent="TopRight" unique_id=2087467822 instance=ExtResource("2_map")]
+[node name="Minimap" type="Control" parent="TopRight" unique_id=2087467822 instance=ExtResource("2_map")]
+custom_minimum_size = Vector2(140, 140)
 layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_136eg")
 
 [node name="TopCenter" type="VBoxContainer" parent="." unique_id=467457857]
 layout_mode = 1
@@ -228,8 +268,8 @@ theme_override_constants/separation = 4
 [node name="BossPhaseLabel" type="Label" parent="TopCenter/BossContainer" unique_id=1120394431]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.25, 0.25, 1)
 theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(1, 0.25, 0.25, 1)
 text = "ARCHON HEAVY GUNSHIP // PHASE 1"
 horizontal_alignment = 1
 
@@ -251,8 +291,8 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_hqnrr")
 [node name="BorderWarningLabel" type="Label" parent="TopCenter/BorderWarningBanner" unique_id=1952064705]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.8, 0.2, 1)
 theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 0.8, 0.2, 1)
 text = "⚠ WARNING: LEAVING MISSION AIRSPACE ⚠
 RETURN TO COMBAT AREA"
 horizontal_alignment = 1
@@ -370,8 +410,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 text = "⚠ SAM LOCKING // DEPLOY FLARES [X] ⚠"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -382,9 +422,9 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -270.0
-offset_top = -94.0
-offset_right = 270.0
+offset_left = -380.0
+offset_top = -98.0
+offset_right = 380.0
 offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 0
@@ -398,21 +438,21 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -256.0
-offset_top = -88.0
-offset_right = 256.0
+offset_left = -356.0
+offset_top = -92.0
+offset_right = 356.0
 offset_bottom = -18.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_constants/separation = 4
+theme_override_constants/separation = 3
 alignment = 2
 
 [node name="OverheatWarning" type="Label" parent="BottomCenter" unique_id=692757404]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
 theme_override_fonts/font = ExtResource("2_8qguk")
 theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
 text = "CHAINGUN OVERHEATED - 2.5s LOCKOUT"
 horizontal_alignment = 1
 
@@ -438,7 +478,7 @@ theme_override_constants/separation = 2
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_8qguk")
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
 text = "MISSILES  6 / 6  ▮▮▮▮▮▮  READY"
 
 [node name="MissileLockBar" type="ProgressBar" parent="BottomCenter/WeaponsRow/MissilePod" unique_id=929076579]
@@ -463,11 +503,51 @@ theme_override_constants/separation = 2
 [node name="FlaresLabel" type="Label" parent="BottomCenter/WeaponsRow/FlaresPod" unique_id=1158119981]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_fonts/font = ExtResource("2_8qguk")
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 text = "FLARES [X]  3 / 3  ◆ ◆ ◆  READY"
+horizontal_alignment = 1
+
+[node name="FlaresBar" type="ProgressBar" parent="BottomCenter/WeaponsRow/FlaresPod" unique_id=683472863]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_4d46k")
+theme_override_styles/fill = SubResource("StyleBoxFlat_erw67")
+max_value = 3.0
+value = 3.0
+show_percentage = false
+
+[node name="TacticalVDivider2" type="ColorRect" parent="BottomCenter/WeaponsRow" unique_id=144065887]
+custom_minimum_size = Vector2(1, 24)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.22, 0.55, 0.68, 0.35)
+
+[node name="EvadePod" type="VBoxContainer" parent="BottomCenter/WeaponsRow" unique_id=453937835]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="EvadeLabel" type="Label" parent="BottomCenter/WeaponsRow/EvadePod" unique_id=1269772261]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.25, 0.95, 0.65, 1)
+text = "EVADE [SPACE]  READY"
 horizontal_alignment = 2
+
+[node name="EvadeBar" type="ProgressBar" parent="BottomCenter/WeaponsRow/EvadePod" unique_id=1963041170]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_h022r")
+theme_override_styles/fill = SubResource("StyleBoxFlat_0h1do")
+max_value = 3.5
+value = 3.5
+show_percentage = false
 
 [node name="TacticalHDivider" type="ColorRect" parent="BottomCenter" unique_id=1387502962]
 custom_minimum_size = Vector2(0, 1)
@@ -481,14 +561,14 @@ theme_override_constants/separation = 10
 [node name="LevelLabel" type="Label" parent="BottomCenter/XPRow" unique_id=1053404914]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
 theme_override_fonts/font = ExtResource("2_8qguk")
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.31, 0.88, 0.93, 1)
 text = "LVL 1"
 
 [node name="XPBar" type="ProgressBar" parent="BottomCenter/XPRow" unique_id=1947533861]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 8)
+custom_minimum_size = Vector2(0, 7)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -499,9 +579,9 @@ show_percentage = false
 [node name="SalvageLabel" type="Label" parent="BottomCenter/XPRow" unique_id=146839969]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
 theme_override_fonts/font = ExtResource("2_8qguk")
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
 text = "SALVAGE: 0"
 
 [node name="MissionCard" type="PanelContainer" parent="." unique_id=752542244]

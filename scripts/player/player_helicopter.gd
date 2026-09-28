@@ -96,6 +96,17 @@ var _current_tail_speed: float = 72.0
 var _smoothed_throttle: float = 0.0
 var _smoothed_strafe: float = 0.0
 
+# Evasive Maneuver & Winch Rescue Mechanics
+@export var evade_cooldown: float = 3.5
+@export var passenger_capacity: int = 6
+var passenger_count: int = 0
+var _evade_timer: float = 0.0
+var _is_evading: bool = false
+var _evade_duration: float = 0.32
+var _evade_elapsed: float = 0.0
+var _evade_direction: Vector3 = Vector3.ZERO
+var _evade_speed: float = 42.0
+
 # Node references
 static var instance: PlayerHelicopter = null
 static var _player_flash_normal_mat: StandardMaterial3D = null
@@ -155,6 +166,9 @@ func _exit_tree() -> void:
 @onready var xp_magnet_area: Area3D = get_node_or_null("XPMagnetArea")
 @onready var xp_collect_area: Area3D = get_node_or_null("XPCollectArea")
 
+var damage_smoke_particles: GPUParticles3D = null
+var damage_fire_particles: GPUParticles3D = null
+
 func _ready() -> void:
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 	current_health = max_health
@@ -180,6 +194,10 @@ func _ready() -> void:
 		EventBus.player_health_changed.emit(current_health, max_health)
 		if missile_pod:
 			EventBus.missile_ammo_changed.emit(missile_pod.current_missiles, missile_pod.max_missiles)
+		if EventBus.has_signal("evade_cooldown_updated"):
+			EventBus.evade_cooldown_updated.emit(0.0, evade_cooldown)
+		if EventBus.has_signal("survivor_collected"):
+			EventBus.survivor_collected.emit(passenger_count, passenger_capacity)
 	if chaingun and chaingun.has_signal("fired"):
 		chaingun.fired.connect(_on_chaingun_fired)
 
@@ -196,6 +214,9 @@ func _ready() -> void:
 			(col_shape.shape as CylinderShape3D).radius = 3.8
 		if not xp_collect_area.area_entered.is_connected(_on_xp_collect_area_entered):
 			xp_collect_area.area_entered.connect(_on_xp_collect_area_entered)
+
+	_setup_damage_vfx()
+	_update_damage_vfx()
 
 func _on_xp_magnet_area_entered(area: Area3D) -> void:
 	if not is_instance_valid(area) or area.is_queued_for_deletion():
@@ -315,6 +336,7 @@ func heal(amount: float) -> float:
 		return 0.0
 	var actual_heal: float = minf(amount, max_health - current_health)
 	current_health = clampf(current_health + actual_heal, 0.0, max_health)
+	_update_damage_vfx()
 	emit_signal("health_changed", current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
@@ -454,6 +476,7 @@ func _handle_repair_drone(delta: float) -> void:
 			})
 		_repair_drone_healed_accum = 0.0
 	health_changed.emit(current_health, max_health)
+	_update_damage_vfx()
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
 
@@ -529,11 +552,22 @@ func _handle_flight_movement(delta: float) -> void:
 	var h_response := active_velocity_response if has_h_input else release_velocity_response
 	var h_weight := exp_weight(h_response, delta)
 
-	var current_h := Vector3(velocity.x, 0.0, velocity.z)
-	current_h = current_h.lerp(target_horizontal_velocity, h_weight)
+	if _is_evading:
+		_evade_elapsed += delta
+		velocity.x = _evade_direction.x * _evade_speed
+		velocity.z = _evade_direction.z * _evade_speed
+		if _evade_elapsed >= _evade_duration:
+			_is_evading = false
+	else:
+		var current_h := Vector3(velocity.x, 0.0, velocity.z)
+		current_h = current_h.lerp(target_horizontal_velocity, h_weight)
+		velocity.x = current_h.x
+		velocity.z = current_h.z
 
-	velocity.x = current_h.x
-	velocity.z = current_h.z
+	if _evade_timer > 0.0:
+		_evade_timer = maxf(0.0, _evade_timer - delta)
+		if EventBus and EventBus.has_signal("evade_cooldown_updated"):
+			EventBus.evade_cooldown_updated.emit(_evade_timer, evade_cooldown)
 
 	# 6. Altitude movement
 	var collective_input := Input.get_axis("heli_descend", "heli_climb")
@@ -636,8 +670,12 @@ func _handle_visual_tilt(delta: float) -> void:
 	# 5. Apply strictly to FlightTiltPivot (or visuals fallback)
 	var tilt_target: Node3D = flight_tilt_pivot if flight_tilt_pivot else visuals
 	if tilt_target:
+		var roll_boost: float = 0.0
+		if _is_evading:
+			var roll_dir: float = -1.0 if _evade_direction.dot(global_transform.basis.x) < 0.0 else 1.0
+			roll_boost = roll_dir * TAU * (_evade_elapsed / maxf(0.01, _evade_duration))
 		tilt_target.rotation.x = _base_tilt_rotation.x + current_visual_pitch
-		tilt_target.rotation.z = _base_tilt_rotation.z + current_visual_bank
+		tilt_target.rotation.z = _base_tilt_rotation.z + current_visual_bank + roll_boost
 		tilt_target.rotation.y = _base_tilt_rotation.y
 
 	# 6. Hover breathing
@@ -717,6 +755,77 @@ func _handle_weapons() -> void:
 	if Input.is_action_just_pressed("countermeasure_flares") and flare_dispenser:
 		flare_dispenser.try_dispense()
 
+	if Input.is_action_just_pressed("evade"):
+		try_evade()
+
+func try_evade() -> bool:
+	if not is_alive or _is_dying or not _control_enabled:
+		return false
+	if _evade_timer > 0.0 or _is_evading:
+		return false
+
+	_evade_timer = evade_cooldown
+	_is_evading = true
+	_evade_elapsed = 0.0
+
+	var move_dir := Vector3(velocity.x, 0.0, velocity.z)
+	if move_dir.length_squared() > 1.0:
+		_evade_direction = move_dir.normalized()
+	else:
+		var fwd := -global_transform.basis.z
+		fwd.y = 0.0
+		_evade_direction = fwd.normalized() if fwd.length_squared() > 0.01 else Vector3.FORWARD
+
+	_invulnerability_timer = maxf(_invulnerability_timer, 0.35)
+
+	# Decoy / break locks on incoming guided missiles tracking player
+	var missiles := get_tree().get_nodes_in_group("enemy_projectiles")
+	for m in missiles:
+		if is_instance_valid(m) and m.has_method("deflect"):
+			m.call("deflect")
+		elif is_instance_valid(m) and "target" in m and m.target == self:
+			m.target = null
+
+	if EventBus:
+		if EventBus.has_signal("player_evaded"):
+			EventBus.player_evaded.emit()
+		if EventBus.has_signal("evade_cooldown_updated"):
+			EventBus.evade_cooldown_updated.emit(_evade_timer, evade_cooldown)
+		if EventBus.has_signal("camera_shake_requested"):
+			EventBus.camera_shake_requested.emit(0.2)
+
+	var sound_mgr: Node = get_tree().get_first_node_in_group("sound_manager")
+	if sound_mgr and sound_mgr.has_method("play_sfx"):
+		sound_mgr.call("play_sfx", "laser")
+
+	return true
+
+func can_rescue_passenger() -> bool:
+	return is_alive and not _is_dying and passenger_count < passenger_capacity
+
+func rescue_passenger() -> bool:
+	if not can_rescue_passenger():
+		return false
+	passenger_count += 1
+	if EventBus and EventBus.has_signal("survivor_collected"):
+		EventBus.survivor_collected.emit(passenger_count, passenger_capacity)
+	return true
+
+func evacuate_passengers() -> Dictionary:
+	if passenger_count <= 0:
+		return {"count": 0, "healed": 0.0, "salvage": 0}
+	var count := passenger_count
+	var heal_amt: float = count * 25.0
+	heal(heal_amt)
+	var salvage_amt: int = count * 50
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_method("add_salvage"):
+		gm.call("add_salvage", salvage_amt)
+	passenger_count = 0
+	if EventBus and EventBus.has_signal("survivors_evacuated"):
+		EventBus.survivors_evacuated.emit(count, heal_amt, salvage_amt)
+	return {"count": count, "healed": heal_amt, "salvage": salvage_amt}
+
 func _on_chaingun_fired(_muzzle_pos: Vector3, _dir: Vector3) -> void:
 	_recoil_offset = 0.09
 
@@ -725,20 +834,123 @@ func _handle_ground_fx() -> void:
 		ground_ray.global_position = global_position
 		ground_ray.force_raycast_update()
 		if ground_ray.is_colliding():
-			var ground_y := ground_ray.get_collision_point().y
+			var hit_point := ground_ray.get_collision_point()
+			var hit_normal := ground_ray.get_collision_normal()
+			var ground_y := hit_point.y
 			var altitude_above_ground := global_position.y - ground_y
 
 			if ground_shadow:
-				ground_shadow.global_position = Vector3(global_position.x, ground_y + 0.05, global_position.z)
-				var shadow_scale := clampf(1.0 - (altitude_above_ground / 30.0), 0.35, 1.2)
+				ground_shadow.visible = true
+				var shadow_scale := clampf(1.0 - (altitude_above_ground / 30.0), 0.35, 1.25)
+				ground_shadow.global_position = hit_point + hit_normal * 0.04
 				ground_shadow.scale = Vector3(shadow_scale, 1.0, shadow_scale)
+				if hit_normal.length_squared() > 0.1 and absf(hit_normal.dot(Vector3.UP)) < 0.999:
+					var align_quat := Quaternion(Vector3.UP, hit_normal)
+					ground_shadow.basis = Basis(align_quat).scaled(Vector3(shadow_scale, 1.0, shadow_scale))
 
 			if downwash_dust:
-				if altitude_above_ground < 18.0:
+				if altitude_above_ground < 20.0 and is_alive and not _is_dying:
 					downwash_dust.emitting = true
-					downwash_dust.global_position = Vector3(global_position.x, ground_y + 0.1, global_position.z)
+					var slipstream := -Vector3(velocity.x, 0.0, velocity.z) * 0.04
+					downwash_dust.global_position = hit_point + hit_normal * 0.08 + slipstream
+					var dust_intensity := clampf(1.0 - (altitude_above_ground / 20.0), 0.25, 1.1)
+					downwash_dust.scale = Vector3(dust_intensity, dust_intensity, dust_intensity)
 				else:
 					downwash_dust.emitting = false
+		else:
+			if downwash_dust:
+				downwash_dust.emitting = false
+
+func _setup_damage_vfx() -> void:
+	var rig: Node3D = flight_tilt_pivot.get_node_or_null("VisualRig") if flight_tilt_pivot else self
+	if not rig:
+		return
+
+	# Smoke particles at engine exhaust port
+	damage_smoke_particles = GPUParticles3D.new()
+	damage_smoke_particles.name = "DamageSmokeParticles"
+	damage_smoke_particles.top_level = false
+	damage_smoke_particles.local_coords = false
+	damage_smoke_particles.amount = 36
+	damage_smoke_particles.lifetime = 0.9
+	damage_smoke_particles.position = Vector3(0.0, 0.9, 1.2)
+	damage_smoke_particles.emitting = false
+
+	var smoke_mat := ParticleProcessMaterial.new()
+	smoke_mat.direction = Vector3(0.0, 0.6, 1.0).normalized()
+	smoke_mat.spread = 25.0
+	smoke_mat.initial_velocity_min = 2.5
+	smoke_mat.initial_velocity_max = 5.0
+	smoke_mat.gravity = Vector3(0.0, 2.0, 0.0)
+	smoke_mat.scale_min = 0.5
+	smoke_mat.scale_max = 1.6
+	smoke_mat.color = Color(0.18, 0.18, 0.18, 0.7)
+	damage_smoke_particles.process_material = smoke_mat
+
+	var smoke_mesh := SphereMesh.new()
+	smoke_mesh.radius = 0.35
+	smoke_mesh.height = 0.7
+	var smoke_mesh_mat := StandardMaterial3D.new()
+	smoke_mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smoke_mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smoke_mesh_mat.albedo_color = Color(0.22, 0.22, 0.22, 0.6)
+	damage_smoke_particles.draw_pass_1 = smoke_mesh
+	rig.add_child(damage_smoke_particles)
+
+	# Fire/sparks particles when health critical (<20%)
+	damage_fire_particles = GPUParticles3D.new()
+	damage_fire_particles.name = "DamageFireParticles"
+	damage_fire_particles.top_level = false
+	damage_fire_particles.local_coords = false
+	damage_fire_particles.amount = 28
+	damage_fire_particles.lifetime = 0.45
+	damage_fire_particles.position = Vector3(0.0, 0.8, 1.1)
+	damage_fire_particles.emitting = false
+
+	var fire_mat := ParticleProcessMaterial.new()
+	fire_mat.direction = Vector3(0.0, 0.4, 1.0).normalized()
+	fire_mat.spread = 35.0
+	fire_mat.initial_velocity_min = 3.5
+	fire_mat.initial_velocity_max = 7.0
+	fire_mat.gravity = Vector3(0.0, 0.5, 0.0)
+	fire_mat.scale_min = 0.25
+	fire_mat.scale_max = 0.65
+	fire_mat.color = Color(1.0, 0.55, 0.1, 0.95)
+	damage_fire_particles.process_material = fire_mat
+
+	var fire_mesh := SphereMesh.new()
+	fire_mesh.radius = 0.2
+	fire_mesh.height = 0.4
+	var fire_mesh_mat := StandardMaterial3D.new()
+	fire_mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fire_mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fire_mesh_mat.albedo_color = Color(1.0, 0.6, 0.12, 0.95)
+	damage_fire_particles.draw_pass_1 = fire_mesh
+	rig.add_child(damage_fire_particles)
+
+func _update_damage_vfx() -> void:
+	if not is_alive or _is_dying:
+		if is_instance_valid(damage_smoke_particles):
+			damage_smoke_particles.emitting = false
+		if is_instance_valid(damage_fire_particles):
+			damage_fire_particles.emitting = false
+		return
+
+	var hp_ratio := current_health / maxf(1.0, max_health)
+
+	if is_instance_valid(damage_smoke_particles):
+		var should_smoke := hp_ratio <= 0.40
+		if damage_smoke_particles.emitting != should_smoke:
+			damage_smoke_particles.emitting = should_smoke
+		if should_smoke and damage_smoke_particles.process_material is ParticleProcessMaterial:
+			var pm := damage_smoke_particles.process_material as ParticleProcessMaterial
+			var distress_factor := clampf((0.40 - hp_ratio) / 0.40, 0.0, 1.0)
+			pm.scale_max = lerpf(1.2, 2.2, distress_factor)
+
+	if is_instance_valid(damage_fire_particles):
+		var should_fire := hp_ratio <= 0.20
+		if damage_fire_particles.emitting != should_fire:
+			damage_fire_particles.emitting = should_fire
 
 func _get_world_aim_point_from_screen(screen_pos: Vector2) -> Vector3:
 	var cam := get_viewport().get_camera_3d()
@@ -889,6 +1101,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	_time_since_damage = 0.0
 	_repair_drone_healed_accum = 0.0
 	_flash_hit()
+	_update_damage_vfx()
 	emit_signal("health_changed", current_health, max_health)
 	if EventBus:
 		EventBus.player_health_changed.emit(current_health, max_health)
@@ -957,6 +1170,10 @@ func _die() -> void:
 		ground_shadow.visible = false
 	if downwash_dust:
 		downwash_dust.emitting = false
+	if is_instance_valid(damage_smoke_particles):
+		damage_smoke_particles.emitting = false
+	if is_instance_valid(damage_fire_particles):
+		damage_fire_particles.emitting = false
 	emit_signal("died")
 	if EventBus:
 		EventBus.player_died.emit()

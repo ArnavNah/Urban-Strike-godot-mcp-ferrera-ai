@@ -26,6 +26,9 @@ var _last_impact_terrain_time: float = 0.0
 var _last_player_hit_time: float = 0.0
 var _last_missile_impact_time: float = 0.0
 var _cached_camera: Camera3D = null
+var engine_player: AudioStreamPlayer = null
+var _cached_player: Node3D = null
+var _engine_sound_enabled: bool = true
 
 func _get_active_camera() -> Camera3D:
 	if is_instance_valid(_cached_camera) and (_cached_camera.current or not is_inside_tree()):
@@ -60,6 +63,13 @@ func _ready() -> void:
 		add_child(p)
 		_sfx_pool.append(p)
 
+	if has_node("EnginePlayer"):
+		engine_player = get_node("EnginePlayer") as AudioStreamPlayer
+	else:
+		engine_player = AudioStreamPlayer.new()
+		engine_player.name = "EnginePlayer"
+		add_child(engine_player)
+
 	if sfx_bus_exists:
 		if chaingun_player:
 			chaingun_player.bus = "SFX"
@@ -67,6 +77,11 @@ func _ready() -> void:
 			alert_player.bus = "SFX"
 		if explosion_player:
 			explosion_player.bus = "SFX"
+		if engine_player:
+			engine_player.bus = "SFX"
+
+	if is_instance_valid(engine_player):
+		engine_player.stream = _create_procedural_rotor_stream()
 
 	if EventBus:
 		EventBus.chaingun_heat_changed.connect(_on_heat_changed)
@@ -129,7 +144,7 @@ func apply_volume_settings() -> void:
 	var eff_sfx_db := linear_to_db(maxf(0.0001, master_vol * sfx_vol))
 	var is_muted := (master_vol * sfx_vol) <= 0.001
 
-	var all_players := [chaingun_player, alert_player, explosion_player]
+	var all_players := [chaingun_player, alert_player, explosion_player, engine_player]
 	all_players.append_array(_sfx_pool)
 	for p in all_players:
 		if is_instance_valid(p):
@@ -345,6 +360,8 @@ func _on_wave_started(wave_num: int, _announcement: String) -> void:
 		_play_tone(alert_player, 520.0, 0.25) # Crisp wave departure chime
 
 func _on_player_died() -> void:
+	if is_instance_valid(engine_player) and engine_player.playing:
+		engine_player.stop()
 	_play_tone(explosion_player, 65.0, 1.0) # Heavy destruction blast
 
 func _on_no_missiles_warning() -> void:
@@ -407,3 +424,89 @@ func _play_tone(player: AudioStreamPlayer, freq: float, duration: float, volume:
 			phase += phase_inc
 			if phase >= 1.0:
 				phase -= 1.0
+
+func _process(delta: float) -> void:
+	_update_engine_sound(delta)
+
+func _update_engine_sound(delta: float) -> void:
+	if not _engine_sound_enabled or not is_instance_valid(engine_player):
+		return
+
+	if get_tree().paused:
+		if engine_player.playing:
+			engine_player.stop()
+		return
+
+	if not is_instance_valid(_cached_player) or not _cached_player.is_inside_tree():
+		_cached_player = get_tree().get_first_node_in_group("player") as Node3D
+
+	if is_instance_valid(_cached_player) and _cached_player.get("is_alive") == true:
+		if not engine_player.playing:
+			engine_player.play()
+
+		var vel: Vector3 = _cached_player.get("velocity") if "velocity" in _cached_player else Vector3.ZERO
+		var horiz_spd := Vector2(vel.x, vel.z).length()
+		var max_spd: float = float(_cached_player.get("max_forward_speed")) if "max_forward_speed" in _cached_player else 28.0
+		var speed_ratio := clampf(horiz_spd / maxf(1.0, max_spd), 0.0, 1.25)
+
+		# Pitch modulation: 0.92 (idle hover) up to 1.32 (full forward flight)
+		var target_pitch := lerpf(0.92, 1.32, speed_ratio)
+
+		# If helicopter health is critical (<25%), add distressed stuttering wobble
+		var cur_hp: float = float(_cached_player.get("current_health")) if "current_health" in _cached_player else 100.0
+		var max_hp: float = float(_cached_player.get("max_health")) if "max_health" in _cached_player else 100.0
+		if (cur_hp / maxf(1.0, max_hp)) < 0.25:
+			target_pitch += sin(float(Time.get_ticks_msec()) * 0.02) * 0.06
+
+		engine_player.pitch_scale = lerpf(engine_player.pitch_scale, target_pitch, delta * 6.0)
+
+		# Volume scaling with settings
+		var master_vol: float = float(SaveSystem.get_setting("volume_master", 1.0))
+		var sfx_vol: float = float(SaveSystem.get_setting("volume_sfx", 1.0))
+		var base_vol := master_vol * sfx_vol * 0.32
+		if base_vol <= 0.001:
+			engine_player.volume_db = -80.0
+		else:
+			var target_db := linear_to_db(base_vol * lerpf(0.85, 1.15, speed_ratio))
+			engine_player.volume_db = lerpf(engine_player.volume_db, target_db, delta * 4.0)
+	else:
+		if engine_player.playing:
+			engine_player.stop()
+
+func _create_procedural_rotor_stream() -> AudioStreamWAV:
+	var sample_hz := 22050
+	var duration := 1.0 # 1 second seamless loop
+	var num_samples := int(sample_hz * duration)
+	var byte_data := PackedByteArray()
+	byte_data.resize(num_samples * 2) # 16-bit mono
+
+	var pulses_per_sec := 22.0
+	var pulse_period_samples := float(sample_hz) / pulses_per_sec
+
+	for i in range(num_samples):
+		var t := float(i) / float(sample_hz)
+		var sample_in_pulse := fmod(float(i), pulse_period_samples)
+		var pulse_phase := sample_in_pulse / pulse_period_samples
+
+		# 1. Blade-slap thump: exponential attack and decay
+		var slap_envelope := pow(1.0 - pulse_phase, 2.5) * sin(pulse_phase * PI * 4.0)
+		var thump := sin(pulse_phase * TAU * 3.5) * slap_envelope * 0.55
+
+		# 2. Turbine engine whine
+		var whine := (sin(t * TAU * 420.0) * 0.12) + (sin(t * TAU * 840.0) * 0.05)
+
+		# 3. Air rotor whoosh
+		var whoosh := sin(t * TAU * pulses_per_sec) * 0.18
+
+		var total_sample := clampf(thump + whine + whoosh, -0.95, 0.95)
+		var sample_16 := int(clampf(total_sample * 32767.0, -32768.0, 32767.0))
+		byte_data.encode_s16(i * 2, sample_16)
+
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_hz
+	stream.data = byte_data
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = num_samples
+	return stream

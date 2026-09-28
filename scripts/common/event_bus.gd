@@ -47,6 +47,16 @@ signal incoming_missile_warning(source_pos: Vector3, is_active: bool)
 @warning_ignore("unused_signal")
 signal missile_impact_occurred(impact_pos: Vector3, is_player: bool)
 
+# --- Evasive & Rescue Mechanics ---
+@warning_ignore("unused_signal")
+signal player_evaded()
+@warning_ignore("unused_signal")
+signal evade_cooldown_updated(current: float, maximum: float)
+@warning_ignore("unused_signal")
+signal survivor_collected(current_passengers: int, max_capacity: int)
+@warning_ignore("unused_signal")
+signal survivors_evacuated(count: int, heal_amount: float, salvage_amount: int)
+
 # --- Progression & Director ---
 @warning_ignore("unused_signal")
 signal xp_collected(amount: int)
@@ -132,6 +142,10 @@ func _setup_default_inputs() -> void:
 	# Dedicated aim_override actions (Shift key or Middle Mouse or Gamepad LT)
 	_add_action_key("aim_override", KEY_SHIFT)
 	_add_action_mouse("aim_override", MOUSE_BUTTON_MIDDLE)
+
+	# Tactical Evade / Barrel Roll
+	_add_action_key("evade", KEY_SPACE)
+	_add_action_joypad_button("evade", JOY_BUTTON_B)
 
 	# Dual-stick aim axes
 	_add_action_joypad_motion("aim_left", JOY_AXIS_RIGHT_X, -1.0)
