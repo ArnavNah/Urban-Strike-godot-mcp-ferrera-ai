@@ -5692,8 +5692,8 @@ func test_city_world_streamer_and_scale_contract(logs: Array[String]) -> bool:
 			chunkB.queue_free()
 			return false
 
-	chunkA.queue_free()
-	chunkB.queue_free()
+	chunkA.free()
+	chunkB.free()
 
 	# -------------------------------------------------------------
 	# 3. Road Socket Continuity Across Chunk Seams
@@ -5729,9 +5729,9 @@ func test_city_world_streamer_and_scale_contract(logs: Array[String]) -> bool:
 		c_east.queue_free()
 		return false
 
-	c_center.queue_free()
-	c_north.queue_free()
-	c_east.queue_free()
+	c_center.free()
+	c_north.free()
+	c_east.free()
 
 	# -------------------------------------------------------------
 	# 4. Chunk Streaming & Bounded Active Chunk Count
@@ -6251,7 +6251,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 
 	# --- Case 7: Formation members satisfy minimum separation ---
 	append_log("  -> Running Case 7: Formation member minimum separation...", logs)
-	var column_origin := Vector3(50.0, 0.0, 50.0)
+	var column_origin := Vector3(120.0, 0.0, 50.0)
 	var column_dir := Vector3(0.0, 0.0, 1.0)
 	var column_units := spawn_director.spawn_road_column(column_origin, column_dir, 3, false)
 	if column_units.size() != 3:
