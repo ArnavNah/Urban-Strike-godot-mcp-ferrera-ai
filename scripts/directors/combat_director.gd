@@ -11,9 +11,9 @@ extends Node
 
 # Default capacities by wave
 const WAVE_TOKEN_CONFIG := {
-	1: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 6 },
-	2: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 2, "danger_cap": 7 },
-	3: { "ground_tokens": 2, "air_tokens": 1, "max_attackers": 3, "danger_cap": 8 },
+	1: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 2, "danger_cap": 6 },
+	2: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 2, "danger_cap": 7 },
+	3: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 3, "danger_cap": 8 },
 	4: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 3, "danger_cap": 9 },
 	5: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 10 },
 	6: { "ground_tokens": 2, "air_tokens": 2, "max_attackers": 4, "danger_cap": 11 },
@@ -44,7 +44,7 @@ const DANGER_COST_BOSS_ORDNANCE: int = 3
 
 @export var current_wave: int = 1
 @export var max_ground_attack_slots: int = 2
-@export var max_air_attack_slots: int = 1
+@export var max_air_attack_slots: int = 2
 @export var max_concurrent_attackers: int = 2
 @export var max_projectile_danger: int = 6
 @export var slot_lease_duration: float = 6.0
@@ -182,7 +182,7 @@ func set_wave_limits(ground: int, air: int) -> void:
 		max_air_attack_slots = air
 	else:
 		# Safeguard: Never overwrite positive air capacity with zero from unconfigured wave definitions
-		max_air_attack_slots = int(cfg.get("air_tokens", 1))
+		max_air_attack_slots = int(cfg.get("air_tokens", 2))
 
 	max_concurrent_attackers = maxi(2, max_ground_attack_slots + max_air_attack_slots)
 	_cleanup_slots()

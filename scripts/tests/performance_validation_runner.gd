@@ -66,9 +66,9 @@ func _save_phase_screenshot(phase_name: String) -> void:
 	if img:
 		var letter: String = phase_name.substr(0, 1).to_lower()
 		var fn: String = "step8_scenario_%s.png" % letter
-		DirAccess.make_dir_recursive_absolute("res://.fennara/tmp")
-		img.save_png("res://.fennara/tmp/" + fn)
-		img.save_png("res://.fennara/tmp/step8_scenario_%s.png" % phase_name.to_lower())
+		DirAccess.make_dir_recursive_absolute("res://tmp")
+		img.save_png("res://tmp/" + fn)
+		img.save_png("res://tmp/step8_scenario_%s.png" % phase_name.to_lower())
 
 func _process(_delta: float) -> void:
 	if not started or completed: return
@@ -362,5 +362,5 @@ func complete(root: Node) -> void:
 		if vp and vp.get_texture():
 			var img: Image = vp.get_texture().get_image()
 			if img:
-				img.save_png("res://.fennara/tmp/step8_final.png")
+				img.save_png("res://tmp/step8_final.png")
 	get_tree().quit(0)

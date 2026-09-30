@@ -22,7 +22,7 @@ size = Vector3(3, 6, 3)
 [node name="CivicPlaza" type="Node3D" unique_id=811312086]
 
 [node name="PlazaPavement" type="MeshInstance3D" parent="." unique_id=94017592]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_yf2t8")
 

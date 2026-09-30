@@ -4987,7 +4987,7 @@ func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[Stri
 	root_node.add_child(cd)
 
 	cd.set_wave(1)
-	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 1 or cd.max_concurrent_attackers != 2 or cd.max_projectile_danger != 6:
+	if cd.max_ground_attack_slots != 2 or cd.max_air_attack_slots != 2 or cd.max_concurrent_attackers != 2 or cd.max_projectile_danger != 6:
 		append_log("FAIL: [Step 2] Wave 1 CombatDirector capacities incorrect: %s" % str(cd.get_debug_combat_telemetry()), logs)
 		root_node.queue_free()
 		return false
@@ -5219,9 +5219,9 @@ func test_survivors_low_difficulty_enemy_ai_and_spawner_refinement(logs: Array[S
 	root_node.add_child(cd)
 
 	var expected_attacker_caps: Dictionary = {
-		1: { "attackers": 2, "air_tokens": 1 },
-		2: { "attackers": 2, "air_tokens": 1 },
-		3: { "attackers": 3, "air_tokens": 1 },
+		1: { "attackers": 2, "air_tokens": 2 },
+		2: { "attackers": 2, "air_tokens": 2 },
+		3: { "attackers": 3, "air_tokens": 2 },
 		4: { "attackers": 3, "air_tokens": 2 },
 		5: { "attackers": 4, "air_tokens": 2 },
 		6: { "attackers": 4, "air_tokens": 2 },

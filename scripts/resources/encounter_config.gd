@@ -56,5 +56,5 @@ extends Resource
 @export var early_air_first_arrival_min: float = 3.0 ## First arrival 3-5 seconds after player control begins
 @export var early_air_first_arrival_max: float = 5.0
 @export var early_air_active_cap: int = 2 ## Initially allow 1-2 active light flying enemies
-@export var early_air_replenish_interval_min: float = 6.0 ## Replenish gradually: roughly 6-10 seconds between replacement arrivals
-@export var early_air_replenish_interval_max: float = 10.0
+@export var early_air_replenish_interval_min: float = 1.5 ## Replenish quickly: roughly 1.5-3.0 seconds between arrivals
+@export var early_air_replenish_interval_max: float = 3.0

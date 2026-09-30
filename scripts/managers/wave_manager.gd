@@ -177,7 +177,7 @@ func start_wave(index: int) -> void:
 
 		if CombatDirector.instance:
 			var g_slots: int = maxi(2, _current_wave_def.ground_attack_slots)
-			var a_slots: int = maxi(1, _current_wave_def.air_attack_slots)
+			var a_slots: int = maxi(2, _current_wave_def.air_attack_slots)
 			CombatDirector.instance.set_wave_limits(g_slots, a_slots)
 
 		if EventBus:

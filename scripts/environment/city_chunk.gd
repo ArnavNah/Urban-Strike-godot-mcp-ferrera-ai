@@ -185,11 +185,11 @@ static func _init_shared_prop_resources() -> void:
 
 	var light_mat := StandardMaterial3D.new()
 	light_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	light_mat.albedo_color = Color(0.31, 0.88, 0.93, 1.0)
+	light_mat.albedo_color = Color(1.0, 0.76, 0.20, 1.0)
 
 	_helipad_lens_mesh = SphereMesh.new()
-	_helipad_lens_mesh.radius = 0.22
-	_helipad_lens_mesh.height = 0.44
+	_helipad_lens_mesh.radius = 0.16
+	_helipad_lens_mesh.height = 0.32
 	_helipad_lens_mesh.material = light_mat
 
 	var crate_mat := StandardMaterial3D.new()
@@ -519,7 +519,8 @@ func _finish_full_detail_assembly(token: int) -> void:
 func _populate_initial_candidates() -> void:
 	var origin := global_position
 	ground_spawn_points.clear()
-	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 0.0))
+	if coord != Vector2i.ZERO:
+		ground_spawn_points.append(origin + Vector3(0.0, 0.3, 0.0))
 	ground_spawn_points.append(origin + Vector3(0.0, 0.3, -56.0))
 	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 56.0))
 	ground_spawn_points.append(origin + Vector3(-56.0, 0.3, 0.0))
@@ -614,94 +615,122 @@ func _build_roads() -> void:
 				boxes_by_mat[mat] = []
 			boxes_by_mat[mat].append([size, pos])
 
-		# 1. Parcel underlay
-		add_box.call(ConcreteAgedMat, Vector3(CHUNK_SIZE, 0.1, CHUNK_SIZE), Vector3(0.0, 0.05, 0.0))
+		# 1. Parcel underlay: y = [0.0, 0.10], top = 0.100
+		add_box.call(ConcreteAgedMat, Vector3(CHUNK_SIZE, 0.10, CHUNK_SIZE), Vector3(0.0, 0.05, 0.0))
 
-		# 2. Road geometry: NS Road
-		add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.12, CHUNK_SIZE), Vector3(0.0, 0.07, 0.0))
-		add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.14, CHUNK_SIZE), Vector3(0.0, 0.08, 0.0))
+		# Elevation Hierarchy:
+		# Sidewalk: top y = 0.110 (10mm step above parcel underlay)
+		# Road Asphalt: top y = 0.130 (20mm step above sidewalk curb)
+		# Road Markings: y = [0.130, 0.136] (6mm visible overlay on asphalt)
+		# Helipad Pad (Chunk 0,0): top y = 0.160 (30mm elevated landing surface)
 
-		# 3. Road geometry: EW Road
-		add_box.call(ConcreteSidewalkMat, Vector3(CHUNK_SIZE, 0.12, ew_shoulder_w), Vector3(0.0, 0.075, 0.0))
-		add_box.call(AsphaltMat, Vector3(CHUNK_SIZE, 0.145, ew_asphalt_w), Vector3(0.0, 0.085, 0.0))
+		if coord == Vector2i.ZERO:
+			# Helipad chunk (0,0): roads lead up to the central 28m helipad perimeter without bisecting it
+			var road_len: float = 50.0 # From 14.0 to 64.0
+			var road_z: float = 39.0
 
-		# 4. Center intersection marking / patch
-		add_box.call(AsphaltMat, Vector3(ns_asphalt_w + 1.0, 0.15, ew_asphalt_w + 1.0), Vector3(0.0, 0.09, 0.0))
+			# NS Road branches (North and South)
+			add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.06, road_len), Vector3(0.0, 0.08, -road_z))
+			add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.06, road_len), Vector3(0.0, 0.08, road_z))
+			add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.04, road_len), Vector3(0.0, 0.11, -road_z))
+			add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.04, road_len), Vector3(0.0, 0.11, road_z))
 
-		# 5. Thin geometry overlays: crosswalks, stop lines, yellow centerlines
-		var line_y: float = 0.153
+			# EW Road branches (West and East)
+			add_box.call(ConcreteSidewalkMat, Vector3(road_len, 0.06, ew_shoulder_w), Vector3(-road_z, 0.08, 0.0))
+			add_box.call(ConcreteSidewalkMat, Vector3(road_len, 0.06, ew_shoulder_w), Vector3(road_z, 0.08, 0.0))
+			add_box.call(AsphaltMat, Vector3(road_len, 0.04, ew_asphalt_w), Vector3(-road_z, 0.11, 0.0))
+			add_box.call(AsphaltMat, Vector3(road_len, 0.04, ew_asphalt_w), Vector3(road_z, 0.11, 0.0))
+
+			# Helipad staging base: 28m x 28m asphalt apron at top y = 0.130
+			add_box.call(AsphaltMat, Vector3(28.0, 0.04, 28.0), Vector3(0.0, 0.11, 0.0))
+			# Helipad elevated concrete landing pad: 24m x 24m at top y = 0.160
+			add_box.call(ConcreteMat, Vector3(24.0, 0.08, 24.0), Vector3(0.0, 0.12, 0.0))
+
+			# Helipad perimeter border decal (LineMat) at top y = 0.166
+			var pad_line_y: float = 0.163
+			add_box.call(LineMat, Vector3(22.0, 0.006, 0.6), Vector3(0.0, pad_line_y, -10.7))
+			add_box.call(LineMat, Vector3(22.0, 0.006, 0.6), Vector3(0.0, pad_line_y, 10.7))
+			add_box.call(LineMat, Vector3(0.6, 0.006, 22.0), Vector3(-10.7, pad_line_y, 0.0))
+			add_box.call(LineMat, Vector3(0.6, 0.006, 22.0), Vector3(10.7, pad_line_y, 0.0))
+
+			# Helipad 'H' marking: 2 vertical bars (1.2m x 8.0m) and 1 crossbar (5.2m x 1.2m)
+			add_box.call(LineMat, Vector3(1.2, 0.006, 8.0), Vector3(-3.2, pad_line_y, 0.0))
+			add_box.call(LineMat, Vector3(1.2, 0.006, 8.0), Vector3(3.2, pad_line_y, 0.0))
+			add_box.call(LineMat, Vector3(5.2, 0.006, 1.2), Vector3(0.0, pad_line_y, 0.0))
+		else:
+			# Normal Chunk Road geometry:
+			# Sidewalk slabs (top y = 0.110)
+			add_box.call(ConcreteSidewalkMat, Vector3(ns_shoulder_w, 0.06, CHUNK_SIZE), Vector3(0.0, 0.08, 0.0))
+			add_box.call(ConcreteSidewalkMat, Vector3(CHUNK_SIZE, 0.06, ew_shoulder_w), Vector3(0.0, 0.08, 0.0))
+
+			# Continuous EW Asphalt (top y = 0.130)
+			add_box.call(AsphaltMat, Vector3(CHUNK_SIZE, 0.04, ew_asphalt_w), Vector3(0.0, 0.11, 0.0))
+
+			# NS Asphalt North and South segments (top y = 0.130, joining EW without overlapping center triangles)
+			var ns_seg_len: float = 64.0 - ew_asphalt_w * 0.5
+			var ns_seg_center_z: float = (ew_asphalt_w * 0.5 + 64.0) * 0.5
+			add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.04, ns_seg_len), Vector3(0.0, 0.11, -ns_seg_center_z))
+			add_box.call(AsphaltMat, Vector3(ns_asphalt_w, 0.04, ns_seg_len), Vector3(0.0, 0.11, ns_seg_center_z))
+
+		# 5. Road Markings (Stop lines, crosswalks, dashed centerlines, arrows)
+		# Visible overlay sitting cleanly on asphalt (top y = 0.136)
+		var line_y: float = 0.133
 		var stop_mat := LineWhiteMat
 		var dash_mat := LineMat
 		var wear_mat := AsphaltWornMat
 
-		# North intersection approach: stop line and crosswalk
-		add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, -ew_asphalt_w * 0.5 - 1.2))
-		for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
-			add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, -ew_asphalt_w * 0.5 - 3.2))
+		if coord != Vector2i.ZERO:
+			# North intersection approach: stop line and crosswalk
+			add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.88, 0.006, 0.45), Vector3(0.0, line_y, -ew_asphalt_w * 0.5 - 1.2))
+			for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+				add_box.call(stop_mat, Vector3(0.55, 0.006, 2.4), Vector3(stripe_x, line_y, -ew_asphalt_w * 0.5 - 3.2))
 
-		# South intersection approach: stop line and crosswalk
-		add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.9, 0.015, 0.45), Vector3(0.0, line_y, ew_asphalt_w * 0.5 + 1.2))
-		for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
-			add_box.call(stop_mat, Vector3(0.55, 0.015, 2.4), Vector3(stripe_x, line_y, ew_asphalt_w * 0.5 + 3.2))
+			# South intersection approach: stop line and crosswalk
+			add_box.call(stop_mat, Vector3(ns_asphalt_w * 0.88, 0.006, 0.45), Vector3(0.0, line_y, ew_asphalt_w * 0.5 + 1.2))
+			for stripe_x in [-ns_asphalt_w * 0.35, -ns_asphalt_w * 0.18, ns_asphalt_w * 0.18, ns_asphalt_w * 0.35]:
+				add_box.call(stop_mat, Vector3(0.55, 0.006, 2.4), Vector3(stripe_x, line_y, ew_asphalt_w * 0.5 + 3.2))
 
-		# East intersection approach: stop line and crosswalk
-		add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(ns_asphalt_w * 0.5 + 1.2, line_y, 0.0))
-		for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
-			add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(ns_asphalt_w * 0.5 + 3.2, line_y, stripe_z))
+			# East intersection approach: stop line and crosswalk
+			add_box.call(stop_mat, Vector3(0.45, 0.006, ew_asphalt_w * 0.88), Vector3(ns_asphalt_w * 0.5 + 1.2, line_y, 0.0))
+			for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+				add_box.call(stop_mat, Vector3(2.4, 0.006, 0.55), Vector3(ns_asphalt_w * 0.5 + 3.2, line_y, stripe_z))
 
-		# West intersection approach: stop line and crosswalk
-		add_box.call(stop_mat, Vector3(0.45, 0.015, ew_asphalt_w * 0.9), Vector3(-ns_asphalt_w * 0.5 - 1.2, line_y, 0.0))
-		for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
-			add_box.call(stop_mat, Vector3(2.4, 0.015, 0.55), Vector3(-ns_asphalt_w * 0.5 - 3.2, line_y, stripe_z))
+			# West intersection approach: stop line and crosswalk
+			add_box.call(stop_mat, Vector3(0.45, 0.006, ew_asphalt_w * 0.88), Vector3(-ns_asphalt_w * 0.5 - 1.2, line_y, 0.0))
+			for stripe_z in [-ew_asphalt_w * 0.35, -ew_asphalt_w * 0.18, ew_asphalt_w * 0.18, ew_asphalt_w * 0.35]:
+				add_box.call(stop_mat, Vector3(2.4, 0.006, 0.55), Vector3(-ns_asphalt_w * 0.5 - 3.2, line_y, stripe_z))
 
-		# Dashed yellow centerlines (NS road)
-		var z_cur: float = -ew_asphalt_w * 0.5 - 6.5
-		while z_cur > -62.0:
-			add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
-			z_cur -= 5.2
+			# Lane direction arrows (North and South approaches)
+			add_box.call(stop_mat, Vector3(0.35, 0.006, 2.2), Vector3(-ns_asphalt_w * 0.25, line_y, -ew_asphalt_w * 0.5 - 9.0))
+			add_box.call(stop_mat, Vector3(0.35, 0.006, 2.2), Vector3(ns_asphalt_w * 0.25, line_y, ew_asphalt_w * 0.5 + 9.0))
 
-		z_cur = ew_asphalt_w * 0.5 + 6.5
-		while z_cur < 62.0:
-			add_box.call(dash_mat, Vector3(0.24, 0.015, 2.6), Vector3(0.0, line_y, z_cur))
-			z_cur += 5.2
+			# Asphalt utility patches
+			add_box.call(wear_mat, Vector3(2.6, 0.004, 3.8), Vector3(-ns_asphalt_w * 0.25, line_y - 0.001, -26.0))
+			add_box.call(wear_mat, Vector3(3.6, 0.004, 2.2), Vector3(24.0, line_y - 0.001, ew_asphalt_w * 0.25))
 
-		# Dashed yellow centerlines (EW road)
-		var x_cur: float = ns_asphalt_w * 0.5 + 6.5
-		while x_cur < 62.0:
-			add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
-			x_cur += 5.2
-
-		x_cur = -ns_asphalt_w * 0.5 - 6.5
-		while x_cur > -62.0:
-			add_box.call(dash_mat, Vector3(2.6, 0.015, 0.24), Vector3(x_cur, line_y, 0.0))
-			x_cur -= 5.2
-
-		# Asphalt wear / utility patches
-		add_box.call(wear_mat, Vector3(2.6, 0.01, 3.8), Vector3(-ns_asphalt_w * 0.25, line_y - 0.002, -26.0))
-		add_box.call(wear_mat, Vector3(3.6, 0.01, 2.2), Vector3(24.0, line_y - 0.002, ew_asphalt_w * 0.25))
-
-		# Lane direction arrows (North and South intersection approaches)
-		add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(-ns_asphalt_w * 0.25, line_y, -ew_asphalt_w * 0.5 - 10.0))
-		add_box.call(stop_mat, Vector3(0.35, 0.015, 2.2), Vector3(ns_asphalt_w * 0.25, line_y, ew_asphalt_w * 0.5 + 10.0))
-
-		# Yellow corner curb markings (hazard curb paint near intersection)
-		var curb_corners: Array[Vector3] = [
-			Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
-			Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, -ew_asphalt_w * 0.5 - 3.0),
-			Vector3(-ns_asphalt_w * 0.5 - 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0),
-			Vector3(ns_asphalt_w * 0.5 + 0.35, line_y - 0.005, ew_asphalt_w * 0.5 + 3.0)
-		]
-		for c_pos in curb_corners:
-			add_box.call(dash_mat, Vector3(0.35, 0.015, 4.0), c_pos)
-
-		# Helipad flat surfaces if chunk (0,0)
+		# Boundary-Tiling Dashed Yellow Centerlines (4.0m cycle: 2.4m dash + 1.6m gap)
+		# Exactly divides 128m chunks (32 cycles). Dash at 62.0 leaves 0.8m to boundary 64.0;
+		# adjacent chunk starting at -62.0 leaves 0.8m to -64.0. Gap across boundary is exactly 1.6m!
+		var ns_dash_start: float = 18.0 if ns_is_avenue else 14.0
 		if coord == Vector2i.ZERO:
-			add_box.call(AsphaltMat, Vector3(24.0, 0.14, 24.0), Vector3(0.0, 0.07, 0.0))
-			add_box.call(LineMat, Vector3(23.6, 0.15, 23.6), Vector3(0.0, 0.075, 0.0))
-			add_box.call(ConcreteMat, Vector3(22.0, 0.16, 22.0), Vector3(0.0, 0.08, 0.0))
-			add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(-2.5, 0.17, 0.0))
-			add_box.call(LineMat, Vector3(0.9, 0.02, 7.5), Vector3(2.5, 0.17, 0.0))
-			add_box.call(LineMat, Vector3(4.5, 0.02, 0.9), Vector3(0.0, 0.17, 0.0))
+			ns_dash_start = 18.0
+		var ew_dash_start: float = 18.0 if ew_is_avenue else 14.0
+		if coord == Vector2i.ZERO:
+			ew_dash_start = 18.0
+
+		# NS road centerlines
+		var z_cur: float = ns_dash_start
+		while z_cur <= 62.0:
+			add_box.call(dash_mat, Vector3(0.24, 0.006, 2.4), Vector3(0.0, line_y, -z_cur))
+			add_box.call(dash_mat, Vector3(0.24, 0.006, 2.4), Vector3(0.0, line_y, z_cur))
+			z_cur += 4.0
+
+		# EW road centerlines
+		var x_cur: float = ew_dash_start
+		while x_cur <= 62.0:
+			add_box.call(dash_mat, Vector3(2.4, 0.006, 0.24), Vector3(-x_cur, line_y, 0.0))
+			add_box.call(dash_mat, Vector3(2.4, 0.006, 0.24), Vector3(x_cur, line_y, 0.0))
+			x_cur += 4.0
 
 		# Commit merged static mesh with 1 surface per material
 		merged_mesh = ArrayMesh.new()
@@ -741,7 +770,7 @@ func _build_helipad_staging(parent: Node3D) -> void:
 
 	_init_shared_prop_resources()
 
-	# 1. Perimeter Boundary Lights (4 corners) with MultiMesh
+	# 1. Perimeter Boundary Lights (4 corners of 24m landing pad) with MultiMesh
 	var mm_poles := MultiMeshInstance3D.new()
 	mm_poles.name = "PerimeterPolesMultiMesh"
 	var p_mm := MultiMesh.new()
@@ -757,10 +786,10 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	l_mm.mesh = _helipad_lens_mesh
 
 	var light_corners: Array[Vector3] = [
-		Vector3(-11.0, 0.0, -11.0),
-		Vector3(11.0, 0.0, -11.0),
-		Vector3(-11.0, 0.0, 11.0),
-		Vector3(11.0, 0.0, 11.0)
+		Vector3(-12.2, 0.16, -12.2),
+		Vector3(12.2, 0.16, -12.2),
+		Vector3(-12.2, 0.16, 12.2),
+		Vector3(12.2, 0.16, 12.2)
 	]
 
 	for idx in range(4):
@@ -777,11 +806,11 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	mm_lenses.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	staging.add_child(mm_lenses)
 
-	# 2. Support Staging Props (Off to the sides, clear takeoff path)
+	# 2. Support Maintenance Staging (Located safely in NW parking lot, clear of flight path)
 	var truck := Node3D.new()
 	truck.name = "SupportTruck"
-	truck.position = Vector3(14.5, 0.0, 8.5)
-	truck.rotation.y = deg_to_rad(-25.0)
+	truck.position = Vector3(-24.0, 0.12, -22.0)
+	truck.rotation.y = deg_to_rad(35.0)
 
 	var chassis := MeshInstance3D.new()
 	chassis.mesh = _truck_chassis_mesh
@@ -796,7 +825,7 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	truck.add_child(cab)
 	staging.add_child(truck)
 
-	# 3. Supply Crates Stack with MultiMesh
+	# 3. Supply Crates Stack with MultiMesh (In maintenance staging area)
 	var mm_crates := MultiMeshInstance3D.new()
 	mm_crates.name = "SupplyCratesMultiMesh"
 	var c_mm := MultiMesh.new()
@@ -805,10 +834,10 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	c_mm.mesh = _crate_mesh
 
 	var crate_positions: Array[Vector3] = [
-		Vector3(-14.2, 0.55, 8.5),
-		Vector3(-14.2, 0.55, 10.0),
-		Vector3(-12.8, 0.55, 9.2),
-		Vector3(-13.5, 1.65, 9.2)
+		Vector3(-21.5, 0.65, -24.0),
+		Vector3(-21.5, 0.65, -22.5),
+		Vector3(-20.0, 0.65, -23.2),
+		Vector3(-20.8, 1.75, -23.2)
 	]
 	for c_idx in range(4):
 		c_mm.set_instance_transform(c_idx, Transform3D(Basis(), crate_positions[c_idx]))
@@ -816,15 +845,15 @@ func _build_helipad_staging(parent: Node3D) -> void:
 	mm_crates.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	staging.add_child(mm_crates)
 
-	# 4. Security Fences with MultiMesh
+	# 4. Security Fences with MultiMesh (Flanking maintenance staging)
 	var mm_fences := MultiMeshInstance3D.new()
 	mm_fences.name = "SecurityFencesMultiMesh"
 	var f_mm := MultiMesh.new()
 	f_mm.transform_format = MultiMesh.TRANSFORM_3D
 	f_mm.instance_count = 2
 	f_mm.mesh = _fence_mesh
-	f_mm.set_instance_transform(0, Transform3D(Basis(), Vector3(13.5, 0.45, 13.0)))
-	f_mm.set_instance_transform(1, Transform3D(Basis(), Vector3(-13.5, 0.45, 13.0)))
+	f_mm.set_instance_transform(0, Transform3D(Basis(), Vector3(-28.0, 0.55, -20.0)))
+	f_mm.set_instance_transform(1, Transform3D(Basis(), Vector3(-28.0, 0.55, -26.0)))
 	mm_fences.multimesh = f_mm
 	mm_fences.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	staging.add_child(mm_fences)
@@ -1140,10 +1169,10 @@ func _place_lot_building(
 	var rotated_offset_x: float = center_offset.x * cos(rot_y) + center_offset.z * sin(rot_y)
 	var rotated_offset_z: float = -center_offset.x * sin(rot_y) + center_offset.z * cos(rot_y)
 
-	var min_u: float = x_inner + 1.2
-	var max_u: float = 62.0 - 1.2
-	var min_v: float = z_inner + 1.2
-	var max_v: float = 62.0 - 1.2
+	var min_u: float = x_inner + 2.5
+	var max_u: float = 62.0 - 1.5
+	var min_v: float = z_inner + 2.5
+	var max_v: float = 62.0 - 1.5
 
 	# Check if building fits within the quadrant parcel boundaries
 	if eff_w > (max_u - min_u) or eff_d > (max_v - min_v):
@@ -1159,8 +1188,9 @@ func _place_lot_building(
 
 	var u_x: float = x_inner + u_norm * block_w
 	var v_z: float = z_inner + v_norm * block_d
-	u_x += rng.randf_range(-0.4, 0.4)
-	v_z += rng.randf_range(-0.4, 0.4)
+	if coord.length() > 1.5:
+		u_x += rng.randf_range(-0.4, 0.4)
+		v_z += rng.randf_range(-0.4, 0.4)
 
 	u_x = clampf(u_x, min_u + half_w, max_u - half_w)
 	v_z = clampf(v_z, min_v + half_d, max_v - half_d)
@@ -1189,7 +1219,7 @@ func _place_lot_building(
 
 	var x_sign: float = -1.0 if (q == 0 or q == 2) else 1.0
 	var z_sign: float = -1.0 if (q == 0 or q == 1) else 1.0
-	var final_pos := Vector3(x_sign * u_x - x_sign * rotated_offset_x, 0.0, z_sign * v_z - z_sign * rotated_offset_z)
+	var final_pos := Vector3(x_sign * u_x - rotated_offset_x, 0.0, z_sign * v_z - rotated_offset_z)
 
 	var scene: PackedScene = entry["scene"] as PackedScene
 	var b_inst := scene.instantiate() as Node3D
@@ -1305,7 +1335,7 @@ func _build_quadrant(q: int, rng: RandomNumberGenerator, cat: Dictionary, x_inne
 		var occupied_rects: Array[Rect2] = []
 		match district_type:
 			DistrictType.HELIPAD:
-				# Chunk (0,0): Keep central 24m x 24m clear. Place low-profile structures in outer quadrant.
+				# Chunk (0,0): Keep central 60m circle clear. Place low-profile structures in outer quadrant.
 				var helipad_lot_entry: Dictionary
 				var h_fallbacks: Array[String] = ["parking_lot", "small_c"]
 				if q == 0:
@@ -1313,10 +1343,10 @@ func _build_quadrant(q: int, rng: RandomNumberGenerator, cat: Dictionary, x_inne
 				elif q == 1:
 					helipad_lot_entry = cat["small_c"]
 				elif q == 2:
-					helipad_lot_entry = cat["parking_lot"]
+					helipad_lot_entry = cat["container_stack"]
 				else:
 					helipad_lot_entry = cat["small_b"]
-				_place_lot_building(helipad_lot_entry, 0.52, 0.52, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, h_fallbacks)
+				_place_lot_building(helipad_lot_entry, 0.65, 0.65, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, h_fallbacks)
 
 			DistrictType.HIGH_RISE:
 				var pattern_hr: int = rng.randi_range(0, 2)
@@ -1324,26 +1354,24 @@ func _build_quadrant(q: int, rng: RandomNumberGenerator, cat: Dictionary, x_inne
 					# North Showcase Landmark: Commercial Plaza & Skyscraper Cluster
 					if q == 3:
 						# Southeast quadrant facing Helipad Avenue: Grand Civic Plaza centerpiece
-						_place_lot_building(cat["civic_plaza"], 0.44, 0.44, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
-						_place_lot_building(cat["small_c"], 0.84, 0.84, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, [])
+						_place_lot_building(cat["civic_plaza"], 0.40, 0.40, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["parking_lot"])
+						_place_lot_building(cat["small_c"], 0.82, 0.82, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, [])
 					elif q == 2:
 						# Southwest quadrant facing Helipad Avenue: Mid-rise retail, plaza parking & shops
-						_place_lot_building(cat["medium_a"], 0.28, 0.26, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_c"])
-						_place_lot_building(cat["parking_lot"], 0.74, 0.26, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
-						_place_lot_building(cat["medium_c"], 0.28, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
-						_place_lot_building(cat["small_b"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+						_place_lot_building(cat["medium_c"], 0.32, 0.30, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+						_place_lot_building(cat["parking_lot"], 0.74, 0.30, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+						_place_lot_building(cat["small_b"], 0.74, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
 					elif q == 0:
-						# Northwest quadrant: Northern skyline skyscraper tower & mid-rise flank
-						_place_lot_building(cat["skyscraper_a"], 0.32, 0.30, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_b"])
-						_place_lot_building(cat["medium_b"], 0.74, 0.28, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
-						_place_lot_building(cat["parking_lot"], 0.30, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
-						_place_lot_building(cat["small_c"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+						# Northwest quadrant: Iconic Sky-Tower Anchor & office flank
+						_place_lot_building(cat["skyscraper_a"], 0.38, 0.38, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_b"])
+						_place_lot_building(cat["medium_b"], 0.76, 0.32, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
+						_place_lot_building(cat["parking_lot"], 0.32, 0.76, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_c"])
+						_place_lot_building(cat["small_c"], 0.76, 0.76, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 					else:
-						# Northeast quadrant: Northern skyline skyscraper towers & corporate plaza
-						_place_lot_building(cat["skyscraper_b"], 0.30, 0.30, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["skyscraper_c"])
-						_place_lot_building(cat["skyscraper_c"], 0.74, 0.30, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_a"])
-						_place_lot_building(cat["medium_c"], 0.30, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
-						_place_lot_building(cat["parking_lot"], 0.74, 0.74, q, 3, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
+						# Northeast quadrant: Mid-rise commercial offices
+						_place_lot_building(cat["medium_b"], 0.34, 0.32, q, 0, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["medium_a"])
+						_place_lot_building(cat["medium_a"], 0.74, 0.32, q, 1, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_a"])
+						_place_lot_building(cat["parking_lot"], 0.74, 0.74, q, 2, x_inner, z_inner, block_w, block_d, occupied_rects, rng, -1, ["small_b"])
 				elif pattern_hr == 0:
 					# Archetype A: Skyscraper Anchor + Mid-Rise Flanks + Retail Infill + Parking
 					var tower_entry: Dictionary = cat["skyscraper_a"] if rng.randf() < 0.5 else cat["skyscraper_b"]
@@ -2106,15 +2134,23 @@ func _populate_gameplay_candidates() -> void:
 	var origin := global_position
 
 	# 1. Ground spawn points: center intersection, 4 road sockets, alley entries
-	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 0.0))
+	if coord != Vector2i.ZERO:
+		ground_spawn_points.append(origin + Vector3(0.0, 0.3, 0.0))
+		ground_spawn_points.append(origin + Vector3(-20.0, 0.3, -20.0))
+		ground_spawn_points.append(origin + Vector3(20.0, 0.3, -20.0))
+		ground_spawn_points.append(origin + Vector3(-20.0, 0.3, 20.0))
+		ground_spawn_points.append(origin + Vector3(20.0, 0.3, 20.0))
+	else:
+		# For helipad chunk (0,0), keep ground spawns at outer road sockets away from landing pad
+		ground_spawn_points.append(origin + Vector3(0.0, 0.3, -42.0))
+		ground_spawn_points.append(origin + Vector3(0.0, 0.3, 42.0))
+		ground_spawn_points.append(origin + Vector3(-42.0, 0.3, 0.0))
+		ground_spawn_points.append(origin + Vector3(42.0, 0.3, 0.0))
+
 	ground_spawn_points.append(origin + Vector3(0.0, 0.3, -56.0))
 	ground_spawn_points.append(origin + Vector3(0.0, 0.3, 56.0))
 	ground_spawn_points.append(origin + Vector3(-56.0, 0.3, 0.0))
 	ground_spawn_points.append(origin + Vector3(56.0, 0.3, 0.0))
-	ground_spawn_points.append(origin + Vector3(-20.0, 0.3, -20.0))
-	ground_spawn_points.append(origin + Vector3(20.0, 0.3, -20.0))
-	ground_spawn_points.append(origin + Vector3(-20.0, 0.3, 20.0))
-	ground_spawn_points.append(origin + Vector3(20.0, 0.3, 20.0))
 
 	# 2. Air entry positions: elevated approaches
 	air_entry_positions.append(origin + Vector3(-58.0, 38.0, -58.0))

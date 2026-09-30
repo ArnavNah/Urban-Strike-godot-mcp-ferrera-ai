@@ -33,8 +33,8 @@ extends Node3D
 @export var early_air_first_arrival_min: float = 3.0
 @export var early_air_first_arrival_max: float = 5.0
 @export var early_air_active_cap: int = 2
-@export var early_air_replenish_interval_min: float = 6.0
-@export var early_air_replenish_interval_max: float = 10.0
+@export var early_air_replenish_interval_min: float = 1.5
+@export var early_air_replenish_interval_max: float = 3.0
 
 var _early_air_timer: float = 0.0
 var _early_air_active: bool = false
@@ -170,6 +170,8 @@ const SEPARATION_RADII: Dictionary = {
 	"sam": 10.0,
 	"mortar": 10.0,
 	"ground_default": 10.0,
+	"air_scout": 10.0,
+	"scout": 10.0,
 	"air_default": 16.0
 }
 
@@ -788,6 +790,35 @@ func _process_early_air_spawning(delta: float) -> void:
 			"retries": 0
 		})
 
+		# Spawn in pairs: If both air slots are open (initial early air wave), queue 2-drone flight immediately
+		if eff_air == 0 and early_air_active_cap >= 2:
+			var right_vec := heading.cross(Vector3.UP).normalized()
+			if right_vec.length_squared() < 0.01:
+				right_vec = Vector3.RIGHT
+			var wing_pos := spawn_pos + right_vec * 16.0
+			var wing_res_id := reserve_spawn_position(
+				wing_pos,
+				SEPARATION_RADII.get("air_default", 16.0),
+				"air",
+				s_name,
+				sec,
+				5.0,
+				"",
+				s_key + "_wing"
+			)
+			_pending_air_spawns.append({
+				"timer": randf_range(0.4, 0.65),
+				"scene": _scene_air_scout,
+				"position": wing_pos,
+				"heading": heading,
+				"source_name": s_name,
+				"source_key": s_key + "_wing",
+				"sector": sec,
+				"res_id": wing_res_id,
+				"retries": 0
+			})
+			continuous_air_budget = maxf(0.0, continuous_air_budget - 4.0)
+
 		continuous_air_budget = maxf(0.0, continuous_air_budget - 4.0)
 		_early_air_timer = randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
 	else:
@@ -1008,6 +1039,9 @@ func start_wave(wave_num: int) -> void:
 		_early_air_active = true
 		_early_air_timer = randf_range(early_air_first_arrival_min, early_air_first_arrival_max)
 		continuous_air_budget = 10.0
+	elif wave_num >= 3:
+		# Deactivate early air warm-up mode to unlock regular continuous air spawning and air formations
+		_early_air_active = false
 
 	var config: Dictionary
 	if wave_num > 10:
