@@ -769,7 +769,7 @@ func _process_early_air_spawning(delta: float) -> void:
 
 		var res_id := reserve_spawn_position(
 			spawn_pos,
-			SEPARATION_RADII.get("air_default", 16.0),
+			SEPARATION_RADII.get("air_scout", 10.0),
 			"air",
 			s_name,
 			sec,
@@ -795,10 +795,10 @@ func _process_early_air_spawning(delta: float) -> void:
 			var right_vec := heading.cross(Vector3.UP).normalized()
 			if right_vec.length_squared() < 0.01:
 				right_vec = Vector3.RIGHT
-			var wing_pos := spawn_pos + right_vec * 16.0
+			var wing_pos := spawn_pos + right_vec * 24.0
 			var wing_res_id := reserve_spawn_position(
 				wing_pos,
-				SEPARATION_RADII.get("air_default", 16.0),
+				SEPARATION_RADII.get("air_scout", 10.0),
 				"air",
 				s_name,
 				sec,
@@ -807,7 +807,7 @@ func _process_early_air_spawning(delta: float) -> void:
 				s_key + "_wing"
 			)
 			_pending_air_spawns.append({
-				"timer": randf_range(0.4, 0.65),
+				"timer": randf_range(0.3, 0.5),
 				"scene": _scene_air_scout,
 				"position": wing_pos,
 				"heading": heading,
@@ -1842,6 +1842,10 @@ func apply_elite_modifier(enemy: Node3D) -> void:
 func _process_continuous_survival(delta: float) -> void:
 	elapsed_survival_time += delta
 
+	# Transition early air warm-up mode off once wave 3 or 90s is reached
+	if _early_air_active and (current_wave >= 3 or elapsed_survival_time >= 90.0):
+		_early_air_active = false
+
 	var warmup_dur: float = encounter_config.warmup_duration if encounter_config else 25.0
 	var surge_dur: float = encounter_config.surge_duration if encounter_config else 15.0
 	var breather_dur: float = encounter_config.recovery_breather_duration if encounter_config else 10.0
@@ -2818,11 +2822,11 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		var max_heavy: int = int(target.get("max_heavy")) if target else 99
 		var max_med: int = int(target.get("max_medium_armored")) if target else 99
 		var max_air: int = int(target.get("max_air")) if target else air_cap
-		if elapsed_survival_time < 180.0 or current_wave <= 2:
+		if elapsed_survival_time < 90.0 and current_wave <= 2:
 			max_air = mini(early_air_active_cap, max_air) if max_air > 0 else early_air_active_cap
 
 		var eff_air := get_effective_air_count()
-		var can_spawn_air: bool = (not _early_air_active and current_wave > 2) and (eff_air < max_air) and (eff_air < air_cap) and (continuous_air_budget >= 4.0)
+		var can_spawn_air: bool = (not _early_air_active and (current_wave > 2 or elapsed_survival_time >= 90.0)) and (eff_air < max_air) and (eff_air < air_cap) and (continuous_air_budget >= 4.0)
 		var can_spawn_ground: bool = (ground_living < ground_cap) and (continuous_ground_budget >= 15.0)
 
 		var spawn_air_now: bool = false
@@ -2970,8 +2974,8 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 	# Air stream with time-based unlocks and tactical caps
 	var p_y := clampf(_get_player_altitude(), 11.0, 17.0)
 	var eff_air_fb := get_effective_air_count()
-	var max_air_fb: int = mini(early_air_active_cap, air_cap) if (elapsed_survival_time < 180.0 or current_wave <= 2) else air_cap
-	if not _early_air_active and current_wave > 2 and eff_air_fb < max_air_fb and eff_air_fb < air_cap:
+	var max_air_fb: int = mini(early_air_active_cap, air_cap) if (elapsed_survival_time < 90.0 and current_wave <= 2) else air_cap
+	if not _early_air_active and (current_wave > 2 or elapsed_survival_time >= 90.0) and eff_air_fb < max_air_fb and eff_air_fb < air_cap:
 		if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and randf() > 0.45:
 			_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
 			continuous_air_budget -= 9.0
