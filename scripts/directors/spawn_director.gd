@@ -3253,7 +3253,7 @@ func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
 
 	for form in procedural_formations:
 		# 0. Air gating: Pure ground during initial warmup (first 20s) or early air phase (waves 1-2)
-		if elapsed_survival_time < 20.0 or _early_air_active or current_wave <= 2:
+		if elapsed_survival_time < 20.0 or _early_air_active or (current_wave <= 2 and elapsed_survival_time < 90.0):
 			if form.air_budget_cost > 0.0 or form.category == 2 or form.category == 3:
 				continue
 			var has_air_unit := false
