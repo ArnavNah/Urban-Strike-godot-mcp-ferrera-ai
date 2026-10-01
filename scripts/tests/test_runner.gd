@@ -9566,13 +9566,7 @@ func test_phase2_build_paths_evolutions_and_xp_pacing(logs: Array[String]) -> bo
 	player.is_alive = true
 	player.set_control_enabled(true)
 
-	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
-	var mgr_scene: PackedScene = load("res://scenes/managers/upgrade_manager.tscn")
-	var mgr: UpgradeManager = null
-	if mgr_scene:
-		mgr = mgr_scene.instantiate() as UpgradeManager
-	else:
-		mgr = mgr_script.new() as UpgradeManager
+	var mgr := UpgradeManager.new()
 	root_node.add_child(mgr)
 	mgr.reset_run()
 	mgr.guarantee_mini_heli_on_first_offer = false
@@ -9791,13 +9785,13 @@ func test_phase2_build_paths_evolutions_and_xp_pacing(logs: Array[String]) -> bo
 
 	# --- Step 5: Determinism & Clean Exhausted Pool Fallback ---
 	RunSeedManager.is_procedural_run = false
-	var seed_mgr1 := mgr_script.new() as UpgradeManager
+	var seed_mgr1 := UpgradeManager.new()
 	root_node.add_child(seed_mgr1)
 	seed_mgr1.reset_run()
 	seed_mgr1.guarantee_mini_heli_on_first_offer = false
 	var c1 := seed_mgr1.get_random_choices(3)
 
-	var seed_mgr2 := mgr_script.new() as UpgradeManager
+	var seed_mgr2 := UpgradeManager.new()
 	root_node.add_child(seed_mgr2)
 	seed_mgr2.reset_run()
 	seed_mgr2.guarantee_mini_heli_on_first_offer = false
