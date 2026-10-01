@@ -488,6 +488,7 @@ func _on_deploy_pressed() -> void:
 	var tw: Tween = create_tween()
 	tw.tween_property(curtain, "modulate:a", 1.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func() -> void:
+		RunSeedManager.initialize_new_run()
 		get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 	)
 

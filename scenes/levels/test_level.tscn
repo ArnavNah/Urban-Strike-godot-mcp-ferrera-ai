@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://0wwfumki2wjn"]
 
-[ext_resource type="PackedScene" uid="uid://c7k2xaa5r4m1f" path="res://scenes/player/player_helicopter.tscn" id="1_jbqir"]
+[ext_resource type="PackedScene" uid="uid://cerjq4bw0ykkv" path="res://scenes/player/player_helicopter.tscn" id="1_jbqir"]
 
 [sub_resource type="Environment" id="Environment_yautc"]
 background_mode = 1

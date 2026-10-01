@@ -34,6 +34,12 @@ static func reset_run_encounters() -> void:
 	completed_encounters.clear()
 	active_encounter_states.clear()
 
+static func get_encounter_state(id: String) -> Dictionary:
+	return active_encounter_states.get(id, {})
+
+static func set_encounter_state(id: String, state: Dictionary) -> void:
+	active_encounter_states[id] = state
+
 func _ready() -> void:
 	add_to_group("world_encounters")
 	if encounter_id.is_empty():
@@ -91,3 +97,12 @@ func abandon_encounter() -> void:
 	is_active = false
 	is_abandoned = true
 	emit_signal("encounter_abandoned", self)
+
+func get_encounter_display_type() -> String:
+	return "UNKNOWN"
+
+func get_encounter_status_text() -> String:
+	return ""
+
+func get_encounter_color() -> Color:
+	return Color(0.9, 0.75, 0.15, 1.0)

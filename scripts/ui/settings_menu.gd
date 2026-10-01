@@ -206,8 +206,9 @@ func _setup_focus_loop() -> void:
 		var w := _focus_widgets[i]
 		var prev := _focus_widgets[(i - 1 + _focus_widgets.size()) % _focus_widgets.size()]
 		var next := _focus_widgets[(i + 1) % _focus_widgets.size()]
-		w.focus_neighbor_top = prev.get_path()
-		w.focus_neighbor_bottom = next.get_path()
+		if is_inside_tree() and w.is_inside_tree() and prev.is_inside_tree() and next.is_inside_tree():
+			w.focus_neighbor_top = w.get_path_to(prev)
+			w.focus_neighbor_bottom = w.get_path_to(next)
 
 func _build_section_header(parent: Control, text: String) -> void:
 	var row := HBoxContainer.new()

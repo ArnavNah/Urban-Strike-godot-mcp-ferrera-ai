@@ -18,6 +18,15 @@ func _ready() -> void:
 	collision_mask = 1
 	current_health = max_health
 
+	var streamer := get_tree().get_first_node_in_group("city_streamer")
+	if streamer and streamer.has_method("is_object_destroyed"):
+		var p_node := get_parent()
+		while p_node and not (p_node is CityChunk):
+			p_node = p_node.get_parent()
+		if p_node is CityChunk and streamer.is_object_destroyed(p_node.coord, name):
+			queue_free()
+			return
+
 func take_damage(amount: float, _source: Node = null, hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if is_destroyed or amount <= 0.0:
 		return
@@ -44,6 +53,14 @@ func _destroy_prop() -> void:
 	is_destroyed = true
 	collision_layer = 0
 	collision_mask = 0
+
+	var streamer := get_tree().get_first_node_in_group("city_streamer")
+	if streamer and streamer.has_method("record_destroyed_object"):
+		var p_node := get_parent()
+		while p_node and not (p_node is CityChunk):
+			p_node = p_node.get_parent()
+		if p_node is CityChunk:
+			streamer.record_destroyed_object(p_node.coord, name)
 
 	if VfxPool.instance:
 		VfxPool.instance.spawn_sparks(global_position)

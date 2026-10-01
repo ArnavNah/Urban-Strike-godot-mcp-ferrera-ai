@@ -2,7 +2,9 @@
 
 [ext_resource type="Script" uid="uid://d02ok2duo7ni0" path="res://scripts/companions/mini_helicopter.gd" id="1_ljto1"]
 [ext_resource type="PackedScene" uid="uid://twppmoss73ee" path="res://assets/vehicles/player/escort_drone.glb" id="2_7qaoa"]
+[ext_resource type="Material" uid="uid://btvgu2xsbatr" path="res://resources/materials/toon_escort_drone.tres" id="3_drone_body"]
 [ext_resource type="Material" uid="uid://sfdeawwq1nfr" path="res://resources/materials/toon_escort_drone_prop.tres" id="4_qa5jj"]
+[ext_resource type="Material" uid="uid://cxw3u8vj4p56q" path="res://resources/materials/toon_escort_drone_trim.tres" id="5_drone_trim"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_h2w3n"]
 size = Vector3(3.4, 1.6, 4.8)
@@ -53,6 +55,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.509348, 2.333048, 0.064362
 
 [node name="IronWingsModel" parent="VisualRoot/PlaneModel" unique_id=1195371944 instance=ExtResource("2_7qaoa")]
 
+[node name="Cube_124" parent="VisualRoot/PlaneModel/IronWingsModel" parent_id_path=PackedInt32Array(1195371944) index="0" unique_id=412520253]
+surface_material_override/0 = ExtResource("3_drone_body")
+
+[node name="Cube_125" parent="VisualRoot/PlaneModel/IronWingsModel/Cube_124" parent_id_path=PackedInt32Array(1195371944, 412520253) index="0" unique_id=987654321]
+surface_material_override/0 = ExtResource("4_qa5jj")
+
 [node name="Cube_126" parent="VisualRoot/PlaneModel/IronWingsModel/Cube_124" parent_id_path=PackedInt32Array(1195371944, 412520253) index="1" unique_id=782243840]
 surface_material_override/0 = ExtResource("4_qa5jj")
 
@@ -60,10 +68,10 @@ surface_material_override/0 = ExtResource("4_qa5jj")
 surface_material_override/0 = ExtResource("4_qa5jj")
 
 [node name="Cube_128" parent="VisualRoot/PlaneModel/IronWingsModel/Cube_124" parent_id_path=PackedInt32Array(1195371944, 412520253) index="3" unique_id=66220528]
-surface_material_override/0 = ExtResource("4_qa5jj")
+surface_material_override/0 = ExtResource("5_drone_trim")
 
 [node name="Cube_129" parent="VisualRoot/PlaneModel/IronWingsModel/Cube_124" parent_id_path=PackedInt32Array(1195371944, 412520253) index="4" unique_id=1022714947]
-surface_material_override/0 = ExtResource("4_qa5jj")
+surface_material_override/0 = ExtResource("3_drone_body")
 
 [node name="Cube_130" parent="VisualRoot/PlaneModel/IronWingsModel/Cube_124" parent_id_path=PackedInt32Array(1195371944, 412520253) index="5" unique_id=866040292]
 surface_material_override/0 = ExtResource("4_qa5jj")

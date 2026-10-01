@@ -29,6 +29,19 @@ extends Control
 @onready var boss_bar: ProgressBar = %BossBar
 @onready var boss_phase_label: Label = %BossPhaseLabel
 
+@onready var score_label: Label = get_node_or_null("%ScoreLabel") as Label
+@onready var kills_label: Label = get_node_or_null("%KillsLabel") as Label
+@onready var multiplier_badge: Label = get_node_or_null("%MultiplierBadge") as Label
+@onready var combo_bar: ProgressBar = get_node_or_null("%ComboBar") as ProgressBar
+@onready var hover_hazard_banner: PanelContainer = get_node_or_null("%HoverHazardBanner") as PanelContainer
+@onready var hover_hazard_label: Label = get_node_or_null("%HoverHazardLabel") as Label
+
+var _displayed_score: int = 0
+var _target_score: int = 0
+var _score_tween: Tween = null
+var _multiplier_tween: Tween = null
+var _is_hover_hazard: bool = false
+
 @onready var altitude_label: Label = %AltitudeLabel
 @onready var speed_label: Label = %SpeedLabel
 @onready var aim_mode_label: Label = %AimModeLabel
@@ -47,6 +60,9 @@ var upgrade_banner: PanelContainer = null
 var upgrade_banner_label: Label = null
 var _upgrade_banner_timer: float = 0.0
 
+var attack_run_banner: PanelContainer = null
+var attack_run_label: Label = null
+
 var _player: Node3D = null
 var _current_target: Node3D = null
 var _is_manual_aim: bool = false
@@ -54,6 +70,8 @@ var _is_jammed: bool = false
 var _banner_timer: float = 0.0
 var _prev_health: float = 100.0
 var _health_tween: Tween = null
+var _heat_tween: Tween = null
+var _flares_tween: Tween = null
 var _vignette_tween: Tween = null
 var _missile_ammo: int = 6
 var _max_missiles: int = 6
@@ -170,6 +188,14 @@ func _ready() -> void:
 			eb.boss_defeated.connect(_on_boss_defeated)
 		if eb.has_signal("salvage_updated"):
 			eb.salvage_updated.connect(_on_salvage_updated)
+		if eb.has_signal("kills_updated"):
+			eb.kills_updated.connect(_on_kills_updated)
+		if eb.has_signal("score_updated"):
+			eb.score_updated.connect(_on_score_updated)
+		if eb.has_signal("combo_timer_updated"):
+			eb.combo_timer_updated.connect(_on_combo_timer_updated)
+		if eb.has_signal("hover_hazard_state_changed"):
+			eb.hover_hazard_state_changed.connect(_on_hover_hazard_state_changed)
 		if eb.has_signal("jammer_status_changed"):
 			eb.jammer_status_changed.connect(_on_jammer_status_changed)
 		if eb.has_signal("border_warning_changed"):
@@ -204,6 +230,10 @@ func _ready() -> void:
 			eb.survivor_collected.connect(_on_survivor_collected)
 		if eb.has_signal("survivors_evacuated"):
 			eb.survivors_evacuated.connect(_on_survivors_evacuated)
+		if eb.has_signal("attack_run_state_changed"):
+			eb.attack_run_state_changed.connect(_on_attack_run_state_changed)
+		if eb.has_signal("player_died"):
+			eb.player_died.connect(_on_player_died)
 
 	_setup_mission_card()
 
@@ -263,6 +293,10 @@ func _process(delta: float) -> void:
 		if _mission_banner_timer <= 0.0 and mission_card:
 			mission_card.visible = false
 
+	if _is_hover_hazard and hover_hazard_banner:
+		var pulse: float = 0.65 + 0.35 * sin(Time.get_ticks_msec() * 0.012)
+		hover_hazard_banner.modulate.a = pulse
+
 	if not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player") as Node3D
 		return
@@ -320,10 +354,21 @@ func _process(delta: float) -> void:
 		var pulse: float = (sin(Time.get_ticks_msec() * 0.008) + 1.0) * 0.5
 		border_warning_banner.modulate = Color(1.0, 1.0, 1.0, lerpf(0.55, 1.0, pulse))
 
-	# Critical health pulse
+	# Critical health pulse (both label and continuous perimeter vignette)
 	if is_instance_valid(health_label) and _hull_full_timer <= 0.0 and _max_health > 0.0 and _current_health <= _max_health * 0.30:
 		var hp_pulse := lerpf(0.60, 1.0, (sin(Time.get_ticks_msec() * 0.010) + 1.0) * 0.5)
 		health_label.modulate = Color(1.0, 0.20, 0.20, hp_pulse)
+		if damage_vignette and _damage_flash_enabled and _damage_flash_intensity > 0.0 and _current_health > 0.0:
+			var base_crit_a := lerpf(0.10, 0.28, hp_pulse) * _damage_flash_intensity
+			if _reduced_flashing:
+				base_crit_a = minf(base_crit_a, 0.12)
+			if damage_vignette.color.a < base_crit_a or (_vignette_tween and not _vignette_tween.is_valid()):
+				damage_vignette.color = Color(0.88, 0.12, 0.12, base_crit_a)
+
+	# Overheat warning strobe
+	if overheat_warning and overheat_warning.visible:
+		var ov_pulse: float = (sin(Time.get_ticks_msec() * 0.016) + 1.0) * 0.5
+		overheat_warning.modulate = Color(1.0, 0.25, 0.25, lerpf(0.6, 1.0, ov_pulse))
 
 	queue_redraw()
 
@@ -659,6 +704,94 @@ func _draw() -> void:
 				draw_string(font, txt_pos, txt, HORIZONTAL_ALIGNMENT_CENTER, 56, 10, c_col)
 			drawn_crates += 1
 
+	# Priority 5: World Encounters & Tactical Rewards (Supply Stops, Guarded Caches, Beacons)
+	var encounters := get_tree().get_nodes_in_group("world_encounters")
+	for enc in encounters:
+		var enc3d := enc as Node3D
+		if not is_instance_valid(enc3d) or enc3d.is_queued_for_deletion():
+			continue
+		if enc3d.get("is_completed") == true:
+			continue
+
+		var dist := _player.global_position.distance_to(enc3d.global_position)
+		if dist > 180.0:
+			continue
+
+		var enc_type: String = "SUPPLY"
+		if enc3d.has_method("get_encounter_display_type"):
+			enc_type = enc3d.get_encounter_display_type()
+
+		var enc_status: String = ""
+		if enc3d.has_method("get_encounter_status_text"):
+			enc_status = enc3d.get_encounter_status_text()
+
+		var enc_color: Color = Color(0.9, 0.75, 0.15, 1.0)
+		if enc3d.has_method("get_encounter_color"):
+			enc_color = enc3d.get_encounter_color()
+
+		var enc_pos := enc3d.global_position + Vector3(0, 1.5, 0)
+		if cam.global_position.distance_squared_to(enc_pos) < 0.5:
+			continue
+		var is_behind := cam.is_position_behind(enc_pos)
+		var scr_pos := cam.unproject_position(enc_pos)
+		var is_offscreen := is_behind or scr_pos.x < margin or scr_pos.x > (vp_rect.size.x - margin) or scr_pos.y < margin or scr_pos.y > (vp_rect.size.y - margin)
+
+		var label_text := "%s %dm" % [enc_type, int(dist)]
+		if not enc_status.is_empty() and enc_status != enc_type:
+			label_text = "%s [%s] %dm" % [enc_type, enc_status, int(dist)]
+
+		if is_offscreen:
+			var dir_2d := -(scr_pos - vp_center).normalized() if is_behind else (scr_pos - vp_center).normalized()
+			if dir_2d.length_squared() < 0.01:
+				dir_2d = Vector2.UP
+			var edge_pos := _get_clamped_edge_position(dir_2d, vp_rect, margin)
+
+			var tip := edge_pos + dir_2d * 13.0
+			var side_a := edge_pos - dir_2d * 7.0 + Vector2(-dir_2d.y, dir_2d.x) * 8.0
+			var side_b := edge_pos - dir_2d * 7.0 - Vector2(-dir_2d.y, dir_2d.x) * 8.0
+			var poly := PackedVector2Array([tip, side_a, side_b])
+
+			if _high_contrast_indicators:
+				var outline := PackedVector2Array([tip, side_a, side_b, tip])
+				draw_polyline(outline, Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_colored_polygon(poly, enc_color)
+
+			var font := _get_hud_font()
+			if font:
+				var lbl_pos := edge_pos - dir_2d * 20.0
+				var box_w := clampf(float(label_text.length()) * 7.0 + 16.0, 70.0, 140.0)
+				var box_pos := lbl_pos - Vector2(box_w * 0.5, 8.0)
+				box_pos.x = clampf(box_pos.x, margin * 0.5, vp_rect.size.x - margin * 0.5 - box_w)
+				box_pos.y = clampf(box_pos.y, margin * 0.5, vp_rect.size.y - margin * 0.5 - 16.0)
+				draw_rect(Rect2(box_pos, Vector2(box_w, 16)), Color(0.02, 0.05, 0.08, 0.82), true)
+				draw_string(font, box_pos + Vector2(0, 12.0), label_text, HORIZONTAL_ALIGNMENT_CENTER, int(box_w), 11, enc_color)
+		else:
+			# On-screen bracket reticle with corner ticks
+			var rad := 16.0
+			var tick := 6.0
+			# Top-left corner
+			draw_line(scr_pos + Vector2(-rad, -rad), scr_pos + Vector2(-rad + tick, -rad), enc_color, 2.0)
+			draw_line(scr_pos + Vector2(-rad, -rad), scr_pos + Vector2(-rad, -rad + tick), enc_color, 2.0)
+			# Top-right corner
+			draw_line(scr_pos + Vector2(rad, -rad), scr_pos + Vector2(rad - tick, -rad), enc_color, 2.0)
+			draw_line(scr_pos + Vector2(rad, -rad), scr_pos + Vector2(rad, -rad + tick), enc_color, 2.0)
+			# Bottom-left corner
+			draw_line(scr_pos + Vector2(-rad, rad), scr_pos + Vector2(-rad + tick, rad), enc_color, 2.0)
+			draw_line(scr_pos + Vector2(-rad, rad), scr_pos + Vector2(-rad, rad - tick), enc_color, 2.0)
+			# Bottom-right corner
+			draw_line(scr_pos + Vector2(rad, rad), scr_pos + Vector2(rad - tick, rad), enc_color, 2.0)
+			draw_line(scr_pos + Vector2(rad, rad), scr_pos + Vector2(rad, rad - tick), enc_color, 2.0)
+
+			# Central reticle pip
+			draw_circle(scr_pos, 2.5, enc_color)
+
+			var font := _get_hud_font()
+			if font and dist > 5.0:
+				var box_w := clampf(float(label_text.length()) * 7.0 + 16.0, 70.0, 140.0)
+				var txt_pos := scr_pos + Vector2(-box_w * 0.5, rad + 14.0)
+				draw_rect(Rect2(txt_pos - Vector2(2, 10), Vector2(box_w, 15)), Color(0.02, 0.05, 0.08, 0.75))
+				draw_string(font, txt_pos, label_text, HORIZONTAL_ALIGNMENT_CENTER, int(box_w), 11, enc_color)
+
 	# Directional damage indicator arc wedges pointing toward damage sources
 	var cue_radius := 145.0
 	for cue in _damage_cues:
@@ -689,6 +822,71 @@ func _draw() -> void:
 			outline_pts.append(poly_pts[0])
 			draw_polyline(outline_pts, Color(0.02, 0.04, 0.06, alpha * 0.95), 2.5)
 		draw_colored_polygon(poly_pts, col)
+
+	# Priority 5: Target Reticle Classification & Missile Lock-On HUD Feedback
+	if target_reticle and target_reticle.visible and not _is_manual_aim and is_instance_valid(_current_target) and not _current_target.is_queued_for_deletion():
+		var r_center: Vector2 = target_reticle.position + target_reticle.size * 0.5
+		var font := _get_hud_font()
+
+		# Target category / role readout
+		var role_tag := "HOSTILE"
+		var role_col := Color(1.0, 0.35, 0.35, 0.95)
+		if _current_target.is_in_group("bosses"):
+			role_tag = "[ BOSS ]"
+			role_col = Color(1.0, 0.15, 0.15, 1.0)
+		elif _current_target.is_in_group("sam_sites"):
+			role_tag = "[ SAM SITE ]"
+			role_col = Color(1.0, 0.55, 0.15, 1.0)
+		elif _current_target.is_in_group("turrets"):
+			role_tag = "[ TURRET ]"
+			role_col = Color(1.0, 0.75, 0.20, 0.95)
+		elif _current_target.is_in_group("tanks") or _current_target.is_in_group("armored_enemies"):
+			role_tag = "[ ARMOR ]"
+			role_col = Color(1.0, 0.85, 0.30, 0.95)
+		elif _current_target.is_in_group("rocket_raiders"):
+			role_tag = "[ RAIDER ]"
+			role_col = Color(1.0, 0.40, 0.25, 0.95)
+		elif _current_target.is_in_group("attack_gunships") or _current_target.is_in_group("ace_gunships"):
+			role_tag = "[ GUNSHIP ]"
+			role_col = Color(0.95, 0.35, 0.60, 0.95)
+		elif _current_target.is_in_group("air_enemies"):
+			role_tag = "[ AIR ]"
+			role_col = Color(0.35, 0.85, 1.0, 0.95)
+
+		if font:
+			draw_string(font, r_center + Vector2(-45, -22), role_tag, HORIZONTAL_ALIGNMENT_CENTER, 90, 11, role_col)
+
+		# Missile lock state visualization
+		if _is_missile_locked:
+			var lock_col := Color(0.25, 1.0, 0.55, 1.0)
+			var pulse := 0.85 + 0.15 * sin(Time.get_ticks_msec() * 0.015)
+			lock_col.a = pulse
+
+			# Locked diamond frame
+			var d_top := r_center + Vector2(0, -25)
+			var d_r := r_center + Vector2(25, 0)
+			var d_bot := r_center + Vector2(0, 25)
+			var d_l := r_center + Vector2(-25, 0)
+			var lock_diamond := PackedVector2Array([d_top, d_r, d_bot, d_l, d_top])
+			if _high_contrast_indicators:
+				draw_polyline(lock_diamond, Color(0.02, 0.04, 0.06, 0.95), 3.0)
+			draw_polyline(lock_diamond, lock_col, 2.0)
+
+			if font:
+				draw_string(font, r_center + Vector2(-50, 36), "[ LOCKED ]", HORIZONTAL_ALIGNMENT_CENTER, 100, 11, lock_col)
+		elif _last_lock_progress > 0.05:
+			var ring_col := Color(1.0, 0.78, 0.22, 0.9)
+			if _is_jammed:
+				ring_col = Color(1.0, 0.45, 0.20, 0.9)
+			var start_ang := -PI * 0.5
+			var end_ang := start_ang + TAU * clampf(_last_lock_progress, 0.0, 1.0)
+			draw_arc(r_center, 23.0, start_ang, end_ang, 28, ring_col, 2.0, false)
+
+			if font:
+				var lock_txt := "LOCK %d%%" % int(_last_lock_progress * 100.0)
+				if _is_jammed:
+					lock_txt = "JAMMED %d%%" % int(_last_lock_progress * 100.0)
+				draw_string(font, r_center + Vector2(-45, 34), lock_txt, HORIZONTAL_ALIGNMENT_CENTER, 90, 10, ring_col)
 
 func _update_target_reticle(delta: float = 0.0) -> void:
 	if not target_reticle:
@@ -722,8 +920,16 @@ func _update_target_reticle(delta: float = 0.0) -> void:
 	var screen_pos: Vector2 = cam.unproject_position(target_3d_pos)
 	var target_screen_pos: Vector2 = screen_pos - (target_reticle.size * 0.5)
 
-	# Update reticle color: Amber for manual aim, Crimson for auto-track
-	var reticle_color: Color = Color(1.0, 0.75, 0.18, 0.95) if is_manual else Color(1.0, 0.2, 0.2, 0.9)
+	# Update reticle color: Amber for manual aim, Emerald for locked, Gold for locking, Crimson for auto-track
+	var reticle_color: Color = Color(1.0, 0.75, 0.18, 0.95)
+	if not is_manual:
+		if _is_missile_locked:
+			reticle_color = Color(0.25, 0.98, 0.55, 1.0)
+		elif _last_lock_progress > 0.05:
+			reticle_color = Color(1.0, 0.82, 0.22, 1.0)
+		else:
+			reticle_color = Color(1.0, 0.2, 0.2, 0.9)
+
 	for child in target_reticle.get_children():
 		if child is ColorRect:
 			(child as ColorRect).color = reticle_color
@@ -793,7 +999,10 @@ func _on_ammo_full_notified() -> void:
 func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> void:
 	if heat_bar:
 		heat_bar.max_value = maximum
-		heat_bar.value = current
+		if _heat_tween:
+			_heat_tween.kill()
+		_heat_tween = create_tween()
+		_heat_tween.tween_property(heat_bar, "value", current, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		heat_bar.visible = current > 0.05
 		if is_overheated:
 			heat_bar.modulate = Color(1.0, 0.25, 0.25)
@@ -867,7 +1076,10 @@ func _on_jammer_status_changed(is_jammed: bool, _count: int) -> void:
 func _on_flares_updated(charges_left: int, max_charges: int, is_ready: bool) -> void:
 	if flares_bar:
 		flares_bar.max_value = max_charges
-		flares_bar.value = charges_left
+		if _flares_tween:
+			_flares_tween.kill()
+		_flares_tween = create_tween()
+		_flares_tween.tween_property(flares_bar, "value", float(charges_left), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		if not is_ready and charges_left < max_charges:
 			flares_bar.modulate = Color(1.0, 0.65, 0.15)
 		elif charges_left <= 0:
@@ -940,6 +1152,10 @@ func _on_boss_health_changed(current: float, maximum: float, phase: int) -> void
 func _on_boss_defeated() -> void:
 	if boss_container:
 		boss_container.visible = false
+	if attack_run_banner:
+		attack_run_banner.visible = false
+	if combo_bar:
+		combo_bar.modulate = Color.WHITE
 
 func _on_salvage_updated(run_salvage: int) -> void:
 	if salvage_label:
@@ -1171,17 +1387,24 @@ func _on_upgrade_applied(upgrade_id: String) -> void:
 	if not upgrade_banner:
 		_setup_upgrade_banner()
 	var title := upgrade_id.capitalize()
+	var is_evo: bool = false
 	var mgr := get_tree().get_first_node_in_group("upgrade_manager")
 	if mgr and "upgrade_database" in mgr:
 		var db: Dictionary = mgr.get("upgrade_database")
 		if db.has(upgrade_id):
 			title = str(db[upgrade_id].get("name", title))
+			is_evo = bool(db[upgrade_id].get("is_evolution", false))
 	if upgrade_banner_label:
-		upgrade_banner_label.text = "▲ UPGRADE INSTALLED: %s" % title.to_upper()
+		if is_evo:
+			upgrade_banner_label.text = "★ WEAPON EVOLUTION: %s" % title.to_upper()
+			upgrade_banner_label.modulate = Color(1.0, 0.84, 0.0)
+		else:
+			upgrade_banner_label.text = "▲ UPGRADE INSTALLED: %s" % title.to_upper()
+			upgrade_banner_label.modulate = Color(0.3, 1.0, 0.85)
 	if upgrade_banner:
 		upgrade_banner.visible = true
 		upgrade_banner.modulate.a = 1.0
-	_upgrade_banner_timer = 2.2
+	_upgrade_banner_timer = 2.8 if is_evo else 2.2
 
 func _on_command_unit_destroyed(_pos: Vector3) -> void:
 	if not upgrade_banner:
@@ -1205,6 +1428,72 @@ func _on_radar_status_changed(is_active: bool) -> void:
 			upgrade_banner.visible = true
 			upgrade_banner.modulate.a = 1.0
 		_upgrade_banner_timer = 2.4
+
+func _setup_attack_run_banner() -> void:
+	if attack_run_banner:
+		return
+	attack_run_banner = PanelContainer.new()
+	attack_run_banner.name = "AttackRunBanner"
+	attack_run_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	attack_run_banner.anchor_left = 0.5
+	attack_run_banner.anchor_right = 0.5
+	attack_run_banner.offset_left = -210.0
+	attack_run_banner.offset_right = 210.0
+	attack_run_banner.offset_top = 96.0
+	attack_run_banner.offset_bottom = 124.0
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.08, 0.01, 0.88)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(1.0, 0.80, 0.20, 0.90)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_right = 4
+	style.corner_radius_bottom_left = 4
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 3.0
+	style.content_margin_bottom = 3.0
+	attack_run_banner.add_theme_stylebox_override("panel", style)
+
+	attack_run_label = Label.new()
+	attack_run_label.name = "AttackRunLabel"
+	attack_run_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	attack_run_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var font := _get_hud_font()
+	if font:
+		attack_run_label.add_theme_font_override("font", font)
+	attack_run_label.add_theme_font_size_override("font_size", 13)
+	attack_run_label.modulate = Color(1.0, 0.88, 0.25)
+	attack_run_banner.add_child(attack_run_label)
+
+	add_child(attack_run_banner)
+	attack_run_banner.visible = false
+
+func _on_attack_run_state_changed(is_active: bool, duration: float, _max_duration: float) -> void:
+	if not attack_run_banner:
+		_setup_attack_run_banner()
+	if is_active:
+		if attack_run_banner:
+			attack_run_banner.visible = true
+		if attack_run_label:
+			attack_run_label.text = "⚡ ATTACK RUN // -50%% HEAT + RAPID LOCK [%.1fs] ⚡" % duration
+		if combo_bar:
+			combo_bar.modulate = Color(1.0, 0.85, 0.25, 1.0)
+	else:
+		if attack_run_banner:
+			attack_run_banner.visible = false
+		if combo_bar:
+			combo_bar.modulate = Color.WHITE
+
+func _on_player_died() -> void:
+	if attack_run_banner:
+		attack_run_banner.visible = false
+	if combo_bar:
+		combo_bar.modulate = Color.WHITE
 
 func _get_hud_font() -> Font:
 	if not _hud_font:
@@ -1364,3 +1653,63 @@ func _setup_evade_and_passenger_ui() -> void:
 			passenger_label.text = "PASSENGERS  0 / 6"
 			passenger_label.modulate = Color(0.65, 0.78, 0.88)
 			top_left.add_child(passenger_label)
+
+func _on_kills_updated(total_kills: int) -> void:
+	if kills_label:
+		kills_label.text = "KILLS: %d" % total_kills
+
+func _on_score_updated(total_score: int, _earned: int, mult: float, _streak: int) -> void:
+	_target_score = total_score
+	if score_label:
+		if _score_tween and _score_tween.is_valid():
+			_score_tween.kill()
+		_score_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_score_tween.tween_method(func(val: int):
+			_displayed_score = val
+			if is_instance_valid(score_label):
+				score_label.text = "SCORE: %s" % _format_number(val)
+		, _displayed_score, _target_score, 0.4)
+
+	if multiplier_badge:
+		multiplier_badge.text = "%.1fx" % mult if mult > 1.05 else "1.0x"
+		var color := Color(0.7, 0.88, 1.0, 1.0)
+		if mult >= 5.0:
+			color = Color(1.0, 0.95, 0.4, 1.0) # MEGABONK gold
+		elif mult >= 4.0:
+			color = Color(0.85, 0.35, 1.0, 1.0) # Mayhem purple
+		elif mult >= 3.0:
+			color = Color(1.0, 0.25, 0.25, 1.0) # Crimson
+		elif mult >= 2.0:
+			color = Color(1.0, 0.65, 0.1, 1.0) # Amber
+		elif mult >= 1.5:
+			color = Color(0.3, 0.95, 0.5, 1.0) # Green
+		multiplier_badge.set("theme_override_colors/font_color", color)
+
+		if mult > 1.05:
+			multiplier_badge.pivot_offset = multiplier_badge.size * 0.5
+			if _multiplier_tween and _multiplier_tween.is_valid():
+				_multiplier_tween.kill()
+			_multiplier_tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			_multiplier_tween.tween_property(multiplier_badge, "scale", Vector2(1.3, 1.3), 0.1)
+			_multiplier_tween.tween_property(multiplier_badge, "scale", Vector2(1.0, 1.0), 0.2)
+
+func _on_combo_timer_updated(remaining: float, max_time: float, _mult: float) -> void:
+	if combo_bar:
+		var ratio: float = clampf(remaining / maxf(0.01, max_time), 0.0, 1.0)
+		combo_bar.value = ratio
+
+func _on_hover_hazard_state_changed(is_hazard: bool) -> void:
+	_is_hover_hazard = is_hazard
+	if hover_hazard_banner:
+		hover_hazard_banner.visible = is_hazard
+
+func _format_number(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return out

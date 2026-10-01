@@ -6,7 +6,7 @@ extends "res://scripts/encounters/base_encounter.gd"
 ## while fending off automated defensive reinforcements.
 ## Rewards full missile replenishment, hull repair, and banked salvage gems.
 
-@export var capture_time_required: float = 10.0
+@export var capture_time_required: float = 6.0
 @export var abandonment_timeout: float = 8.0
 
 var capture_progress: float = 0.0
@@ -20,6 +20,11 @@ var _time: float = 0.0
 func _ready() -> void:
 	super._ready()
 	if is_completed:
+		return
+	var saved := BaseEncounter.get_encounter_state(encounter_id)
+	if saved.get("used", false):
+		is_completed = true
+		queue_free()
 		return
 	_build_visuals()
 
@@ -116,15 +121,27 @@ func _trigger_defense_wave() -> void:
 		spawn_dir.call("request_encounter_reinforcements", global_position, 2)
 
 func _grant_rewards(player: PlayerHelicopter) -> void:
+	BaseEncounter.set_encounter_state(encounter_id, {"used": true})
+
 	if is_instance_valid(player):
 		# 1. Full missile reload
 		if player.missile_pod and player.missile_pod.has_method("replenish_ammo"):
 			player.missile_pod.replenish_ammo(6)
 		# 2. Hull repair
 		if player.has_method("heal"):
-			player.heal(40.0)
+			player.heal(45.0)
 
-	# 3. Spawn high-value salvage gems around the beacon
+	# 3. Direct banked salvage bonus
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_method("add_salvage"):
+		gm.call("add_salvage", 50)
+	else:
+		var data := SaveSystem.load_data()
+		var cur_salvage: int = int(data.get("salvage", 0))
+		data["salvage"] = cur_salvage + 50
+		SaveSystem.save_data(data)
+
+	# 4. Spawn high-value salvage gems around the beacon
 	var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
 	var parent := get_parent() if get_parent() else get_tree().current_scene
 	if gem_scene and parent:
@@ -133,10 +150,10 @@ func _grant_rewards(player: PlayerHelicopter) -> void:
 			var spawn_pos: Vector3 = global_position + Vector3(cos(angle) * 4.0, 1.2, sin(angle) * 4.0)
 			var gem: Node3D = gem_scene.instantiate() as Node3D
 			if gem:
+				parent.add_child(gem)
 				gem.global_position = spawn_pos
 				if "xp_value" in gem:
 					gem.set("xp_value", 35)
-				parent.add_child(gem)
 
 	# Turn light green on completion
 	if _indicator_light:
@@ -144,3 +161,17 @@ func _grant_rewards(player: PlayerHelicopter) -> void:
 		_indicator_light.light_energy = 3.0
 	if _ring_mesh and _ring_mesh.material_override:
 		(_ring_mesh.material_override as StandardMaterial3D).albedo_color = Color(0.2, 1.0, 0.4, 0.8)
+
+func get_encounter_display_type() -> String:
+	return "BEACON"
+
+func get_encounter_status_text() -> String:
+	if is_completed:
+		return "SECURED"
+	elif is_active:
+		return "%d%%" % int(clampf(capture_progress / capture_time_required, 0.0, 1.0) * 100.0)
+	else:
+		return "BEACON"
+
+func get_encounter_color() -> Color:
+	return Color(0.2, 1.0, 0.4, 1.0) if is_completed else Color(0.961, 0.725, 0.106, 1.0)

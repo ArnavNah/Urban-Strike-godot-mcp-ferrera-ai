@@ -49,6 +49,47 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ScoreCard"]
+content_margin_left = 12.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04, 0.06, 0.09, 0.88)
+border_width_left = 1
+border_width_top = 2
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.6, 0.85, 0.75)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ComboFill"]
+bg_color = Color(0.95, 0.75, 0.1, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_HoverBanner"]
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+bg_color = Color(0.18, 0.05, 0.02, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1.0, 0.25, 0.1, 0.95)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hqnrr"]
 content_margin_left = 16.0
 content_margin_top = 8.0
@@ -259,6 +300,69 @@ offset_bottom = 120.0
 grow_horizontal = 2
 theme_override_constants/separation = 6
 alignment = 1
+
+[node name="ScoreCard" type="PanelContainer" parent="TopCenter" unique_id=78219412]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_ScoreCard")
+
+[node name="ScoreHBox" type="HBoxContainer" parent="TopCenter/ScoreCard" unique_id=78219413]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="ScorePod" type="VBoxContainer" parent="TopCenter/ScoreCard/ScoreHBox" unique_id=78219414]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="ScoreLabel" type="Label" parent="TopCenter/ScoreCard/ScoreHBox/ScorePod" unique_id=78219415]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+text = "SCORE: 0"
+
+[node name="ComboBar" type="ProgressBar" parent="TopCenter/ScoreCard/ScoreHBox/ScorePod" unique_id=78219416]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 4)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_gss2c")
+theme_override_styles/fill = SubResource("StyleBoxFlat_ComboFill")
+max_value = 1.0
+value = 0.0
+show_percentage = false
+
+[node name="KillsLabel" type="Label" parent="TopCenter/ScoreCard/ScoreHBox" unique_id=78219417]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.7, 0.88, 1.0, 1)
+text = "KILLS: 0"
+
+[node name="MultiplierBadge" type="Label" parent="TopCenter/ScoreCard/ScoreHBox" unique_id=78219418]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.95, 0.75, 0.1, 1)
+text = "1.0x"
+
+[node name="HoverHazardBanner" type="PanelContainer" parent="TopCenter" unique_id=78219419]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_HoverBanner")
+
+[node name="HoverHazardLabel" type="Label" parent="TopCenter/HoverHazardBanner" unique_id=78219420]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_8qguk")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(1, 0.35, 0.15, 1)
+text = "⚠ HOVER HAZARD: CONSTANT MOVEMENT REQUIRED ⚠"
+horizontal_alignment = 1
 
 [node name="BossContainer" type="VBoxContainer" parent="TopCenter" unique_id=4028705]
 unique_name_in_owner = true

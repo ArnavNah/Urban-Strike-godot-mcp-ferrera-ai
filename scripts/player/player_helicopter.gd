@@ -100,6 +100,9 @@ var _smoothed_strafe: float = 0.0
 @export var evade_cooldown: float = 3.5
 @export var passenger_capacity: int = 6
 var passenger_count: int = 0
+var _hover_hazard_time: float = 0.0
+var _is_hover_hazard_active: bool = false
+const HOVER_HAZARD_THRESHOLD: float = 2.0
 var _evade_timer: float = 0.0
 var _is_evading: bool = false
 var _evade_duration: float = 0.32
@@ -210,8 +213,8 @@ func _ready() -> void:
 	if xp_collect_area:
 		var col_shape := xp_collect_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if col_shape and col_shape.shape is CylinderShape3D:
-			(col_shape.shape as CylinderShape3D).height = 6.0
-			(col_shape.shape as CylinderShape3D).radius = 3.8
+			(col_shape.shape as CylinderShape3D).height = 10.0
+			(col_shape.shape as CylinderShape3D).radius = 5.5
 		if not xp_collect_area.area_entered.is_connected(_on_xp_collect_area_entered):
 			xp_collect_area.area_entered.connect(_on_xp_collect_area_entered)
 
@@ -243,12 +246,12 @@ func _on_xp_collect_area_entered(area: Area3D) -> void:
 	if has_node("StableTrackingPoint"):
 		var marker: Node3D = get_node("StableTrackingPoint") as Node3D
 		if marker:
-			tracking_pos = marker.global_position
+			tracking_pos = global_transform * marker.transform.origin
 	var to_pickup := area.global_position - tracking_pos
 	var flat_d := Vector2(to_pickup.x, to_pickup.z).length()
 	var vertical_d := absf(to_pickup.y)
 
-	var in_cabin_reach := (to_pickup.length() <= 3.5) or (flat_d <= 3.8 and vertical_d <= 3.5)
+	var in_cabin_reach := (to_pickup.length() <= 4.5) or (flat_d <= 5.5 and vertical_d <= 5.0)
 	if not in_cabin_reach:
 		# If not yet within cabin reach, ensure it is magnetized so it flies toward the helicopter
 		if area.has_method("magnetize_to"):
@@ -564,6 +567,21 @@ func _handle_flight_movement(delta: float) -> void:
 		velocity.x = current_h.x
 		velocity.z = current_h.z
 
+	# Hover hazard monitoring: require constant movement to avoid concentrated fire
+	var h_speed := Vector2(velocity.x, velocity.z).length()
+	if h_speed < 6.0 and not _is_evading:
+		_hover_hazard_time += delta
+		if _hover_hazard_time >= HOVER_HAZARD_THRESHOLD and not _is_hover_hazard_active:
+			_is_hover_hazard_active = true
+			if EventBus and EventBus.has_signal("hover_hazard_state_changed"):
+				EventBus.hover_hazard_state_changed.emit(true)
+	else:
+		_hover_hazard_time = maxf(0.0, _hover_hazard_time - delta * 5.0)
+		if _is_hover_hazard_active and _hover_hazard_time <= 0.5:
+			_is_hover_hazard_active = false
+			if EventBus and EventBus.has_signal("hover_hazard_state_changed"):
+				EventBus.hover_hazard_state_changed.emit(false)
+
 	if _evade_timer > 0.0:
 		_evade_timer = maxf(0.0, _evade_timer - delta)
 		if EventBus and EventBus.has_signal("evade_cooldown_updated"):
@@ -605,6 +623,12 @@ func _handle_flight_movement(delta: float) -> void:
 		global_position.y = maximum_altitude
 		if velocity.y > 0.0:
 			velocity.y = 0.0
+
+func is_hover_hazard_active() -> bool:
+	return _is_hover_hazard_active
+
+func get_horizontal_speed() -> float:
+	return Vector2(velocity.x, velocity.z).length()
 
 func _handle_visual_tilt(delta: float) -> void:
 	var throttle_input := Input.get_axis("heli_throttle_reverse", "heli_throttle_forward")
@@ -978,27 +1002,53 @@ func _handle_aim_input(_delta: float) -> void:
 		return
 
 	# 1. Dual-Stick Gamepad Aiming (360-degree turret authority)
-	var joy_rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
-	var joy_ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
-	var stick := Vector2(joy_rx, joy_ry)
-	if stick.length() > 0.22:
+	var raw_stick := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down", 0.0)
+	if raw_stick.length_squared() < 0.001:
+		raw_stick = Vector2(Input.get_joy_axis(0, JOY_AXIS_RIGHT_X), Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y))
+
+	var aim_dz: float = float(SaveSystem.get_setting("aim_deadzone", 0.12))
+	var aim_sens: float = float(SaveSystem.get_setting("aim_sensitivity", 1.0))
+	var aim_exp: float = float(SaveSystem.get_setting("aim_exponent", 1.45))
+
+	var stick_len := raw_stick.length()
+	if stick_len > aim_dz:
+		var norm_len := clampf((stick_len - aim_dz) / maxf(1.0 - aim_dz, 0.001), 0.0, 1.0)
+		var curved_len := pow(norm_len, aim_exp) * aim_sens
+		var stick := raw_stick.normalized() * curved_len
+
 		var cam := get_viewport().get_camera_3d()
 		var cam_basis: Basis = cam.global_transform.basis if cam else global_transform.basis
 		var cam_fwd := -cam_basis.z
 		cam_fwd.y = 0.0
-		cam_fwd = cam_fwd.normalized()
+		cam_fwd = cam_fwd.normalized() if cam_fwd.length_squared() > 0.001 else -global_transform.basis.z
 		var cam_right := cam_basis.x
 		cam_right.y = 0.0
-		cam_right = cam_right.normalized()
+		cam_right = cam_right.normalized() if cam_right.length_squared() > 0.001 else global_transform.basis.x
 
 		# Controller right stick: X is horizontal, negative Y is forward
 		var aim_world_dir := (cam_right * stick.x + cam_fwd * (-stick.y)).normalized()
 		var aim_target := global_position + aim_world_dir * 45.0
 		targeting_system.trigger_manual_aim(aim_target)
-	elif Input.is_action_pressed("aim_override") or Input.is_action_pressed("fire_primary"):
-		var mouse_pos := get_viewport().get_mouse_position()
-		var world_aim := _get_world_aim_point_from_screen(mouse_pos)
-		targeting_system.trigger_manual_aim(world_aim)
+	else:
+		# Check if player is commanding aim via mouse or keyboard
+		var mouse_aim_active := (
+			Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+			or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+			or Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE)
+			or Input.is_key_pressed(KEY_SHIFT)
+		)
+
+		if mouse_aim_active and (Input.is_action_pressed("aim_override") or Input.is_action_pressed("fire_primary")):
+			var mouse_pos := get_viewport().get_mouse_position()
+			var world_aim := _get_world_aim_point_from_screen(mouse_pos)
+			targeting_system.trigger_manual_aim(world_aim)
+		elif Input.is_action_pressed("aim_override"):
+			# Gamepad precision forward lock (e.g. Left Trigger / LT or Left Shoulder)
+			var fwd := -global_transform.basis.z
+			fwd.y = 0.0
+			fwd = fwd.normalized() if fwd.length_squared() > 0.001 else Vector3.FORWARD
+			var aim_target := global_position + fwd * 45.0
+			targeting_system.trigger_manual_aim(aim_target)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:

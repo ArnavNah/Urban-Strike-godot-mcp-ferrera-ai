@@ -1,15 +1,13 @@
-[gd_resource type="ShaderMaterial" format=3 uid="uid://btvgu2xsbatr"]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cxw3u8vj4p56q"]
 
 [ext_resource type="Material" uid="uid://r7ewkaygiklv" path="res://resources/materials/outline_player.tres" id="1_dnhc1"]
 [ext_resource type="Shader" uid="uid://beavdf4ginxjl" path="res://resources/shaders/toon.gdshader" id="2_2r7ug"]
-[ext_resource type="Texture2D" uid="uid://dsfjn8jqiuajw" path="res://assets/vehicles/player/escort_drone_texture_car.png" id="3_gl11r"]
 
 [resource]
 render_priority = 0
 next_pass = ExtResource("1_dnhc1")
 shader = ExtResource("2_2r7ug")
-shader_parameter/albedo_color = Color(0.22, 0.25, 0.28, 1)
-shader_parameter/albedo_texture = ExtResource("3_gl11r")
+shader_parameter/albedo_color = Color(0.16, 0.58, 0.7, 1)
 shader_parameter/use_texture = false
 shader_parameter/shadow_factor = 0.38
 shader_parameter/midtone_factor = 0.72
@@ -17,10 +15,10 @@ shader_parameter/shadow_threshold = 0.2
 shader_parameter/midtone_threshold = 0.55
 shader_parameter/step_smoothness = 0.12
 shader_parameter/specular_size = 0.05
-shader_parameter/specular_intensity = 0.06
+shader_parameter/specular_intensity = 0.08
 shader_parameter/specular_smoothness = 0.04
 shader_parameter/rim_size = 0.5
-shader_parameter/rim_intensity = 0.12
+shader_parameter/rim_intensity = 0.15
 shader_parameter/rim_smoothness = 0.08
 shader_parameter/emission_color = Color(0, 0, 0, 1)
 shader_parameter/emission_energy = 0.0

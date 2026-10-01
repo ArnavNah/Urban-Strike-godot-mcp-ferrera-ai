@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dm4k8p2w1x7ye"]
 
-[ext_resource type="PackedScene" uid="uid://c7k2w9a5r4m1f" path="res://scenes/player/player_helicopter.tscn" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://cerjq4bw0ykkv" path="res://scenes/player/player_helicopter.tscn" id="1_player"]
 [ext_resource type="PackedScene" uid="uid://b1m9k3f5w8r2q" path="res://scenes/camera/camera_rig.tscn" id="2_cam"]
 [ext_resource type="PackedScene" uid="uid://c6j2k4x8p1m9e" path="res://scenes/enemies/target_dummy.tscn" id="3_dummy"]
 [ext_resource type="PackedScene" uid="uid://be8k4m2xav1q5" path="res://scenes/enemies/infantry_cluster.tscn" id="4_inf"]

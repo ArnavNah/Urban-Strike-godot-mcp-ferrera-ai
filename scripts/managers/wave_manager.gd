@@ -45,6 +45,16 @@ var _countdown_seconds: int = 0
 var _active_enemies: Array[Node] = []
 var _spawn_markers: Array[Marker3D] = []
 var _is_boss_defeated: bool = false
+var _wave_rng: RandomNumberGenerator = null
+
+func _get_wave_rng() -> RandomNumberGenerator:
+	if _wave_rng == null:
+		if RunSeedManager.is_procedural_run:
+			_wave_rng = RunSeedManager.get_stream_rng(RunSeedManager.STREAM_ENCOUNTERS, 0x1122)
+		else:
+			_wave_rng = RandomNumberGenerator.new()
+			_wave_rng.seed = 1337
+	return _wave_rng
 
 @onready var wave_timer: Timer = $WaveTimer
 @onready var intermission_timer: Timer = $IntermissionTimer
@@ -139,6 +149,13 @@ func start_run() -> void:
 		emit_signal("deployment_countdown_changed", _countdown_seconds)
 		countdown_timer.wait_time = 1.0
 		countdown_timer.start()
+
+		# Opening grace period: zero enemy attacks and locked player controls
+		if CombatDirector.instance:
+			CombatDirector.instance.set_wave_limits(0, 0)
+		var player := get_tree().get_first_node_in_group("player") as PlayerHelicopter
+		if is_instance_valid(player) and player.has_method("set_control_enabled"):
+			player.set_control_enabled(false)
 	else:
 		current_state = State.ACTIVE_WAVE
 		_countdown_seconds = 0
@@ -150,6 +167,9 @@ func _on_countdown_timer_timeout() -> void:
 	emit_signal("deployment_countdown_changed", _countdown_seconds)
 	if _countdown_seconds <= 0:
 		countdown_timer.stop()
+		var player := get_tree().get_first_node_in_group("player") as PlayerHelicopter
+		if is_instance_valid(player) and player.has_method("set_control_enabled"):
+			player.set_control_enabled(true)
 		if current_state != State.ACTIVE_WAVE:
 			start_wave(1)
 
@@ -271,7 +291,8 @@ func _try_spawn_enemy() -> void:
 		return
 
 	# Weighted selection
-	var roll := randf() * total_weight
+	var rng := _get_wave_rng()
+	var roll := rng.randf() * total_weight
 	var cumulative := 0.0
 	var chosen: WaveEnemyEntry = affordable[0]
 	for entry in affordable:
@@ -301,7 +322,7 @@ func _try_spawn_enemy() -> void:
 			var p_pos := player.global_position if player else Vector3.ZERO
 			var r_socks: Array[Dictionary] = streamer.get_rooftop_sockets_in_radius(p_pos, 30.0, 95.0, true)
 			if not r_socks.is_empty():
-				var sock: Dictionary = r_socks.pick_random()
+				var sock: Dictionary = r_socks[rng.randi() % r_socks.size()]
 				var sid: String = sock.get("socket_id", "")
 				var spos: Vector3 = sock.get("world_position", Vector3.ZERO)
 				if streamer.has_method("occupy_rooftop_socket"):
@@ -365,11 +386,12 @@ func _select_spawn_marker() -> Marker3D:
 				if is_behind or not cam.is_position_in_frustum(marker.global_position):
 					offscreen_candidates.append(marker)
 
+	var rng := _get_wave_rng()
 	if not offscreen_candidates.is_empty():
-		return offscreen_candidates.pick_random()
+		return offscreen_candidates[rng.randi() % offscreen_candidates.size()]
 	if not distant_candidates.is_empty():
-		return distant_candidates.pick_random()
-	return _spawn_markers.pick_random()
+		return distant_candidates[rng.randi() % distant_candidates.size()]
+	return _spawn_markers[rng.randi() % _spawn_markers.size()]
 
 func register_spawned_enemy(enemy: Node) -> void:
 	if not enemy or _active_enemies.has(enemy):
@@ -417,14 +439,16 @@ func _on_wave_timer_timeout() -> void:
 
 func _on_boss_defeated() -> void:
 	_is_boss_defeated = true
-	# If on wave 10 (standard run climax), defeat of Archon triggers authoritative run victory!
-	if current_wave_index == total_waves and current_state != State.RUN_COMPLETE:
+	# If on wave 10 (or finale climax), defeat of Archon triggers authoritative run victory!
+	if (current_wave_index >= total_waves or elapsed_survival_time >= 250.0) and current_state != State.RUN_COMPLETE:
 		_finalize_run_victory()
 
 func _finalize_run_victory() -> void:
 	current_state = State.RUN_COMPLETE
-	wave_timer.stop()
-	spawn_timer.stop()
+	if is_instance_valid(wave_timer):
+		wave_timer.stop()
+	if is_instance_valid(spawn_timer):
+		spawn_timer.stop()
 	if spawn_director and spawn_director.has_method("stop_spawning"):
 		spawn_director.stop_spawning()
 
@@ -434,6 +458,9 @@ func _finalize_run_victory() -> void:
 
 	# Clean up surviving minor fodder enemies so player is safe
 	_cleanup_surviving_enemies()
+
+	if EventBus and EventBus.has_signal("mission_completed"):
+		EventBus.mission_completed.emit("finale_archon", "MISSION ACCOMPLISHED", "ARCHON COMMAND GUNSHIP DESTROYED")
 
 	# 2.2s delay for the Archon death explosion, salvage crates, and XP collection to settle
 	get_tree().create_timer(2.2, false).timeout.connect(func():

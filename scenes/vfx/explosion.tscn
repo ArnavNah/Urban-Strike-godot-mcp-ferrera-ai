@@ -19,6 +19,44 @@ albedo_color = Color(1, 0.45, 0.05, 1)
 material = SubResource("StandardMaterial3D_1")
 size = Vector3(0.25, 0.25, 0.25)
 
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Debris"]
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 8.0
+initial_velocity_max = 18.0
+gravity = Vector3(0, -18, 0)
+scale_min = 0.15
+scale_max = 0.45
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Debris"]
+shading_mode = 0
+albedo_color = Color(0.2, 0.2, 0.22, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_Debris"]
+material = SubResource("StandardMaterial3D_Debris")
+size = Vector3(0.2, 0.2, 0.2)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Smoke"]
+direction = Vector3(0, 1, 0)
+spread = 120.0
+initial_velocity_min = 1.5
+initial_velocity_max = 4.0
+gravity = Vector3(0, 2.0, 0)
+scale_min = 0.6
+scale_max = 1.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Smoke"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.25, 0.25, 0.28, 0.6)
+
+[sub_resource type="SphereMesh" id="SphereMesh_Smoke"]
+material = SubResource("StandardMaterial3D_Smoke")
+radius = 0.4
+height = 0.8
+radial_segments = 8
+rings = 4
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6d3yd"]
 shading_mode = 0
 albedo_color = Color(1, 0.62, 0.12, 1)
@@ -29,6 +67,18 @@ radius = 0.6
 height = 1.2
 radial_segments = 6
 rings = 3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_Shockwave"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.6, 0.15, 0.8)
+
+[sub_resource type="TorusMesh" id="TorusMesh_Shockwave"]
+material = SubResource("StandardMaterial3D_Shockwave")
+inner_radius = 1.2
+outer_radius = 1.5
+rings = 16
+ring_segments = 32
 
 [node name="Explosion" type="Node3D" unique_id=1737044042]
 script = ExtResource("1_expl")
@@ -42,9 +92,32 @@ explosiveness = 0.95
 process_material = SubResource("ParticleProcessMaterial_1")
 draw_pass_1 = SubResource("BoxMesh_1")
 
+[node name="DebrisParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 20
+lifetime = 0.85
+one_shot = true
+explosiveness = 0.9
+process_material = SubResource("ParticleProcessMaterial_Debris")
+draw_pass_1 = SubResource("BoxMesh_Debris")
+
+[node name="SmokeParticles" type="GPUParticles3D" parent="."]
+emitting = false
+amount = 16
+lifetime = 1.1
+one_shot = true
+explosiveness = 0.8
+process_material = SubResource("ParticleProcessMaterial_Smoke")
+draw_pass_1 = SubResource("SphereMesh_Smoke")
+
 [node name="FireballMesh" type="MeshInstance3D" parent="." unique_id=320013467]
 transform = Transform3D(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 mesh = SubResource("SphereMesh_rckmw")
+
+[node name="ShockwaveMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0.1, 0)
+visible = false
+mesh = SubResource("TorusMesh_Shockwave")
 
 [node name="FlashLight" type="OmniLight3D" parent="." unique_id=994073907]
 light_color = Color(1, 0.72, 0.22, 1)

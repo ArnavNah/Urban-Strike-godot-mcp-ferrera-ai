@@ -636,12 +636,16 @@ func _spawn_xp() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn") as PackedScene
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			if "xp_value" in gem:
-				gem.xp_value = xp_reward
-			gem.transform.origin = global_position
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var spawn_pos := global_position
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(spawn_pos, xp_reward)
+	else:
+		var xp_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn") as PackedScene
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_reward
+				gem.transform.origin = spawn_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)

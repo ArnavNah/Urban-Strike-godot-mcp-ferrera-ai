@@ -114,16 +114,51 @@ var main_rotor: Node3D = null
 @onready var guided_missile_scene: PackedScene = preload("res://scenes/weapons/guided_missile.tscn")
 @onready var unguided_rocket_scene: PackedScene = preload("res://scenes/weapons/unguided_rocket.tscn")
 
+const LIVERY_TEXTURES := [
+	preload("res://assets/vehicles/enemies/air/textures/enemi1_texture_car.png"),
+	preload("res://assets/vehicles/enemies/air/textures/enemi2_texture_car.png"),
+	preload("res://assets/vehicles/enemies/air/textures/enemi3_texture_car.png"),
+	preload("res://assets/vehicles/enemies/air/textures/enemi4_texture_car.png")
+]
+
 var _base_visual_scale: Vector3 = Vector3.ONE
+var _rocket_laser_mesh: MeshInstance3D = null
 
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group("air_enemies")
 
 	_apply_archetype_config()
+	_apply_squadron_livery()
 
 	if visuals:
 		_base_visual_scale = visuals.scale
+
+	# Auto-discover rotor node for spinning animation
+	if not main_rotor:
+		main_rotor = find_child("*rotor*", true, false) as Node3D
+		if not main_rotor:
+			main_rotor = find_child("*propeller*", true, false) as Node3D
+		if not main_rotor:
+			main_rotor = find_child("Helicopter_Propeller", true, false) as Node3D
+
+	# Pre-attack rocket salvo aiming laser telegraph
+	if not _rocket_laser_mesh:
+		_rocket_laser_mesh = MeshInstance3D.new()
+		_rocket_laser_mesh.name = "RocketTelegraphBeam"
+		var beam_cyl := CylinderMesh.new()
+		beam_cyl.top_radius = 0.035
+		beam_cyl.bottom_radius = 0.035
+		beam_cyl.height = 1.0
+		_rocket_laser_mesh.mesh = beam_cyl
+		var b_mat := StandardMaterial3D.new()
+		b_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		b_mat.albedo_color = Color(1.0, 0.35, 0.12, 0.75)
+		b_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_rocket_laser_mesh.material_override = b_mat
+		_rocket_laser_mesh.visible = false
+		_rocket_laser_mesh.top_level = true
+		add_child(_rocket_laser_mesh)
 
 	# If Jammer, notify active jamming
 	if archetype and archetype.weapon_type == AirEnemyArchetype.WeaponType.JAMMER_SUPPORT:
@@ -164,6 +199,8 @@ func _ready() -> void:
 	_transition_to(State.APPROACH)
 
 func _exit_tree() -> void:
+	if is_instance_valid(_rocket_laser_mesh):
+		_rocket_laser_mesh.queue_free()
 	_warn_incoming_missile(false)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
@@ -171,6 +208,22 @@ func _exit_tree() -> void:
 	if is_in_group("jammers"):
 		remove_from_group("jammers")
 		_notify_jammer_state_change()
+
+func _apply_squadron_livery() -> void:
+	if not visuals:
+		return
+	var mesh_instances: Array[Node] = visuals.find_children("*", "MeshInstance3D", true, false)
+	if mesh_instances.is_empty():
+		return
+	var tex: Texture2D = LIVERY_TEXTURES[randi() % LIVERY_TEXTURES.size()]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.roughness = 0.55
+	mat.metallic = 0.25
+	for node in mesh_instances:
+		var mi := node as MeshInstance3D
+		if mi and mi.mesh and mi.name != "HostileBeacon":
+			mi.set_surface_override_material(0, mat)
 
 func _apply_archetype_config() -> void:
 	if not archetype:
@@ -273,6 +326,7 @@ func _physics_process(delta: float) -> void:
 	# Move and update visual bank/pitch
 	move_and_slide()
 	_update_visual_orientation(delta)
+	_update_rocket_telegraph()
 
 func _update_altitude(delta: float) -> void:
 	if not is_instance_valid(_player):
@@ -529,6 +583,28 @@ func _update_visual_orientation(delta: float) -> void:
 		var target_pitch := speed_ratio * max_pitch
 		visuals.rotation.x = lerp_angle(visuals.rotation.x, target_pitch, clampf(4.5 * delta, 0.0, 1.0))
 
+func _update_rocket_telegraph() -> void:
+	if not is_instance_valid(_rocket_laser_mesh):
+		return
+	if _is_telegraphing and is_instance_valid(_player):
+		var reach := _get_forward_hull_reach()
+		var m_marker := find_child("Muzzle*", true, false) as Marker3D
+		var muzzle_pos := m_marker.global_position if is_instance_valid(m_marker) else (global_position + (-global_transform.basis.z * (reach * 0.85)) + Vector3(0.0, -0.2, 0.0))
+		var target_pos := _player.global_position + Vector3(0, 0.5, 0)
+		var diff := target_pos - muzzle_pos
+		var dist := diff.length()
+		if dist > 0.5:
+			_rocket_laser_mesh.visible = true
+			var mid_point := muzzle_pos + diff * 0.5
+			_rocket_laser_mesh.global_position = mid_point
+			var dir := diff.normalized()
+			var up_vec := Vector3.UP if absf(dir.y) < 0.9 else Vector3.FORWARD
+			_rocket_laser_mesh.look_at(target_pos, up_vec)
+			_rocket_laser_mesh.rotate_object_local(Vector3.RIGHT, PI * 0.5)
+			_rocket_laser_mesh.scale = Vector3(1.0, dist, 1.0)
+			return
+	_rocket_laser_mesh.visible = false
+
 func _tick_enter(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 	var target_pos := _player.global_position if is_instance_valid(_player) else Vector3.ZERO
@@ -604,7 +680,8 @@ func _tick_attack_setup(delta: float, flat_dist: float) -> void:
 func _tick_orbit(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 
-	if flat_dist > 52.0:
+	var max_orbit_dist: float = maxf(52.0, (archetype.orbit_distance if archetype else 28.0) + 12.0)
+	if flat_dist > max_orbit_dist:
 		_transition_to(State.APPROACH)
 		return
 	_orbit_angle += _orbit_direction * (archetype.cruise_speed / maxf(archetype.orbit_distance, 10.0)) * delta
@@ -691,9 +768,10 @@ func _process_machine_gun_fire(delta: float, flat_dist: float) -> void:
 		current_state == State.STRAFE or
 		current_state == State.ORBIT or
 		current_state == State.ATTACK_SETUP or
-		(current_state == State.APPROACH and flat_dist <= 32.0)
+		(current_state == State.APPROACH and flat_dist <= (archetype.preferred_distance + 4.0 if archetype else 32.0))
 	)
-	if not in_combat_state or flat_dist > 36.0:
+	var max_fire_dist: float = maxf(38.0, (archetype.preferred_distance if archetype else 30.0) + 8.0)
+	if not in_combat_state or flat_dist > max_fire_dist:
 		return
 
 	if _arming_timer > 0.0:
@@ -757,6 +835,8 @@ func _exec_rocket_salvo_attack(_delta: float) -> void:
 	if _is_telegraphing:
 		if _attack_timer <= archetype.strafe_duration - 0.5:
 			_is_telegraphing = false
+			if is_instance_valid(_rocket_laser_mesh):
+				_rocket_laser_mesh.visible = false
 			_burst_shots_remaining = archetype.burst_count
 	else:
 		if _burst_shots_remaining > 0 and _shot_cooldown <= 0.0:
@@ -816,7 +896,8 @@ func _tick_break_away(delta: float) -> void:
 func _tick_reposition(delta: float, flat_dist: float) -> void:
 	_state_timer -= delta
 
-	if flat_dist > 46.0:
+	var max_repo_dist: float = maxf(46.0, (archetype.preferred_distance if archetype else 30.0) + 12.0)
+	if flat_dist > max_repo_dist:
 		_transition_to(State.APPROACH)
 		return
 
@@ -844,9 +925,12 @@ func _tick_retreat(delta: float) -> void:
 		queue_free()
 
 func _transition_to(new_state: State) -> void:
-	if current_state == State.ATTACK or current_state == State.STRAFE:
-		if new_state != State.ATTACK and new_state != State.STRAFE:
-			_release_air_slot()
+	if new_state != State.ATTACK and new_state != State.STRAFE:
+		_release_air_slot()
+	if new_state != State.ATTACK_SETUP and new_state != State.ATTACK:
+		_is_telegraphing = false
+		if is_instance_valid(_rocket_laser_mesh):
+			_rocket_laser_mesh.visible = false
 	current_state = new_state
 	match new_state:
 		State.ENTER:
@@ -950,7 +1034,8 @@ func _fire_bullet(damage_mult: float = 1.0) -> bool:
 		return false
 
 	var reach := _get_forward_hull_reach()
-	var muzzle_pos := global_position + (-global_transform.basis.z * reach) + Vector3(0.0, -0.3, 0.0)
+	var m_marker := find_child("Muzzle*", true, false) as Marker3D
+	var muzzle_pos := m_marker.global_position if is_instance_valid(m_marker) else (global_position + (-global_transform.basis.z * reach) + Vector3(0.0, -0.3, 0.0))
 
 	var space := get_world_3d().direct_space_state
 	if space:
@@ -962,7 +1047,15 @@ func _fire_bullet(damage_mult: float = 1.0) -> bool:
 			return false
 
 	var to_player := (_player.global_position - muzzle_pos).normalized()
-	var spread := Vector3(randf_range(-0.03, 0.03), randf_range(-0.02, 0.02), randf_range(-0.03, 0.03))
+	var is_hovering: bool = _player.has_method("is_hover_hazard_active") and _player.call("is_hover_hazard_active")
+	var spread_factor: float = 0.15 if is_hovering else 1.0
+	if _player.has_method("get_horizontal_speed") and float(_player.call("get_horizontal_speed")) > 12.0:
+		spread_factor *= 1.8
+	var spread := Vector3(
+		randf_range(-0.035, 0.035) * spread_factor,
+		randf_range(-0.025, 0.025) * spread_factor,
+		randf_range(-0.035, 0.035) * spread_factor
+	)
 	var fire_dir := (to_player + spread).normalized()
 
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
@@ -998,7 +1091,8 @@ func _fire_rocket() -> void:
 		return
 
 	var reach := _get_forward_hull_reach()
-	var muzzle_pos := global_position + (-global_transform.basis.z * (reach * 0.85)) + Vector3(randf_range(-0.6, 0.6), -0.2, 0.0)
+	var m_marker := find_child("Muzzle*", true, false) as Marker3D
+	var muzzle_pos := m_marker.global_position if is_instance_valid(m_marker) else (global_position + (-global_transform.basis.z * (reach * 0.85)) + Vector3(randf_range(-0.6, 0.6), -0.2, 0.0))
 	var fire_dir := (_player.global_position - muzzle_pos).normalized()
 	var spread := Vector3(randf_range(-0.06, 0.06), randf_range(-0.04, 0.04), randf_range(-0.06, 0.06))
 	fire_dir = (fire_dir + spread).normalized()
@@ -1033,6 +1127,7 @@ func _deploy_cargo() -> void:
 		parent = get_tree().current_scene if get_tree().current_scene else get_tree().root
 	var drop_pos := Vector3(global_position.x, 0.0, global_position.z)
 
+	var sd: Node = get_tree().get_first_node_in_group("spawn_director") if is_inside_tree() else null
 	var spawn_tank := randf() > 0.4
 	if spawn_tank:
 		var tank_scene: PackedScene = load("res://scenes/enemies/tank.tscn")
@@ -1041,6 +1136,10 @@ func _deploy_cargo() -> void:
 			if tank:
 				tank.transform.origin = drop_pos
 				parent.add_child(tank)
+				if sd and sd.has_method("_register_spawned_node"):
+					sd._register_spawned_node(tank)
+				elif EnemyRegistry.instance:
+					EnemyRegistry.instance.register_enemy(tank, false)
 	else:
 		var inf_scene: PackedScene = load("res://scenes/enemies/infantry_cluster.tscn")
 		if inf_scene:
@@ -1050,6 +1149,10 @@ func _deploy_cargo() -> void:
 					var off := Vector3(float(i * 3 - 1.5), 0.0, 0.0)
 					inf.transform.origin = drop_pos + off
 					parent.add_child(inf)
+					if sd and sd.has_method("_register_spawned_node"):
+						sd._register_spawned_node(inf)
+					elif EnemyRegistry.instance:
+						EnemyRegistry.instance.register_enemy(inf, false)
 
 	if VfxPool.instance:
 		VfxPool.instance.spawn_sparks(drop_pos)
@@ -1135,7 +1238,7 @@ var _visual_meshes: Array[MeshInstance3D] = []
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D and child != _rocket_laser_mesh:
 			_visual_meshes.append(child as MeshInstance3D)
 		_collect_visual_meshes(child)
 
@@ -1152,6 +1255,9 @@ func _die() -> void:
 	DamageFlashManager.clear_target(self)
 	collision_layer = 0
 	collision_mask = 0
+	if is_instance_valid(_rocket_laser_mesh):
+		_rocket_laser_mesh.visible = false
+		_rocket_laser_mesh.queue_free()
 	_release_air_slot()
 	_warn_incoming_missile(false)
 	if EnemyRegistry.instance:

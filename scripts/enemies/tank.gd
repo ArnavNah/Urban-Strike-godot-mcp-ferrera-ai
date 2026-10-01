@@ -104,6 +104,7 @@ func has_valid_attack_slot() -> bool:
 @onready var charge_light: OmniLight3D = (barrel.get_node_or_null("ChargeLight") if barrel else null)
 @onready var anim_player: AnimationPlayer = get_node_or_null("AnimationPlayer")
 @onready var body_node: Node3D = get_node_or_null("Body")
+var _laser_beam_mesh: MeshInstance3D = null
 
 static var _burnt_mat: StandardMaterial3D = null
 
@@ -149,6 +150,23 @@ func _ready() -> void:
 		else:
 			add_child(charge_light)
 
+	if not _laser_beam_mesh:
+		_laser_beam_mesh = MeshInstance3D.new()
+		_laser_beam_mesh.name = "TankLaserBeam"
+		var beam_cyl := CylinderMesh.new()
+		beam_cyl.top_radius = 0.04
+		beam_cyl.bottom_radius = 0.04
+		beam_cyl.height = 1.0
+		_laser_beam_mesh.mesh = beam_cyl
+		var b_mat := StandardMaterial3D.new()
+		b_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		b_mat.albedo_color = Color(1.0, 0.25, 0.08, 0.70)
+		b_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_laser_beam_mesh.material_override = b_mat
+		_laser_beam_mesh.visible = false
+		_laser_beam_mesh.top_level = true
+		add_child(_laser_beam_mesh)
+
 	add_to_group("enemies")
 
 	floor_snap_length = 0.6
@@ -172,6 +190,8 @@ func _ready() -> void:
 		anim_player.play("idle")
 
 func _exit_tree() -> void:
+	if is_instance_valid(_laser_beam_mesh):
+		_laser_beam_mesh.queue_free()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)
 	_release_slot()
@@ -275,7 +295,7 @@ func _physics_process(delta: float) -> void:
 	var has_los := _cached_los
 
 	# If player moves far away horizontally or vertically, break out of aiming/reloading to pursue across the city
-	if (flat_dist > preferred_range * 1.5 or dist > 70.0) and current_state != State.REPOSITIONING and not is_scattered:
+	if (flat_dist > maxf(preferred_range * 1.5, threat_range) or dist > maxf(threat_range + 10.0, 70.0)) and current_state != State.REPOSITIONING and not is_scattered:
 		_release_slot()
 		if charge_light:
 			charge_light.visible = false
@@ -413,7 +433,7 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 		rotation.y = lerp_angle(rotation.y, target_yaw, 4.0 * delta)
 
 	# Check for transition into combat engagement (healthy standoff distance 3-38m)
-	if not is_scattered and _arming_timer <= 0.0 and flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= 60.0:
+	if not is_scattered and _arming_timer <= 0.0 and flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= maxf(threat_range, 60.0):
 		velocity.x = 0.0
 		velocity.z = 0.0
 		if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
@@ -428,7 +448,7 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 			var angle := randf() * TAU
 			_reposition_dir = Vector3(cos(angle), 0.0, sin(angle))
 			_state_timer = 1.0
-		elif not is_scattered and _arming_timer <= 0.0 and flat_dist <= threat_range and dist >= 3.0 and has_los and dist <= 60.0:
+		elif not is_scattered and _arming_timer <= 0.0 and flat_dist <= threat_range and dist >= 3.0 and has_los and dist <= maxf(threat_range, 60.0):
 			if archetype and archetype.weapon_type == GroundEnemyArchetype.WeaponType.TROOP_DEPLOY and not _troops_deployed:
 				_deploy_troops()
 			_transition_to(State.ACQUIRE)
@@ -438,7 +458,7 @@ func _tick_repositioning(delta: float, flat_dist: float, dist: float, has_los: b
 func _tick_acquire(delta: float, flat_dist: float, dist: float, has_los: bool) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if not has_los or flat_dist > threat_range or dist < 3.0 or dist > 65.0:
+	if not has_los or flat_dist > threat_range or dist < 3.0 or dist > maxf(threat_range + 5.0, 65.0):
 		_start_new_reposition()
 		return
 
@@ -468,7 +488,7 @@ func _tick_aiming(delta: float, flat_dist: float, dist: float, has_los: bool) ->
 	else:
 		_los_lost_timer = 0.0
 
-	if flat_dist > threat_range or dist > 65.0 or not has_valid_attack_slot():
+	if flat_dist > threat_range or dist > maxf(threat_range + 5.0, 65.0) or not has_valid_attack_slot():
 		_release_slot()
 		_start_new_reposition()
 		return
@@ -485,6 +505,8 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 		_release_slot()
 		if charge_light:
 			charge_light.visible = false
+		if _laser_beam_mesh:
+			_laser_beam_mesh.visible = false
 		_start_new_reposition()
 		return
 
@@ -494,6 +516,8 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 			_release_slot()
 			if charge_light:
 				charge_light.visible = false
+			if _laser_beam_mesh:
+				_laser_beam_mesh.visible = false
 			_start_new_reposition()
 			return
 	else:
@@ -503,6 +527,8 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 		_release_slot()
 		if charge_light:
 			charge_light.visible = false
+		if _laser_beam_mesh:
+			_laser_beam_mesh.visible = false
 		_start_new_reposition()
 		return
 
@@ -510,18 +536,48 @@ func _tick_charging(delta: float, has_los: bool) -> void:
 	_state_timer -= delta
 	if charge_light:
 		var reduced_flash := bool(SaveSystem.get_setting("reduced_flashing", false))
-		var max_energy := 1.2 if reduced_flash else 4.0
+		var max_energy := 1.2 if reduced_flash else 4.5
 		charge_light.visible = true
-		charge_light.light_energy = (1.0 - (_state_timer / charge_time)) * max_energy
+		var charge_progress: float = clampf(1.0 - (_state_timer / charge_time), 0.0, 1.0)
+		charge_light.light_energy = charge_progress * max_energy
+		charge_light.light_color = Color(1.0, 0.85, 0.2).lerp(Color(1.0, 0.15, 0.05), charge_progress)
+		charge_light.omni_range = lerpf(4.0, 9.0, charge_progress)
+
+	# Telegraph laser beam pointing directly at player during charging
+	_update_charging_telegraph()
 
 	if _state_timer <= 0.0:
+		if is_instance_valid(_laser_beam_mesh):
+			_laser_beam_mesh.visible = false
 		_transition_to(State.FIRING)
+
+func _update_charging_telegraph() -> void:
+	if not is_instance_valid(_laser_beam_mesh):
+		return
+	if current_state == State.CHARGING and is_instance_valid(_player):
+		var muzzle_pos: Vector3 = muzzle.global_position if muzzle else (barrel.global_position if barrel else global_position + Vector3(0, 1.2, 0))
+		var target_pos: Vector3 = _player.global_position + Vector3(0, 0.5, 0)
+		var diff := target_pos - muzzle_pos
+		var dist := diff.length()
+		if dist > 0.5:
+			_laser_beam_mesh.visible = true
+			var mid_point := muzzle_pos + diff * 0.5
+			_laser_beam_mesh.global_position = mid_point
+			var dir := diff.normalized()
+			var up_vec := Vector3.UP if absf(dir.y) < 0.9 else Vector3.FORWARD
+			_laser_beam_mesh.look_at(target_pos, up_vec)
+			_laser_beam_mesh.rotate_object_local(Vector3.RIGHT, PI * 0.5)
+			_laser_beam_mesh.scale = Vector3(1.0, dist, 1.0)
+			return
+	_laser_beam_mesh.visible = false
 
 func _tick_firing(delta: float) -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 	if charge_light:
 		charge_light.visible = false
+	if _laser_beam_mesh:
+		_laser_beam_mesh.visible = false
 
 	if _burst_timer > 0.0:
 		_burst_timer -= delta
@@ -582,7 +638,7 @@ func _tick_reloading(delta: float, flat_dist: float, dist: float, has_los: bool)
 	if _state_timer <= 0.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		if flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= 60.0:
+		if flat_dist <= preferred_range and dist >= 3.0 and has_los and dist <= maxf(threat_range, 60.0):
 			_transition_to(State.ACQUIRE)
 		else:
 			_start_new_reposition()
@@ -591,6 +647,11 @@ func _transition_to(new_state: State) -> void:
 	if current_state == State.AIMING or current_state == State.CHARGING or current_state == State.FIRING:
 		if new_state != State.AIMING and new_state != State.CHARGING and new_state != State.FIRING:
 			_release_slot()
+	if new_state != State.CHARGING:
+		if is_instance_valid(_laser_beam_mesh):
+			_laser_beam_mesh.visible = false
+		if is_instance_valid(charge_light):
+			charge_light.visible = false
 	current_state = new_state
 	match new_state:
 		State.REPOSITIONING:
@@ -1188,7 +1249,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 
 func _collect_visual_meshes(node: Node) -> void:
 	for child in node.get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D and child != _laser_beam_mesh:
 			_visual_meshes.append(child as MeshInstance3D)
 		_collect_visual_meshes(child)
 
@@ -1207,6 +1268,9 @@ func _die() -> void:
 	collision_mask = 0
 	if charge_light:
 		charge_light.visible = false
+	if is_instance_valid(_laser_beam_mesh):
+		_laser_beam_mesh.visible = false
+		_laser_beam_mesh.queue_free()
 	_release_slot()
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(self)

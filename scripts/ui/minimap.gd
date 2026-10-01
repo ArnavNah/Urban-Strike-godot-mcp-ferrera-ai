@@ -143,3 +143,65 @@ func _draw() -> void:
 			if high_contrast:
 				draw_arc(blip_pos, 4.0, 0, TAU, 12, Color(0.02, 0.04, 0.06, 0.95), 1.5)
 			draw_circle(blip_pos, 3.2, Color(0.96, 0.60, 0.18, 1.0))
+
+	# 6. World Rewards & Encounters (distinct shapes & tactical colors)
+	var encounters := get_tree().get_nodes_in_group("world_encounters")
+	for enc in encounters:
+		var enc3d := enc as Node3D
+		if not is_instance_valid(enc3d) or enc3d.is_queued_for_deletion():
+			continue
+		if enc3d.get("is_completed") == true:
+			continue
+
+		var diff_x: float = enc3d.global_position.x - p_pos.x
+		var diff_z: float = enc3d.global_position.z - p_pos.z
+		var dist_m: float = Vector2(diff_x, diff_z).length()
+		if dist_m > radar_range_m:
+			continue
+
+		var px_offset: Vector2 = Vector2(diff_x, diff_z) * (map_radius_px / radar_range_m)
+		var blip_pos: Vector2 = center + px_offset
+
+		var disp_type: String = "SUPPLY"
+		if enc3d.has_method("get_encounter_display_type"):
+			disp_type = enc3d.get_encounter_display_type()
+
+		match disp_type:
+			"REPAIR":
+				# Medical green cross (+)
+				var cr_col := Color(0.20, 0.98, 0.45, 1.0)
+				if high_contrast:
+					draw_rect(Rect2(blip_pos - Vector2(4.5, 4.5), Vector2(9, 9)), Color(0.02, 0.04, 0.06, 0.90))
+				draw_line(blip_pos + Vector2(-3.5, 0), blip_pos + Vector2(3.5, 0), cr_col, 2.0)
+				draw_line(blip_pos + Vector2(0, -3.5), blip_pos + Vector2(0, 3.5), cr_col, 2.0)
+			"AMMO":
+				# Munitions amber upward triangle
+				var am_col := Color(1.0, 0.65, 0.15, 1.0)
+				var tri := PackedVector2Array([
+					blip_pos + Vector2(0, -4.5),
+					blip_pos + Vector2(4.0, 3.5),
+					blip_pos + Vector2(-4.0, 3.5)
+				])
+				if high_contrast:
+					draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), Color(0.02, 0.04, 0.06, 0.95), 2.0)
+				draw_colored_polygon(tri, am_col)
+			"BEACON":
+				# Pulsing gold ring with center core
+				var b_col := Color(0.961, 0.725, 0.106, 1.0)
+				var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.008)
+				if high_contrast:
+					draw_arc(blip_pos, 5.5, 0, TAU, 16, Color(0.02, 0.04, 0.06, 0.95), 2.5)
+				draw_arc(blip_pos, 5.0, 0, TAU, 16, Color(b_col.r, b_col.g, b_col.b, pulse), 1.8)
+				draw_circle(blip_pos, 2.0, b_col)
+			"CACHE":
+				var is_unlocked: bool = bool(enc3d.get("is_unlocked"))
+				var c_col := Color(0.20, 0.95, 0.40, 1.0) if is_unlocked else Color(0.95, 0.22, 0.22, 1.0)
+				# Square outline (locked) or filled (unlocked)
+				var sq_rect := Rect2(blip_pos - Vector2(3.5, 3.5), Vector2(7, 7))
+				if high_contrast:
+					draw_rect(sq_rect.grow(1.0), Color(0.02, 0.04, 0.06, 0.95), false, 2.0)
+				draw_rect(sq_rect, c_col, is_unlocked, 1.6)
+			_:
+				# Default supply marker
+				var s_col := Color(0.30, 0.75, 1.0, 1.0)
+				draw_circle(blip_pos, 3.0, s_col)

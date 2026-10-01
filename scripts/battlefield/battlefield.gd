@@ -6,6 +6,9 @@ extends Node3D
 @onready var run_state_controller: RunStateController = $RunStateController
 @onready var wave_manager: WaveManager = $WaveManager
 
+func _enter_tree() -> void:
+	RunSeedManager.ensure_run_seed()
+
 func _ready() -> void:
 	# 1. Initialize & clear spatial EnemyRegistry
 	if not EnemyRegistry.instance:

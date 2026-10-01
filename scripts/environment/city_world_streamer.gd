@@ -45,16 +45,44 @@ var registered_buildings: Dictionary = {} # building_id (String) -> Dictionary
 var _chunk_rooftop_socket_ids: Dictionary = {} # Vector2i -> Array[String]
 var _chunk_building_ids: Dictionary = {} # Vector2i -> Array[String]
 
+# Persistent run state across chunk unloads and re-loads during the current run
+var persistent_destroyed_objects: Dictionary = {} # String ("cx_cy:object_name") -> bool
+var persistent_occupied_sockets: Dictionary = {} # String (socket_id) -> bool
+
 var _markers_dirty: bool = false
 var _marker_sync_timer: float = 0.0
 
 func _ready() -> void:
 	add_to_group("city_streamer")
+	if world_seed == 1337 and RunSeedManager.is_procedural_run:
+		world_seed = RunSeedManager.active_seed
+
 	_resolve_player()
 
 	var start_chunk := Vector2i.ZERO
 	if is_instance_valid(target_player):
 		start_chunk = world_to_chunk_coord(target_player.global_position)
+
+	if RunSeedManager.is_procedural_run and world_seed != 1337:
+		var dep := get_valid_deployment_candidate()
+		if dep.get("success", false) and is_instance_valid(target_player):
+			var spawn_pos: Vector3 = dep["position"]
+			spawn_pos.y = 10.0
+			target_player.global_position = spawn_pos
+			var heading_yaw: float = float(dep.get("heading_yaw", 0.0))
+			target_player.rotation.y = heading_yaw
+			if target_player.has_method("reset_physics_interpolation"):
+				target_player.reset_physics_interpolation()
+			start_chunk = dep["chunk_coord"]
+			var cam_rig := get_tree().get_first_node_in_group("camera_rig") as Node3D
+			if not cam_rig and is_inside_tree() and get_parent():
+				cam_rig = get_parent().get_node_or_null("CameraRig") as Node3D
+			if not cam_rig and target_player.get_parent():
+				cam_rig = target_player.get_parent().get_node_or_null("CameraRig") as Node3D
+			if is_instance_valid(cam_rig):
+				cam_rig.global_position = Vector3(spawn_pos.x, 0.0, spawn_pos.z)
+				if cam_rig.has_method("reset_smoothing"):
+					cam_rig.call("reset_smoothing")
 
 	if immediate_startup_load:
 		force_update(start_chunk)
@@ -113,6 +141,7 @@ func _start_controlled_startup(start_chunk: Vector2i) -> void:
 					load_queue.append({ "coord": c, "detail": CityChunk.DetailLevel.HLOD, "priority": 0 })
 
 	_sort_load_queue(start_chunk)
+	_sync_gameplay_markers()
 	_is_initialized = true
 
 func _process(delta: float) -> void:
@@ -283,22 +312,23 @@ func _process_streaming_budget() -> void:
 			_apply_chunk_load(item)
 			hlod_loaded += 1
 
-	# If no heavy full-detail chunk was loaded this frame, process gradual unloads
-	if full_detail_loaded == 0 and not unload_queue.is_empty():
+	# Process gradual unloads (allow unloads if no full-detail load, or if unload queue is backing up to prevent chunk leak)
+	if (full_detail_loaded == 0 or unload_queue.size() > 1) and not unload_queue.is_empty():
 		while not unload_queue.is_empty() and unloads_done < max_unloads_per_frame:
 			var c: Vector2i = unload_queue.pop_front()
 			_recycle_chunk(c)
 			unloads_done += 1
 			_markers_dirty = true
 
-	# Check startup readiness (minimum 3x3 playable region)
+	# Check startup readiness (minimum 3x3 playable region, fully assembled)
 	if _is_startup_phase:
 		var all_neighbors_ready: bool = true
 		for dx in range(-1, 2):
 			for dz in range(-1, 2):
 				var c := last_player_chunk + Vector2i(dx, dz)
 				if is_chunk_in_world_bounds(c):
-					if not active_chunks.has(c) or (active_chunks[c] as CityChunk).detail_level != CityChunk.DetailLevel.FULL_DETAIL:
+					var ch: CityChunk = active_chunks.get(c, null) as CityChunk
+					if not ch or ch.detail_level != CityChunk.DetailLevel.FULL_DETAIL or not ch.is_fully_assembled:
 						all_neighbors_ready = false
 						break
 			if not all_neighbors_ready:
@@ -404,15 +434,26 @@ func _add_chunk_to_road_graph(chunk: CityChunk) -> void:
 	var id_mw := _get_road_point_id(p_mid_w)
 	var id_me := _get_road_point_id(p_mid_e)
 
-	road_graph.connect_points(id_n, id_mn)
-	road_graph.connect_points(id_mn, id_c)
-	road_graph.connect_points(id_c, id_ms)
-	road_graph.connect_points(id_ms, id_s)
+	if chunk.district_type == CityChunk.DistrictType.HELIPAD:
+		# Perimeter ring bypass around central helipad landing pad
+		road_graph.connect_points(id_n, id_mn)
+		road_graph.connect_points(id_s, id_ms)
+		road_graph.connect_points(id_w, id_mw)
+		road_graph.connect_points(id_e, id_me)
+		road_graph.connect_points(id_mn, id_mw)
+		road_graph.connect_points(id_mw, id_ms)
+		road_graph.connect_points(id_ms, id_me)
+		road_graph.connect_points(id_me, id_mn)
+	else:
+		road_graph.connect_points(id_n, id_mn)
+		road_graph.connect_points(id_mn, id_c)
+		road_graph.connect_points(id_c, id_ms)
+		road_graph.connect_points(id_ms, id_s)
 
-	road_graph.connect_points(id_w, id_mw)
-	road_graph.connect_points(id_mw, id_c)
-	road_graph.connect_points(id_c, id_me)
-	road_graph.connect_points(id_me, id_e)
+		road_graph.connect_points(id_w, id_mw)
+		road_graph.connect_points(id_mw, id_c)
+		road_graph.connect_points(id_c, id_me)
+		road_graph.connect_points(id_me, id_e)
 
 func _remove_chunk_from_road_graph(chunk: CityChunk) -> void:
 	if not _chunk_road_points.has(chunk.coord):
@@ -542,6 +583,113 @@ func release_rooftop_socket(socket_id: String) -> void:
 	if registered_rooftop_sockets.has(socket_id):
 		registered_rooftop_sockets[socket_id]["is_occupied"] = false
 		registered_rooftop_sockets[socket_id]["occupant"] = null
+	persistent_occupied_sockets.erase(socket_id)
+
+func record_destroyed_object(chunk_coord: Vector2i, object_key: String) -> void:
+	var k := "%d_%d:%s" % [chunk_coord.x, chunk_coord.y, object_key]
+	persistent_destroyed_objects[k] = true
+
+func is_object_destroyed(chunk_coord: Vector2i, object_key: String) -> bool:
+	var k := "%d_%d:%s" % [chunk_coord.x, chunk_coord.y, object_key]
+	return persistent_destroyed_objects.get(k, false)
+
+func clear_run_state() -> void:
+	persistent_destroyed_objects.clear()
+	persistent_occupied_sockets.clear()
+	BaseEncounter.reset_run_encounters()
+
+func get_valid_deployment_candidate() -> Dictionary:
+	var rng: RandomNumberGenerator = RunSeedManager.get_stream_rng(RunSeedManager.STREAM_DEPLOYMENT)
+	var candidate_coords: Array[Vector2i] = []
+
+	# Search candidate chunks across playable inner region (Chebyshev radius 0..5)
+	for dx in range(-5, 6):
+		for dz in range(-5, 6):
+			var c := Vector2i(dx, dz)
+			if is_chunk_in_world_bounds(c):
+				candidate_coords.append(c)
+
+	# Shuffle candidate coords deterministically
+	for i in range(candidate_coords.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := candidate_coords[i]
+		candidate_coords[i] = candidate_coords[j]
+		candidate_coords[j] = tmp
+
+	var fallback_pos := Vector3(0.0, 2.4, 0.0)
+	var fallback_chunk := Vector2i.ZERO
+
+	# In non-procedural runs (test runner), always deploy at (0, 0)
+	if not RunSeedManager.is_procedural_run or world_seed == 1337:
+		return {
+			"success": true,
+			"position": fallback_pos,
+			"chunk_coord": fallback_chunk,
+			"district_type": CityChunk.DistrictType.HELIPAD,
+			"heading_yaw": 0.0
+		}
+
+	# Compute open flight avenue heading
+	var calc_heading = func(coord: Vector2i) -> float:
+		if coord == Vector2i.ZERO:
+			return 0.0 # Standard North
+		var road_salt: int = (world_seed ^ 0x3A5C7E91) & 0x7FFFFFFF
+		var off_x: int = (road_salt >> 4) % 2
+		var off_y: int = (road_salt >> 8) % 2
+		var ns_is_ave: bool = ((coord.x + off_x) % 2 == 0)
+		var ew_is_ave: bool = ((coord.y + off_y) % 2 == 0)
+		if ns_is_ave:
+			return 0.0 if coord.y >= 0 else PI
+		elif ew_is_ave:
+			return PI * 0.5 if coord.x >= 0 else -PI * 0.5
+		var to_ctr := Vector3(-float(coord.x), 0.0, -float(coord.y)).normalized()
+		return atan2(-to_ctr.x, -to_ctr.z)
+
+	# Prioritize HELIPAD, then RESIDENTIAL/MID-RISE/INDUSTRIAL service clearings
+	for c in candidate_coords:
+		var d_type: CityChunk.DistrictType = CityChunk.get_district_type_for_coord(c, world_seed)
+		if d_type == CityChunk.DistrictType.HELIPAD:
+			var w_pos := chunk_to_world_center(c) + Vector3(0.0, 2.4, 0.0)
+			if is_deployment_position_safe(w_pos):
+				return {
+					"success": true,
+					"position": w_pos,
+					"chunk_coord": c,
+					"district_type": d_type,
+					"heading_yaw": calc_heading.call(c)
+				}
+
+	for c in candidate_coords:
+		var d_type: CityChunk.DistrictType = CityChunk.get_district_type_for_coord(c, world_seed)
+		if d_type == CityChunk.DistrictType.RESIDENTIAL or d_type == CityChunk.DistrictType.MID_RISE or d_type == CityChunk.DistrictType.INDUSTRIAL:
+			var w_pos := chunk_to_world_center(c) + Vector3(0.0, 2.4, 0.0)
+			if is_deployment_position_safe(w_pos):
+				return {
+					"success": true,
+					"position": w_pos,
+					"chunk_coord": c,
+					"district_type": d_type,
+					"heading_yaw": calc_heading.call(c)
+				}
+
+	return {
+		"success": true,
+		"position": fallback_pos,
+		"chunk_coord": fallback_chunk,
+		"district_type": CityChunk.DistrictType.HELIPAD,
+		"heading_yaw": 0.0
+	}
+
+func is_deployment_position_safe(pos: Vector3) -> bool:
+	var min_clearance: float = 12.0
+	for b_rec: Dictionary in registered_buildings.values():
+		var b_wpos: Vector3 = b_rec.get("world_position", Vector3.ZERO)
+		var b_eff: Vector2 = b_rec.get("effective_size", Vector2(20.0, 20.0))
+		var dx: float = absf(pos.x - b_wpos.x) - b_eff.x * 0.5
+		var dz: float = absf(pos.z - b_wpos.z) - b_eff.y * 0.5
+		if dx < min_clearance and dz < min_clearance:
+			return false
+	return true
 
 # ==============================================================================
 # QUERIES & TELEMETRY
@@ -569,7 +717,7 @@ func get_loaded_chunk_coords() -> Array[Vector2i]:
 func get_ground_spawn_points(center_pos: Vector3, min_dist: float = 38.0, max_dist: float = 75.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.ground_spawn_points:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -579,7 +727,7 @@ func get_ground_spawn_points(center_pos: Vector3, min_dist: float = 38.0, max_di
 func get_rooftop_spawn_points(center_pos: Vector3, min_dist: float = 30.0, max_dist: float = 85.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.rooftop_spawn_points:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -589,7 +737,7 @@ func get_rooftop_spawn_points(center_pos: Vector3, min_dist: float = 30.0, max_d
 func get_air_entry_positions(center_pos: Vector3, min_dist: float = 45.0, max_dist: float = 120.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.air_entry_positions:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -599,7 +747,7 @@ func get_air_entry_positions(center_pos: Vector3, min_dist: float = 45.0, max_di
 func get_objective_candidates(center_pos: Vector3, min_dist: float = 40.0, max_dist: float = 150.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.objective_candidates:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -609,7 +757,7 @@ func get_objective_candidates(center_pos: Vector3, min_dist: float = 40.0, max_d
 func get_pickup_candidates(center_pos: Vector3, min_dist: float = 25.0, max_dist: float = 90.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.pickup_candidates:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -619,7 +767,7 @@ func get_pickup_candidates(center_pos: Vector3, min_dist: float = 25.0, max_dist
 func get_safe_open_positions(center_pos: Vector3, min_dist: float = 0.0, max_dist: float = 60.0) -> Array[Vector3]:
 	var results: Array[Vector3] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level == CityChunk.DetailLevel.FULL_DETAIL and chunk.is_fully_assembled:
 			for pt: Vector3 in chunk.safe_open_positions:
 				var d: float = center_pos.distance_to(pt)
 				if d >= min_dist and d <= max_dist:
@@ -651,7 +799,7 @@ func get_nearest_road_point(pos: Vector3) -> Vector3:
 func query_natural_spawn_candidates(center_pos: Vector3, category: String = "ground", min_dist: float = 38.0, max_dist: float = 160.0) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	for chunk: CityChunk in active_chunks.values():
-		if chunk.detail_level != CityChunk.DetailLevel.FULL_DETAIL:
+		if chunk.detail_level != CityChunk.DetailLevel.FULL_DETAIL or not chunk.is_fully_assembled:
 			continue
 		var raw_points: Array[Vector3] = []
 		match category:

@@ -8,6 +8,7 @@
 [sub_resource type="Resource" id="Resource_uytkb"]
 script = ExtResource("2_xt4kw")
 archetype_name = "Scout Helicopter"
+threat_cost = 4
 threat_score = 0.4
 formation_tags = Array[String](["scouts"])
 max_health = 25.0

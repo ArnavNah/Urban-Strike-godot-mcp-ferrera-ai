@@ -73,13 +73,14 @@ func _physics_process(delta: float) -> void:
 		raycast.target_position = to_local(global_position + step_vec * 1.5)
 		raycast.force_raycast_update()
 		if raycast.is_colliding():
+			var hit_col: Object = raycast.get_collider()
 			var hit_pos := raycast.get_collision_point()
-			explode(hit_pos)
+			explode(hit_pos, hit_col)
 			return
 
 	global_position += step_vec
 
-func explode(impact_pos: Vector3) -> void:
+func explode(impact_pos: Vector3, direct_collider: Object = null) -> void:
 	if _has_exploded:
 		return
 	_has_exploded = true
@@ -99,25 +100,60 @@ func explode(impact_pos: Vector3) -> void:
 		query.collision_mask = (1 << 1) # Player
 
 	var results := space.intersect_shape(query, 16)
+	var processed_targets: Array[Object] = []
+
+	# If direct collider was hit, process it first
+	if direct_collider != null and direct_collider.has_method("take_damage"):
+		_apply_target_damage(direct_collider, impact_pos, true, 0.0)
+		processed_targets.append(direct_collider)
+
 	for r in results:
 		var col: Object = r.get("collider")
+		if col in processed_targets:
+			continue
 		if col and col.has_method("take_damage"):
+			processed_targets.append(col)
 			var col_pos: Vector3 = col.global_position if col is Node3D else impact_pos
 			var dist := impact_pos.distance_to(col_pos)
-			var falloff := clampf(1.0 - (dist / splash_radius), 0.35, 1.0)
-			var applied_dmg: float = damage * falloff
-			col.take_damage(applied_dmg, self, impact_pos)
-			if is_player_missile:
-				var gm: Node = get_tree().get_first_node_in_group("game_manager")
-				if gm and gm.has_method("record_attributed_damage"):
-					gm.call("record_attributed_damage", applied_dmg, "missiles")
-				var is_dead: bool = false
-				if "current_health" in col and float(col.get("current_health")) <= 0.0:
-					is_dead = true
-				elif "is_alive" in col and col.get("is_alive") == false:
-					is_dead = true
-				if is_dead and gm and gm.has_method("record_attributed_kill"):
-					gm.call("record_attributed_kill", "missiles")
+			var is_direct: bool = (col == direct_collider or (is_instance_valid(target) and col == target))
+			_apply_target_damage(col, impact_pos, is_direct, dist)
+
+func _apply_target_damage(col: Object, impact_pos: Vector3, is_direct: bool, dist: float) -> void:
+	var falloff := 1.0 if is_direct else clampf(1.0 - (dist / splash_radius), 0.35, 1.0)
+	var applied_dmg: float = damage * falloff
+
+	# Direct High-Value Payload Bonus (Phase 1):
+	# Deliberate strikes against armored ground units, rooftop turrets, or dangerous combat aircraft
+	# deal an enhanced 1.6x anti-armor/structural payload (72.0 damage baseline)
+	if is_player_missile and is_direct and col is Node:
+		var node := col as Node
+		var is_high_value: bool = (
+			node.is_in_group("armored_enemies")
+			or node.is_in_group("tanks")
+			or node.is_in_group("turrets")
+			or node.is_in_group("sam_sites")
+			or node.is_in_group("rocket_raiders")
+			or node.is_in_group("attack_gunships")
+			or node.is_in_group("ace_gunships")
+			or node.is_in_group("air_enemies")
+			or node.is_in_group("bosses")
+			or node.is_in_group("objectives")
+		)
+		if is_high_value:
+			applied_dmg *= 1.6
+
+	col.take_damage(applied_dmg, self, impact_pos)
+	if is_player_missile:
+		var gm: Node = get_tree().get_first_node_in_group("game_manager")
+		if gm and gm.has_method("record_attributed_damage"):
+			gm.call("record_attributed_damage", applied_dmg, "missiles")
+		var is_dead: bool = false
+		if "current_health" in col and float(col.get("current_health")) <= 0.0:
+			is_dead = true
+		elif "is_alive" in col and col.get("is_alive") == false:
+			is_dead = true
+		if is_dead and gm and gm.has_method("record_attributed_kill"):
+			gm.call("record_attributed_kill", "missiles")
 
 	# Restrained camera shake & audio event for missile impact
 	if EventBus:

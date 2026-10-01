@@ -48,6 +48,7 @@ var current_target: Node3D = null
 var is_active: bool = true
 
 var _shot_cooldown: float = 0.0
+var _rocket_cooldown: float = 0.0
 var _flash_timer: float = 0.0
 var _target_stick_timer: float = 0.0
 var _bob_phase: float = 0.0
@@ -116,16 +117,27 @@ func _ready() -> void:
 func _setup_toon_materials() -> void:
 	var drone_mat: Material = load("res://resources/materials/toon_escort_drone.tres")
 	var drone_prop_mat: Material = load("res://resources/materials/toon_escort_drone_prop.tres")
+	var drone_trim_mat: Material = load("res://resources/materials/toon_escort_drone_trim.tres")
 
-	var fuselage := find_child("Cube_124", true, false) as MeshInstance3D
-	if fuselage and drone_mat:
-		fuselage.set_surface_override_material(0, drone_mat)
+	# Main fuselage and tail boom: Tactical military gunmetal slate
+	for body_name: String in ["Cube_124", "Cube_129"]:
+		var body_part := find_child(body_name, true, false) as MeshInstance3D
+		if body_part and drone_mat:
+			body_part.set_surface_override_material(0, drone_mat)
 
-	var blade_names: Array[String] = ["Cube_125", "Cube_126", "Cube_127", "Cube_128", "Cube_129", "Cube_130", "Cylinder_018", "Cylinder_019"]
-	for b_name in blade_names:
-		var blade := find_child(b_name, true, false) as MeshInstance3D
-		if blade and drone_prop_mat:
-			blade.set_surface_override_material(0, drone_prop_mat)
+	# Vertical tail stabilizer fin: Allied squadron cyan/teal trim
+	var tail_fin := find_child("Cube_128", true, false) as MeshInstance3D
+	if tail_fin:
+		var trim_mat: Material = drone_trim_mat if drone_trim_mat else drone_mat
+		if trim_mat:
+			tail_fin.set_surface_override_material(0, trim_mat)
+
+	# Main rotor blades, tail rotor, and rotor mast hub: Dark matte carbon graphite
+	var prop_names: Array[String] = ["Cube_125", "Cube_126", "Cube_127", "Cube_130", "Cylinder_018", "Cylinder_019"]
+	for p_name in prop_names:
+		var prop_part := find_child(p_name, true, false) as MeshInstance3D
+		if prop_part and drone_prop_mat:
+			prop_part.set_surface_override_material(0, drone_prop_mat)
 
 func _setup_model_rotors() -> void:
 	if not main_rotor:
@@ -320,6 +332,12 @@ func _handle_targeting_and_combat(delta: float) -> void:
 		if _shot_cooldown <= 0.0:
 			_fire_at_target(current_target)
 			_shot_cooldown = 1.0 / maxf(0.1, get_effective_fire_rate())
+		if has_micro_rockets:
+			if _rocket_cooldown > 0.0:
+				_rocket_cooldown -= delta
+			else:
+				_fire_micro_rocket(current_target)
+				_rocket_cooldown = 3.2
 
 func _on_fire_timer_timeout() -> void:
 	if not is_instance_valid(current_target) or current_target.is_queued_for_deletion():
@@ -389,6 +407,21 @@ func _fire_at_target(target: Node3D) -> void:
 
 	if sfx and not sfx.playing:
 		sfx.play()
+
+func _fire_micro_rocket(target: Node3D) -> void:
+	var rocket_sc: PackedScene = load("res://scenes/weapons/guided_missile.tscn")
+	if not rocket_sc:
+		return
+	var muzzle_pos: Vector3 = weapon_mount.global_position if weapon_mount else global_position + Vector3(0.0, -0.15, -1.5)
+	var spawn_parent: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root
+	var rocket := rocket_sc.instantiate() as GuidedMissile
+	if rocket:
+		rocket.damage = 25.0
+		rocket.splash_radius = 2.5
+		rocket.speed = 70.0
+		spawn_parent.add_child(rocket)
+		var fire_dir := (target.global_position - muzzle_pos).normalized()
+		rocket.launch(muzzle_pos, fire_dir, target, true)
 
 ## Physical Interception: Called by Projectile when an enemy round collides with this aircraft.
 func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector3.ZERO) -> void:

@@ -25,6 +25,11 @@ func _ready() -> void:
 	super._ready()
 	if is_completed:
 		return
+	var saved := BaseEncounter.get_encounter_state(encounter_id)
+	if saved.get("used", false):
+		is_completed = true
+		queue_free()
+		return
 	current_resource_pool = max_resource_pool
 	_build_visuals()
 
@@ -62,7 +67,7 @@ func _build_visuals() -> void:
 			_halo_light.light_color = Color(0.3, 0.7, 1.0, 1.0)
 	add_child(_halo_light)
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if is_completed:
 		return
 
@@ -72,43 +77,54 @@ func _physics_process(delta: float) -> void:
 
 	match reward_type:
 		RewardType.REPAIR_STATION:
-			_process_repair(player, delta)
+			_process_repair(player)
 		RewardType.AMMO_DEPOT:
-			_process_ammo(player, delta)
+			_process_ammo(player)
 		RewardType.EXPLORATION_CACHE:
 			_process_exploration_cache(player)
 
-func _process_repair(player: PlayerHelicopter, delta: float) -> void:
-	if player.current_health < player.max_health and current_resource_pool > 0.0:
-		var amount: float = minf(transfer_rate * delta, current_resource_pool)
-		amount = minf(amount, player.max_health - player.current_health)
-		if amount > 0.0:
-			var healed: float = player.heal(amount)
-			if healed > 0.0:
-				current_resource_pool -= healed
-				if current_resource_pool <= 0.0:
-					complete_encounter()
-					if _halo_light:
-						_halo_light.light_energy = 0.0
-	elif player.current_health >= player.max_health and current_resource_pool > 0.0:
-		player.heal(1.0) # Emits rate-limited hull_full_notified via player
+func _process_repair(player: PlayerHelicopter) -> void:
+	# Immediate field repair: instant +50 HP benefit or salvage if full
+	var healed: float = 0.0
+	if player.current_health < player.max_health:
+		healed = player.heal(50.0)
+	elif player.current_health >= player.max_health:
+		# Already full health: reward detour with immediate salvage
+		var gm := get_tree().get_first_node_in_group("game_manager")
+		if gm and gm.has_method("add_salvage"):
+			gm.call("add_salvage", 35)
 
-func _process_ammo(player: PlayerHelicopter, delta: float) -> void:
-	_pulse_timer += delta
-	if _pulse_timer >= 1.2 and current_resource_pool > 0.0:
-		_pulse_timer = 0.0
-		if player.missile_pod and player.missile_pod.has_method("replenish_ammo"):
-			var gained: int = player.missile_pod.replenish_ammo(1)
-			if gained > 0:
-				current_resource_pool -= float(gained)
-				if current_resource_pool <= 0.0:
-					complete_encounter()
-					if _halo_light:
-						_halo_light.light_energy = 0.0
-			elif EventBus and EventBus.has_signal("ammo_full_notified"):
-				EventBus.ammo_full_notified.emit()
+	BaseEncounter.set_encounter_state(encounter_id, {"used": true})
+	complete_encounter()
+
+	if _halo_light:
+		_halo_light.light_color = Color(0.2, 1.0, 0.4, 0.4)
+		_halo_light.light_energy = 0.5
+	if _pad_mesh and _pad_mesh.material_override:
+		(_pad_mesh.material_override as StandardMaterial3D).albedo_color = Color(0.1, 0.22, 0.15, 0.5)
+
+func _process_ammo(player: PlayerHelicopter) -> void:
+	# Immediate munitions depot: instant full missile replenishment (+6) or salvage if full
+	var gained: int = 0
+	if player.missile_pod and player.missile_pod.has_method("replenish_ammo"):
+		gained = player.missile_pod.replenish_ammo(6)
+	if gained == 0:
+		# Already full on missiles: reward detour with immediate salvage
+		var gm := get_tree().get_first_node_in_group("game_manager")
+		if gm and gm.has_method("add_salvage"):
+			gm.call("add_salvage", 35)
+
+	BaseEncounter.set_encounter_state(encounter_id, {"used": true})
+	complete_encounter()
+
+	if _halo_light:
+		_halo_light.light_color = Color(1.0, 0.65, 0.15, 0.4)
+		_halo_light.light_energy = 0.5
+	if _pad_mesh and _pad_mesh.material_override:
+		(_pad_mesh.material_override as StandardMaterial3D).albedo_color = Color(0.25, 0.18, 0.10, 0.5)
 
 func _process_exploration_cache(_player: PlayerHelicopter) -> void:
+	BaseEncounter.set_encounter_state(encounter_id, {"used": true})
 	complete_encounter()
 
 	# Burst into 8 salvage gems
@@ -120,10 +136,10 @@ func _process_exploration_cache(_player: PlayerHelicopter) -> void:
 			var spawn_pos: Vector3 = global_position + Vector3(cos(angle) * 3.5, 1.0, sin(angle) * 3.5)
 			var gem: Node3D = gem_scene.instantiate() as Node3D
 			if gem:
+				parent.add_child(gem)
 				gem.global_position = spawn_pos
 				if "xp_value" in gem:
 					gem.set("xp_value", 20)
-				parent.add_child(gem)
 
 	# Direct salvage grant through GameManager (with offline save fallback)
 	var gm := get_tree().get_first_node_in_group("game_manager")
@@ -138,3 +154,30 @@ func _process_exploration_cache(_player: PlayerHelicopter) -> void:
 	if _halo_light:
 		_halo_light.light_energy = 0.0
 	queue_free()
+
+func get_encounter_display_type() -> String:
+	match reward_type:
+		RewardType.REPAIR_STATION:
+			return "REPAIR"
+		RewardType.AMMO_DEPOT:
+			return "AMMO"
+		_:
+			return "SUPPLY"
+
+func get_encounter_status_text() -> String:
+	match reward_type:
+		RewardType.REPAIR_STATION:
+			return "REPAIR"
+		RewardType.AMMO_DEPOT:
+			return "AMMO"
+		_:
+			return "SUPPLY"
+
+func get_encounter_color() -> Color:
+	match reward_type:
+		RewardType.REPAIR_STATION:
+			return Color(0.20, 0.98, 0.45, 1.0)
+		RewardType.AMMO_DEPOT:
+			return Color(1.0, 0.65, 0.15, 1.0)
+		_:
+			return Color(0.30, 0.75, 1.0, 1.0)

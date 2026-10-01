@@ -29,10 +29,16 @@ func _ready() -> void:
 	endless_button.mouse_entered.connect(_play_focus_sound)
 
 	# Establish seamless horizontal focus loop
-	extract_button.focus_neighbor_right = endless_button.get_path()
-	extract_button.focus_neighbor_left = endless_button.get_path()
-	endless_button.focus_neighbor_left = extract_button.get_path()
-	endless_button.focus_neighbor_right = extract_button.get_path()
+	if is_inside_tree() and extract_button.is_inside_tree() and endless_button.is_inside_tree():
+		extract_button.focus_neighbor_right = extract_button.get_path_to(endless_button)
+		extract_button.focus_neighbor_left = extract_button.get_path_to(endless_button)
+		endless_button.focus_neighbor_left = endless_button.get_path_to(extract_button)
+		endless_button.focus_neighbor_right = endless_button.get_path_to(extract_button)
+	else:
+		extract_button.focus_neighbor_right = NodePath("../EndlessButton")
+		extract_button.focus_neighbor_left = NodePath("../EndlessButton")
+		endless_button.focus_neighbor_left = NodePath("../ExtractButton")
+		endless_button.focus_neighbor_right = NodePath("../ExtractButton")
 
 func _play_focus_sound() -> void:
 	if _audio_player:
@@ -48,7 +54,10 @@ func _play_confirm_sound() -> void:
 
 func display_victory(earned_salvage: int) -> void:
 	_run_salvage = earned_salvage
-	salvage_label.text = "RUN SALVAGE SECURED: %d\nExtract to safely bank in Hangar, or risk it for 2.0x in Endless Overdrive!" % _run_salvage
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	var kills: int = gm.enemies_killed if gm else 0
+	var score: int = gm.total_score if gm else 0
+	salvage_label.text = "RUN SALVAGE SECURED: %d  |  KILLS: %d  |  SCORE: %d\nExtract to safely bank in Hangar, or risk it for 2.0x in Endless Overdrive!" % [_run_salvage, kills, score]
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	extract_button.grab_focus()

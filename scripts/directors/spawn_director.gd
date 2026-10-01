@@ -30,8 +30,8 @@ extends Node3D
 
 @export_group("Early Air Threat Tuning")
 @export var early_air_enabled: bool = true
-@export var early_air_first_arrival_min: float = 3.0
-@export var early_air_first_arrival_max: float = 5.0
+@export var early_air_first_arrival_min: float = 0.5
+@export var early_air_first_arrival_max: float = 1.2
 @export var early_air_active_cap: int = 2
 @export var early_air_replenish_interval_min: float = 1.5
 @export var early_air_replenish_interval_max: float = 3.0
@@ -57,6 +57,18 @@ var rejected_spawn_reasons: Dictionary = {
 	"opposing_sector": 0
 }
 
+enum ThematicRoster {
+	AIRBORNE_BLITZ,
+	IRON_VANGUARD,
+	GUERRILLA_AMBUSH,
+	COMBINED_ARMS
+}
+
+var active_roster: ThematicRoster = ThematicRoster.COMBINED_ARMS
+var active_roster_name: String = "Combined Arms"
+var _encounter_rng: RandomNumberGenerator = null
+var _is_archon_spawned: bool = false
+
 enum EncounterState {
 	WARMUP,
 	STREAMING,
@@ -76,8 +88,8 @@ var mission_focus_position: Vector3 = Vector3.ZERO
 
 @export_group("Continuous Survival Tuning")
 @export var is_continuous_mode: bool = true
-@export var base_ground_budget_rate: float = 18.0
-@export var base_air_budget_rate: float = 10.0
+@export var base_ground_budget_rate: float = 26.0
+@export var base_air_budget_rate: float = 12.0
 @export var surge_interval: float = 90.0
 @export var surge_duration: float = 15.0
 
@@ -306,8 +318,62 @@ var wave_table: Array[Dictionary] = [
 	}
 ]
 
+func _init_thematic_roster() -> void:
+	_is_archon_spawned = false
+	if RunSeedManager.is_procedural_run:
+		var r_rng := RunSeedManager.get_stream_rng(RunSeedManager.STREAM_ENCOUNTERS)
+		var r_idx: int = r_rng.randi_range(0, 3)
+		active_roster = r_idx as ThematicRoster
+		match active_roster:
+			ThematicRoster.AIRBORNE_BLITZ:
+				active_roster_name = "Airborne Blitz"
+				cap_scout = 5
+				cap_raider = 3
+				cap_gunship = 3
+				base_air_budget_rate = 18.0
+				base_ground_budget_rate = 22.0
+			ThematicRoster.IRON_VANGUARD:
+				active_roster_name = "Iron Vanguard"
+				base_ground_budget_rate = 32.0
+				base_air_budget_rate = 10.0
+			ThematicRoster.GUERRILLA_AMBUSH:
+				active_roster_name = "Guerrilla Ambush"
+				max_active_rooftop_threats = 6
+				cap_turret = 5
+				cap_sam = 4
+				cap_jammer = 2
+				base_ground_budget_rate = 28.0
+				base_air_budget_rate = 12.0
+			ThematicRoster.COMBINED_ARMS:
+				active_roster_name = "Combined Arms"
+				base_ground_budget_rate = 26.0
+				base_air_budget_rate = 14.0
+	else:
+		active_roster = ThematicRoster.COMBINED_ARMS
+		active_roster_name = "Combined Arms"
+
+	print("[SpawnDirector] Thematic Roster: %s (Procedural: %s, Seed: %d)" % [active_roster_name, RunSeedManager.is_procedural_run, RunSeedManager.active_seed])
+
+func _get_encounter_rng() -> RandomNumberGenerator:
+	if _encounter_rng == null:
+		if RunSeedManager.is_procedural_run:
+			_encounter_rng = RunSeedManager.get_stream_rng(RunSeedManager.STREAM_ENCOUNTERS)
+		else:
+			_encounter_rng = RandomNumberGenerator.new()
+			_encounter_rng.seed = 1337
+	return _encounter_rng
+
+func _shuffle_array(arr: Array) -> void:
+	var rng := _get_encounter_rng()
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
 func _ready() -> void:
 	add_to_group("spawn_director")
+	_init_thematic_roster()
 	_init_encounter_config()
 	_setup_spawn_nodes_and_timers()
 	if EventBus:
@@ -316,6 +382,15 @@ func _ready() -> void:
 			EventBus.radar_status_changed.connect(_on_radar_status_changed)
 	if autostart_wave:
 		get_tree().create_timer(1.0).timeout.connect(_on_intro_timeout)
+
+func _exit_tree() -> void:
+	if is_in_group("spawn_director"):
+		remove_from_group("spawn_director")
+	if EventBus:
+		if EventBus.enemy_destroyed.is_connected(_on_enemy_destroyed):
+			EventBus.enemy_destroyed.disconnect(_on_enemy_destroyed)
+		if EventBus.has_signal("radar_status_changed") and EventBus.radar_status_changed.is_connected(_on_radar_status_changed):
+			EventBus.radar_status_changed.disconnect(_on_radar_status_changed)
 
 func _init() -> void:
 	if not _scene_infantry:
@@ -540,7 +615,7 @@ func _get_next_stream_interval(stage: int, is_behind_target: bool) -> float:
 		var target: Resource = get_current_wave_target()
 		var min_int: float = float(target.get("spawn_interval_min")) if target else (1.4 if current_wave <= 3 else (1.1 if current_wave <= 7 else 0.9))
 		var max_int: float = float(target.get("spawn_interval_max")) if target else (2.4 if current_wave <= 3 else (2.0 if current_wave <= 7 else 1.7))
-		base_int = randf_range(min_int, max_int)
+		base_int = _get_encounter_rng().randf_range(min_int, max_int)
 		if is_behind_target:
 			# Maximum 30% interval reduction when behind target (no instant deficit dumping)
 			base_int *= 0.70
@@ -558,15 +633,15 @@ func _get_next_stream_interval(stage: int, is_behind_target: bool) -> float:
 
 	# Legacy fallback for test 29 / vanilla EncounterConfig
 	if is_behind_target:
-		base_int = randf_range(0.85, 1.2)
+		base_int = _get_encounter_rng().randf_range(0.85, 1.2)
 	else:
 		match stage:
 			1:
-				base_int = randf_range(1.5, 2.5)
+				base_int = _get_encounter_rng().randf_range(1.5, 2.5)
 			2, 3:
-				base_int = randf_range(1.0, 2.0)
+				base_int = _get_encounter_rng().randf_range(1.0, 2.0)
 			_:
-				base_int = randf_range(0.7, 1.5)
+				base_int = _get_encounter_rng().randf_range(0.7, 1.5)
 
 	match encounter_state:
 		EncounterState.SURGE:
@@ -589,25 +664,29 @@ func _on_stream_timer_timeout() -> void:
 	# If at or above cap, back off until population drops below cap - 2
 	if current_living >= cap:
 		if stream_timer:
-			stream_timer.wait_time = randf_range(2.0, 3.5)
+			stream_timer.wait_time = _get_encounter_rng().randf_range(1.5, 2.5)
 		return
 
 	var player := _get_player()
 	var p_pos := player.global_position if player else Vector3.ZERO
 	var is_behind_target := current_living < target_count
 
-	# Spawn continuous stream
+	# Spawn continuous stream unit
 	_spawn_continuous_stream(stage, p_pos)
 
+	# When below target count, deploy a second reinforcement unit if cap allows
+	if is_behind_target and get_effective_total_count() < cap:
+		_spawn_continuous_stream(stage, p_pos)
+
 	# Population debt recovery: when below minimum band, queue delayed deficit reinforcement
-	if current_living + 1 < p_band.x:
-		_queue_deficit_reinforcement(stage, p_pos, randf_range(0.45, 0.75))
+	if current_living + 2 < p_band.x:
+		_queue_deficit_reinforcement(stage, p_pos, _get_encounter_rng().randf_range(0.35, 0.55))
 
 	if stream_timer:
 		var next_interval: float
 		if current_living < p_band.x:
-			# Fast pacing (1.0 - 1.5s) to recover population debt quickly
-			next_interval = randf_range(1.0, 1.5)
+			# Fast pacing (0.75 - 1.1s) to recover population debt quickly
+			next_interval = _get_encounter_rng().randf_range(0.75, 1.1)
 		else:
 			next_interval = _get_next_stream_interval(stage, is_behind_target)
 		stream_timer.wait_time = maxf(0.15, next_interval)
@@ -722,14 +801,14 @@ func _process_pending_air_spawns(delta: float) -> void:
 						item["source_key"] = str(new_cand.get("source_key", "AirScoutCorridor"))
 						item["sector"] = int(new_cand.get("sector", primary_entry_sector))
 						item["res_id"] = new_res_id
-						item["timer"] = randf_range(0.35, 0.65)
+						item["timer"] = _get_encounter_rng().randf_range(0.35, 0.65)
 					else:
-						item["timer"] = randf_range(0.8, 1.4)
+						item["timer"] = _get_encounter_rng().randf_range(0.8, 1.4)
 				else:
 					# Max retries exceeded: discard and refund budget cleanly
 					_pending_air_spawns.remove_at(i)
 					continuous_air_budget = minf(air_cap * 4.0, continuous_air_budget + 4.0)
-					_early_air_timer = randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
+					_early_air_timer = _get_encounter_rng().randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
 					failed_spawn_attempts += 1
 
 func _process_early_air_spawning(delta: float) -> void:
@@ -745,12 +824,12 @@ func _process_early_air_spawning(delta: float) -> void:
 
 	var eff_air := get_effective_air_count()
 	if eff_air >= early_air_active_cap:
-		_early_air_timer = randf_range(2.5, 3.5)
+		_early_air_timer = _get_encounter_rng().randf_range(2.5, 3.5)
 		return
 
 	var eff_total := get_effective_total_count()
 	if eff_total >= get_active_population_cap():
-		_early_air_timer = randf_range(2.0, 3.0)
+		_early_air_timer = _get_encounter_rng().randf_range(2.0, 3.0)
 		return
 
 	var player := _get_player()
@@ -767,9 +846,34 @@ func _process_early_air_spawning(delta: float) -> void:
 		var s_key: String = str(cand.get("source_key", s_name))
 		var sec: int = int(cand.get("sector", primary_entry_sector))
 
+		var rng_air := _get_encounter_rng()
+		var lead_scene: PackedScene = _scene_air_scout
+		var lead_radius: float = SEPARATION_RADII.get("air_scout", 10.0)
+		var lead_cost: float = 4.0
+
+		# Opening beat (Waves 1-2 / <60s): Strictly 1-2 light flying threats (Scouts only), separated entrances, room to learn.
+		if current_wave > 2 and elapsed_survival_time >= 60.0:
+			var roll := rng_air.randf()
+			if roll < 0.35 and _scene_air_raider:
+				lead_scene = _scene_air_raider
+				lead_radius = SEPARATION_RADII.get("air_raider", 12.0)
+				lead_cost = 6.0
+			elif roll < 0.60 and _scene_air_gunship:
+				lead_scene = _scene_air_gunship
+				lead_radius = SEPARATION_RADII.get("air_gunship", 12.0)
+				lead_cost = 8.0
+			elif roll < 0.75 and _scene_air_jammer:
+				lead_scene = _scene_air_jammer
+				lead_radius = SEPARATION_RADII.get("air_jammer", 14.0)
+				lead_cost = 7.0
+			else:
+				lead_scene = _scene_air_scout
+				lead_radius = SEPARATION_RADII.get("air_scout", 10.0)
+				lead_cost = 4.0
+
 		var res_id := reserve_spawn_position(
 			spawn_pos,
-			SEPARATION_RADII.get("air_scout", 10.0),
+			lead_radius,
 			"air",
 			s_name,
 			sec,
@@ -779,8 +883,8 @@ func _process_early_air_spawning(delta: float) -> void:
 		)
 
 		_pending_air_spawns.append({
-			"timer": randf_range(0.2, 0.45),
-			"scene": _scene_air_scout,
+			"timer": _get_encounter_rng().randf_range(0.2, 0.45),
+			"scene": lead_scene,
 			"position": spawn_pos,
 			"heading": heading,
 			"source_name": s_name,
@@ -792,13 +896,21 @@ func _process_early_air_spawning(delta: float) -> void:
 
 		# Spawn in pairs: If both air slots are open (initial early air wave), queue 2-drone flight immediately
 		if eff_air == 0 and early_air_active_cap >= 2:
+			var wing_scene: PackedScene = _scene_air_scout
+			var wing_radius: float = SEPARATION_RADII.get("air_scout", 10.0)
+			var wing_cost: float = 4.0
+			if current_wave > 2 and elapsed_survival_time >= 60.0 and rng_air.randf() < 0.50 and _scene_air_raider:
+				wing_scene = _scene_air_raider
+				wing_radius = SEPARATION_RADII.get("air_raider", 12.0)
+				wing_cost = 6.0
+
 			var right_vec := heading.cross(Vector3.UP).normalized()
 			if right_vec.length_squared() < 0.01:
 				right_vec = Vector3.RIGHT
 			var wing_pos := spawn_pos + right_vec * 24.0
 			var wing_res_id := reserve_spawn_position(
 				wing_pos,
-				SEPARATION_RADII.get("air_scout", 10.0),
+				wing_radius,
 				"air",
 				s_name,
 				sec,
@@ -807,8 +919,8 @@ func _process_early_air_spawning(delta: float) -> void:
 				s_key + "_wing"
 			)
 			_pending_air_spawns.append({
-				"timer": randf_range(0.3, 0.5),
-				"scene": _scene_air_scout,
+				"timer": _get_encounter_rng().randf_range(0.3, 0.5),
+				"scene": wing_scene,
 				"position": wing_pos,
 				"heading": heading,
 				"source_name": s_name,
@@ -817,12 +929,12 @@ func _process_early_air_spawning(delta: float) -> void:
 				"res_id": wing_res_id,
 				"retries": 0
 			})
-			continuous_air_budget = maxf(0.0, continuous_air_budget - 4.0)
+			continuous_air_budget = maxf(0.0, continuous_air_budget - wing_cost)
 
-		continuous_air_budget = maxf(0.0, continuous_air_budget - 4.0)
-		_early_air_timer = randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
+		continuous_air_budget = maxf(0.0, continuous_air_budget - lead_cost)
+		_early_air_timer = _get_encounter_rng().randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
 	else:
-		_early_air_timer = randf_range(1.2, 2.0)
+		_early_air_timer = _get_encounter_rng().randf_range(1.2, 2.0)
 
 func _on_formation_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
@@ -833,18 +945,18 @@ func _on_formation_timer_timeout() -> void:
 	var target_count := get_target_active_count()
 	var p_band := get_population_band()
 
-	# Formations have 3-4 units. Check if adding formation exceeds shared effective cap
-	if get_effective_total_count() + 3 <= cap:
+	# Formations have 2-4 units. Check if adding formation exceeds shared effective cap
+	if get_effective_total_count() + 2 <= cap:
 		var player := _get_player()
 		var p_pos := player.global_position if player else Vector3.ZERO
 		var is_behind_target := current_living < target_count
 		if try_spawn_formation_with_fallback(stage, p_pos):
 			if formation_timer:
-				formation_timer.wait_time = randf_range(4.0, 7.0) if current_living < p_band.x else (randf_range(6.0, 10.0) if is_behind_target else randf_range(9.0, 15.0))
+				formation_timer.wait_time = _get_encounter_rng().randf_range(3.5, 5.5) if current_living < p_band.x else (_get_encounter_rng().randf_range(5.0, 8.0) if is_behind_target else _get_encounter_rng().randf_range(7.0, 11.0))
 			return
 
 	if formation_timer:
-		formation_timer.wait_time = randf_range(3.0, 6.0)
+		formation_timer.wait_time = _get_encounter_rng().randf_range(2.5, 4.5)
 
 func _on_surge_timer_timeout() -> void:
 	if not is_wave_active or not is_continuous_mode:
@@ -860,7 +972,7 @@ func _on_surge_timer_timeout() -> void:
 	var s_min: float = encounter_config.surge_interval_min if encounter_config else 75.0
 	var s_max: float = encounter_config.surge_interval_max if encounter_config else 90.0
 	if surge_timer:
-		surge_timer.wait_time = randf_range(s_min, s_max)
+		surge_timer.wait_time = _get_encounter_rng().randf_range(s_min, s_max)
 
 func _on_intro_timeout() -> void:
 	if is_inside_tree() and not is_queued_for_deletion() and not is_wave_active:
@@ -955,7 +1067,7 @@ func _process_formation_stagger_queue(delta: float) -> void:
 					else:
 						item["res_id"] = ""
 					_formation_spawn_queue.append(item)
-					_formation_stagger_timer = randf_range(0.35, 0.6)
+					_formation_stagger_timer = _get_encounter_rng().randf_range(0.35, 0.6)
 					return
 				else:
 					if not unit.is_inside_tree():
@@ -963,7 +1075,7 @@ func _process_formation_stagger_queue(delta: float) -> void:
 					else:
 						unit.queue_free()
 					failed_spawn_attempts += 1
-		_formation_stagger_timer = randf_range(0.25, 0.55)
+		_formation_stagger_timer = _get_encounter_rng().randf_range(0.25, 0.55)
 
 func _deploy_formation_unit(unit: Node3D, parent: Node, is_first: bool, stagger: bool = true, res_id: String = "") -> bool:
 	if not is_instance_valid(unit) or not is_instance_valid(parent):
@@ -1037,7 +1149,7 @@ func start_wave(wave_num: int) -> void:
 		_initial_encounter_spawned = false
 		clear_pending_spawns_and_reservations()
 		_early_air_active = true
-		_early_air_timer = randf_range(early_air_first_arrival_min, early_air_first_arrival_max)
+		_early_air_timer = _get_encounter_rng().randf_range(early_air_first_arrival_min, early_air_first_arrival_max)
 		continuous_air_budget = 10.0
 	elif wave_num >= 3:
 		# Deactivate early air warm-up mode to unlock regular continuous air spawning and air formations
@@ -1089,8 +1201,8 @@ func start_wave(wave_num: int) -> void:
 
 		if wave_num == 1 and not _initial_encounter_spawned:
 			_initial_encounter_spawned = true
-			continuous_ground_budget = 40.0
-			continuous_air_budget = 10.0
+			continuous_ground_budget = 60.0
+			continuous_air_budget = 15.0
 			var player := _get_player()
 			var p_pos := player.global_position if player else Vector3.ZERO
 			_spawn_initial_encounter(p_pos)
@@ -1123,7 +1235,7 @@ func _spawn_initial_encounter(player_pos: Vector3) -> void:
 		_initial_encounter_queue.append(planned[i])
 
 	if not _initial_encounter_queue.is_empty():
-		_initial_encounter_timer = randf_range(0.75, 1.05)
+		_initial_encounter_timer = _get_encounter_rng().randf_range(0.75, 1.05)
 
 	if planned.size() < 3:
 		_initial_encounter_retries_remaining = 3 - planned.size()
@@ -1146,7 +1258,7 @@ func _process_initial_encounter_queue(delta: float) -> void:
 			_deploy_staggered_enemy(scene, pos, heading, s_key, sec, res_id)
 
 		if not _initial_encounter_queue.is_empty():
-			_initial_encounter_timer = randf_range(0.75, 1.05)
+			_initial_encounter_timer = _get_encounter_rng().randf_range(0.75, 1.05)
 
 func _deploy_staggered_enemy(scene: PackedScene, pos: Vector3, heading: Vector3, source_key: String, sector: int, res_id: String) -> Node3D:
 	if not scene or not scene.can_instantiate() or not pos.is_finite():
@@ -1193,6 +1305,7 @@ func _deploy_staggered_enemy(scene: PackedScene, pos: Vector3, heading: Vector3,
 	var parent := _get_spawn_parent()
 	parent.add_child.call_deferred(enemy)
 	_register_spawned_node(enemy)
+	_spawn_telegraph(pos, is_air)
 	if not res_id.is_empty():
 		bind_enemy_to_reservation(res_id, enemy)
 	record_spawn_event(source_key, pos)
@@ -1203,11 +1316,44 @@ func _deploy_staggered_enemy(scene: PackedScene, pos: Vector3, heading: Vector3,
 func _plan_initial_encounter_positions(player_pos: Vector3) -> Array[Dictionary]:
 	var inf_scene := _scene_infantry if (_scene_infantry and _scene_infantry.can_instantiate()) else load("res://scenes/enemies/infantry_cluster.tscn") as PackedScene
 	var turret_scene := _scene_turret if (_scene_turret and _scene_turret.can_instantiate()) else load("res://scenes/enemies/ground_turret.tscn") as PackedScene
-	var units_to_plan := [
-		{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
-		{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
-		{"scene": turret_scene, "radius": 10.0, "type": "turret"}
-	]
+	var units_to_plan: Array = []
+	if not RunSeedManager.is_procedural_run or RunSeedManager.active_seed == 1337:
+		units_to_plan = [
+			{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
+			{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
+			{"scene": turret_scene, "radius": 10.0, "type": "turret"}
+		]
+	else:
+		match active_roster:
+			ThematicRoster.AIRBORNE_BLITZ:
+				var air_scout := _scene_air_scout if (_scene_air_scout and _scene_air_scout.can_instantiate()) else load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
+				var buggy_sc := _scene_buggy if (_scene_buggy and _scene_buggy.can_instantiate()) else load("res://scenes/enemies/ground_scout_buggy.tscn") as PackedScene
+				units_to_plan = [
+					{"scene": air_scout, "radius": 10.0, "type": "air_scout"},
+					{"scene": buggy_sc, "radius": 10.0, "type": "buggy"},
+					{"scene": inf_scene, "radius": 8.0, "type": "infantry"}
+				]
+			ThematicRoster.IRON_VANGUARD:
+				var ifv_sc := _scene_ifv if (_scene_ifv and _scene_ifv.can_instantiate()) else load("res://scenes/enemies/ground_assault_ifv.tscn") as PackedScene
+				units_to_plan = [
+					{"scene": ifv_sc, "radius": 12.0, "type": "ifv"},
+					{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
+					{"scene": turret_scene, "radius": 10.0, "type": "turret"}
+				]
+			ThematicRoster.GUERRILLA_AMBUSH:
+				var tech_sc := _scene_technical if (_scene_technical and _scene_technical.can_instantiate()) else load("res://scenes/enemies/ground_rocket_technical.tscn") as PackedScene
+				units_to_plan = [
+					{"scene": tech_sc, "radius": 10.0, "type": "technical"},
+					{"scene": turret_scene, "radius": 10.0, "type": "turret"},
+					{"scene": inf_scene, "radius": 8.0, "type": "infantry"}
+				]
+			ThematicRoster.COMBINED_ARMS:
+				var buggy_sc := _scene_buggy if (_scene_buggy and _scene_buggy.can_instantiate()) else load("res://scenes/enemies/ground_scout_buggy.tscn") as PackedScene
+				units_to_plan = [
+					{"scene": buggy_sc, "radius": 10.0, "type": "buggy"},
+					{"scene": inf_scene, "radius": 8.0, "type": "infantry"},
+					{"scene": turret_scene, "radius": 10.0, "type": "turret"}
+				]
 	var results: Array[Dictionary] = []
 
 	var raw_candidates: Array[Dictionary] = []
@@ -1280,12 +1426,38 @@ func _plan_initial_encounter_positions(player_pos: Vector3) -> Array[Dictionary]
 				"sector": secondary_entry_sector
 			})
 
-	raw_candidates.shuffle()
+	_shuffle_array(raw_candidates)
 
 	# Select up to 3 positions with >= 18m separation, at least 2 distinct sources/sectors, camera offscreen
 	for unit_info in units_to_plan:
 		var req_rad: float = float(unit_info["radius"])
 		var chosen_cand: Dictionary = {}
+
+		if unit_info.get("type", "") == "air_scout":
+			var air_entry := get_air_corridor_entry(player_pos, 42.0, 85.0)
+			if air_entry.get("success", false) and air_entry.get("position", Vector3.INF).is_finite():
+				var apos: Vector3 = air_entry["position"]
+				apos.y = clampf(_get_player_altitude() + 2.0, 12.0, 18.0)
+				var res_id := reserve_spawn_position(
+					apos,
+					req_rad,
+					"air",
+					air_entry.get("source_name", "AirCorridor"),
+					primary_entry_sector,
+					6.0,
+					"initial_encounter"
+				)
+				results.append({
+					"scene": unit_info["scene"],
+					"position": apos,
+					"heading": air_entry.get("heading", Vector3.FORWARD),
+					"source_name": air_entry.get("source_name", "AirCorridor"),
+					"source_key": air_entry.get("source_name", "AirCorridor"),
+					"sector": primary_entry_sector,
+					"res_id": res_id,
+					"is_air": true
+				})
+				continue
 
 		if unit_info.get("type", "") == "turret":
 			var r_cand: Dictionary = {}
@@ -1343,8 +1515,52 @@ func _plan_initial_encounter_positions(player_pos: Vector3) -> Array[Dictionary]
 				})
 				continue
 			else:
-				# If no valid roof exists, defer/drop the turret request without substituting
-				continue
+				var r_nodes := get_rooftop_spawn_nodes()
+				for marker in r_nodes:
+					var mpos := marker.global_position
+					var d := player_pos.distance_to(mpos)
+					if d >= 28.0 and d <= 85.0 and not is_position_in_camera_view(mpos, 80.0):
+						var conflict := false
+						for prev in results:
+							var prev_pos: Vector3 = prev["position"]
+							if Vector2(mpos.x - prev_pos.x, mpos.z - prev_pos.z).length() < 18.0:
+								conflict = true
+								break
+						if not conflict:
+							var m_heading := (player_pos - mpos)
+							m_heading.y = 0.0
+							r_cand = {
+								"position": mpos,
+								"heading": m_heading.normalized() if m_heading.length_squared() > 0.01 else Vector3.FORWARD,
+								"source_name": "Rooftop_" + marker.name,
+								"source_key": "Rooftop_" + marker.name,
+								"sector": primary_entry_sector,
+								"is_rooftop": true
+							}
+							break
+				if not r_cand.is_empty():
+					var res_id := reserve_spawn_position(
+						r_cand["position"],
+						req_rad,
+						"rooftop",
+						r_cand["source_name"],
+						r_cand["sector"],
+						6.0,
+						"initial_encounter",
+						r_cand["source_key"]
+					)
+					results.append({
+						"scene": unit_info["scene"],
+						"position": r_cand["position"],
+						"heading": r_cand["heading"],
+						"source_name": r_cand["source_name"],
+						"source_key": r_cand["source_key"],
+						"sector": r_cand["sector"],
+						"res_id": res_id,
+						"is_rooftop": true
+					})
+					continue
+				# If no valid rooftop socket or marker exists, allow falling through to ground candidates below
 
 		for cand in raw_candidates:
 			var c_pos: Vector3 = cand["position"]
@@ -1458,17 +1674,17 @@ func get_survival_stage() -> int:
 
 func get_population_band() -> Vector2i:
 	match current_wave:
-		1: return Vector2i(12, 16)
-		2: return Vector2i(16, 20)
-		3: return Vector2i(20, 24)
-		_: return Vector2i(20 + (current_wave - 3) * 2, 24 + (current_wave - 3) * 2)
+		1: return Vector2i(14, 20)
+		2: return Vector2i(18, 24)
+		3: return Vector2i(22, 28)
+		_: return Vector2i(24 + (current_wave - 3) * 2, 28 + (current_wave - 3) * 2)
 
 func get_visual_crowd_band() -> Vector2i:
 	match current_wave:
-		1: return Vector2i(20, 28)
-		2: return Vector2i(26, 36)
-		3: return Vector2i(34, 44)
-		_: return Vector2i(34 + (current_wave - 3) * 4, 44 + (current_wave - 3) * 4)
+		1: return Vector2i(32, 48)
+		2: return Vector2i(40, 58)
+		3: return Vector2i(48, 68)
+		_: return Vector2i(48 + (current_wave - 3) * 4, 68 + (current_wave - 3) * 4)
 
 func get_active_population_cap() -> int:
 	if is_wave_active:
@@ -1596,26 +1812,41 @@ func get_living_air_count() -> int:
 			cnt += 1
 	return cnt
 
+func _is_node_alive_and_not_queued(node: Node) -> bool:
+	if not is_instance_valid(node):
+		return false
+	var curr: Node = node
+	while curr:
+		if curr.is_queued_for_deletion():
+			return false
+		curr = curr.get_parent()
+	return true
+
 func is_spawning_allowed() -> bool:
 	if not is_wave_active:
 		return false
 	if is_inside_tree() and get_tree().paused:
 		return false
-	var wm := get_tree().get_first_node_in_group("wave_manager")
-	if is_instance_valid(wm):
-		if wm.has_method("is_deployment_active") and wm.is_deployment_active():
-			return false
-		if "current_state" in wm:
-			var wm_state: int = int(wm.current_state)
-			# WaveManager.State: IDLE(0), DEPLOYMENT_COUNTDOWN(1), ACTIVE_WAVE(2), INTERMISSION(3), RUN_COMPLETE(4), STOPPED(5)
-			if wm_state != 2:
+	var wm_nodes: Array[Node] = get_tree().get_nodes_in_group("wave_manager") if is_inside_tree() else []
+	for node in wm_nodes:
+		if _is_node_alive_and_not_queued(node):
+			if node.has_method("is_deployment_active") and node.is_deployment_active():
 				return false
+			if "current_state" in node:
+				var wm_state: int = int(node.current_state)
+				# WaveManager.State: IDLE(0), DEPLOYMENT_COUNTDOWN(1), ACTIVE_WAVE(2), INTERMISSION(3), RUN_COMPLETE(4), STOPPED(5)
+				if wm_state != 2:
+					return false
+			break
 	var player := _get_player()
 	if is_instance_valid(player) and "is_alive" in player and not player.is_alive:
 		return false
-	var gm := get_tree().get_first_node_in_group("game_manager")
-	if is_instance_valid(gm) and "is_game_over" in gm and gm.is_game_over:
-		return false
+	var gm_nodes: Array[Node] = get_tree().get_nodes_in_group("game_manager") if is_inside_tree() else []
+	for node in gm_nodes:
+		if _is_node_alive_and_not_queued(node):
+			if "is_game_over" in node and node.is_game_over:
+				return false
+			break
 	return true
 
 func get_pending_air_count() -> int:
@@ -1734,6 +1965,9 @@ func stop_spawning() -> void:
 	is_wave_active = false
 	_early_air_active = false
 	_initial_encounter_spawned = false
+	encounter_state = EncounterState.WARMUP
+	if CombatDirector.instance and CombatDirector.instance.has_method("set_recovery_active"):
+		CombatDirector.instance.set_recovery_active(false)
 	if stream_timer and is_instance_valid(stream_timer):
 		stream_timer.stop()
 	if formation_timer and is_instance_valid(formation_timer):
@@ -1742,7 +1976,11 @@ func stop_spawning() -> void:
 		surge_timer.stop()
 
 	clear_pending_spawns_and_reservations()
+	for e in _wave_enemies.duplicate():
+		if is_instance_valid(e) and not e.is_queued_for_deletion():
+			e.queue_free()
 	_wave_enemies.clear()
+	_is_archon_spawned = false
 
 func pause_spawning() -> void:
 	if stream_timer and is_instance_valid(stream_timer):
@@ -1857,7 +2095,7 @@ func _process_continuous_survival(delta: float) -> void:
 		EncounterState.WARMUP:
 			if elapsed_survival_time >= warmup_dur:
 				encounter_state = EncounterState.STREAMING
-				next_surge_time = elapsed_survival_time + randf_range(s_min, s_max)
+				next_surge_time = elapsed_survival_time + _get_encounter_rng().randf_range(s_min, s_max)
 		EncounterState.STREAMING:
 			if elapsed_survival_time >= next_surge_time:
 				encounter_state = EncounterState.SURGE
@@ -1873,13 +2111,17 @@ func _process_continuous_survival(delta: float) -> void:
 			if surge_timer_duration_active <= 0.0:
 				encounter_state = EncounterState.RECOVERY
 				recovery_timer_remaining = breather_dur
+				if CombatDirector.instance and CombatDirector.instance.has_method("set_recovery_active"):
+					CombatDirector.instance.set_recovery_active(true)
 				if EventBus:
 					EventBus.wave_started.emit(current_wave, "TACTICAL BREATHER // GATHER SALVAGE & REPOSITION")
 		EncounterState.RECOVERY:
 			recovery_timer_remaining -= delta
 			if recovery_timer_remaining <= 0.0:
 				encounter_state = EncounterState.STREAMING
-				next_surge_time = elapsed_survival_time + randf_range(s_min, s_max)
+				if CombatDirector.instance and CombatDirector.instance.has_method("set_recovery_active"):
+					CombatDirector.instance.set_recovery_active(false)
+				next_surge_time = elapsed_survival_time + _get_encounter_rng().randf_range(s_min, s_max)
 
 	# 2. Sector Rotation (preserves primary + adjacent sector, guarantees >=120 deg escape arc)
 	_sector_rotation_timer -= delta
@@ -1888,7 +2130,7 @@ func _process_continuous_survival(delta: float) -> void:
 			rotate_directional_sectors()
 			var r_min: float = difficulty_profile.sector_rotation_interval_min if difficulty_profile else 10.0
 			var r_max: float = difficulty_profile.sector_rotation_interval_max if difficulty_profile else 15.0
-			_sector_rotation_timer = randf_range(r_min, r_max)
+			_sector_rotation_timer = _get_encounter_rng().randf_range(r_min, r_max)
 		else:
 			# Postpone rotation during heavy encounter telegraphs
 			_sector_rotation_timer = 2.0
@@ -1919,8 +2161,8 @@ func _process_continuous_survival(delta: float) -> void:
 	continuous_air_budget += base_air_budget_rate * time_mult * state_mult * diff_scale * delta
 
 	# Cap stored budget to prevent runaway stockpiles during quiet lulls
-	continuous_ground_budget = clampf(continuous_ground_budget, 0.0, 50.0)
-	continuous_air_budget = clampf(continuous_air_budget, 0.0, 30.0)
+	continuous_ground_budget = clampf(continuous_ground_budget, 0.0, 120.0)
+	continuous_air_budget = clampf(continuous_air_budget, 0.0, 60.0)
 
 	# 4. Offscreen distant enemy cleanup (every ~2 seconds)
 	var cleanup_interval: float = encounter_config.offscreen_cleanup_check_interval if encounter_config else 2.0
@@ -1943,7 +2185,7 @@ func _process_continuous_survival(delta: float) -> void:
 	# 8. Periodic rooftop threat check
 	_rooftop_check_timer -= delta
 	if _rooftop_check_timer <= 0.0:
-		_rooftop_check_timer = randf_range(22.0, 32.0)
+		_rooftop_check_timer = _get_encounter_rng().randf_range(22.0, 32.0)
 		var player := _get_player()
 		var p_pos := player.global_position if player else Vector3.ZERO
 		spawn_rooftop_threat(get_survival_stage(), p_pos)
@@ -1996,11 +2238,12 @@ func rotate_directional_sectors() -> void:
 		_apply_mission_sector_focus()
 		return
 	var old_p := primary_entry_sector
-	var new_p := (old_p + randi_range(2, 6)) % 8
+	var rng := _get_encounter_rng()
+	var new_p := (old_p + rng.randi_range(2, 6)) % 8
 	primary_entry_sector = new_p
 
 	# At most one adjacent secondary sector (+1 or -1)
-	var adj_offset := 1 if randf() < 0.5 else -1
+	var adj_offset := 1 if rng.randf() < 0.5 else -1
 	secondary_entry_sector = posmod(new_p + adj_offset, 8)
 
 	# Continuous escape arc of at least 120 degrees (3 contiguous sectors opposite = 135 deg)
@@ -2029,9 +2272,10 @@ func _rotate_active_sectors() -> void:
 		_apply_mission_sector_focus()
 		return
 	var old_first := _active_sectors[0] if _active_sectors.size() > 0 else 0
-	var new_first := (old_first + randi_range(2, 6)) % 8
+	var rng := _get_encounter_rng()
+	var new_first := (old_first + rng.randi_range(2, 6)) % 8
 	var offsets: Array[int] = [2, 3]
-	var offset: int = offsets.pick_random()
+	var offset: int = offsets[rng.randi() % offsets.size()]
 	var new_second: int = (new_first + offset) % 8
 	_active_sectors = [new_first, new_second]
 
@@ -2188,7 +2432,7 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 		var q_min := maxf(min_dist, 45.0 if is_air else 38.0)
 		var q_max := maxf(q_min + 8.0, max_dist)
 		var natural_cands := streamer.query_natural_spawn_candidates(player_pos, cat, q_min, q_max)
-		natural_cands.shuffle()
+		_shuffle_array(natural_cands)
 		for cand in natural_cands:
 			var c_pos: Vector3 = cand["position"]
 			var s_key := _get_streamer_source_key(cand)
@@ -2281,7 +2525,7 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 			continue
 
 		var base_angle := float(sector) * (TAU / 8.0)
-		var angle := base_angle + randf_range(-PI / 8.0, PI / 8.0)
+		var angle := base_angle + _get_encounter_rng().randf_range(-PI / 8.0, PI / 8.0)
 
 		if near_boundary and inward_dir.length_squared() > 0.01:
 			var inward_angle := atan2(inward_dir.y, inward_dir.x)
@@ -2289,7 +2533,7 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 			if angle_diff > (PI * 0.5):
 				angle = lerp_angle(angle, inward_angle, 0.75)
 
-		var dist := randf_range(min_dist, max_dist)
+		var dist := _get_encounter_rng().randf_range(min_dist, max_dist)
 		if dist < min_dist:
 			rejected_spawn_reasons["standoff_distance"] += 1
 			continue
@@ -2304,7 +2548,7 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 		var cand_alt := 0.0
 		if is_air:
 			var surface_y := _get_surface_height(cand_x, cand_z)
-			cand_alt = maxf(clampf(_get_player_altitude() + randf_range(1.0, 3.5), 14.0, 22.0), surface_y + 4.5)
+			cand_alt = maxf(clampf(_get_player_altitude() + _get_encounter_rng().randf_range(1.0, 3.5), 14.0, 22.0), surface_y + 4.5)
 
 		var cand_pos := Vector3(cand_x, cand_alt, cand_z)
 
@@ -2351,8 +2595,8 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 			if is_sector_in_escape_arc(sector):
 				continue
 			var base_angle := float(sector) * (TAU / 8.0)
-			var angle := base_angle + randf_range(-PI / 8.0, PI / 8.0)
-			var dist := randf_range(broader_min, broader_max)
+			var angle := base_angle + _get_encounter_rng().randf_range(-PI / 8.0, PI / 8.0)
+			var dist := _get_encounter_rng().randf_range(broader_min, broader_max)
 			var cand_x := ref_center.x + cos(angle) * dist
 			var cand_z := ref_center.z + sin(angle) * dist
 			if absf(cand_x) > arena_bound or absf(cand_z) > arena_bound:
@@ -2360,7 +2604,7 @@ func get_dynamic_encounter_spawn_point(is_air: bool, player_pos: Vector3, min_di
 			var cand_alt := 0.0
 			if is_air:
 				var surface_y := _get_surface_height(cand_x, cand_z)
-				cand_alt = maxf(clampf(_get_player_altitude() + randf_range(1.0, 3.5), 14.0, 22.0), surface_y + 4.5)
+				cand_alt = maxf(clampf(_get_player_altitude() + _get_encounter_rng().randf_range(1.0, 3.5), 14.0, 22.0), surface_y + 4.5)
 			var cand_pos := Vector3(cand_x, cand_alt, cand_z)
 			if is_position_in_camera_view(cand_pos, margin_px):
 				continue
@@ -2562,7 +2806,7 @@ func _despawn_enemy_quietly(enemy: Node3D) -> void:
 	var is_air := _is_air_enemy(enemy)
 	if is_air and _early_air_active and current_wave <= 2:
 		if _early_air_timer > early_air_replenish_interval_max or _early_air_timer <= 0.0:
-			_early_air_timer = randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
+			_early_air_timer = _get_encounter_rng().randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
 	var recycle_ratio: float = encounter_config.recycle_budget_ratio if encounter_config else 0.5
 	if is_air:
 		continuous_air_budget += 4.0 * recycle_ratio
@@ -2638,18 +2882,18 @@ func _process_continuous_spawning(delta: float) -> void:
 
 	# 1. Formation Spawning
 	_continuous_formation_cooldown -= delta
-	if _continuous_formation_cooldown <= 0.0 and (get_effective_total_count() + 3 <= cap):
+	if _continuous_formation_cooldown <= 0.0 and (get_effective_total_count() + 2 <= cap):
 		if try_spawn_formation_with_fallback(stage, p_pos):
-			_continuous_formation_cooldown = randf_range(4.0, 7.0) if current_living < p_band.x else (randf_range(6.0, 10.0) if is_behind_target else randf_range(9.0, 15.0))
+			_continuous_formation_cooldown = _get_encounter_rng().randf_range(3.5, 5.5) if current_living < p_band.x else (_get_encounter_rng().randf_range(5.0, 8.0) if is_behind_target else _get_encounter_rng().randf_range(7.0, 11.0))
 			return
 
 	# 2. Ambient Stream Spawning
 	_continuous_stream_cooldown -= delta
 	if _continuous_stream_cooldown <= 0.0:
 		_spawn_continuous_stream(stage, p_pos)
-		if current_living + 1 < p_band.x:
+		if is_behind_target and get_effective_total_count() < cap:
 			_spawn_continuous_stream(stage, p_pos)
-			_continuous_stream_cooldown = randf_range(1.0, 1.5)
+			_continuous_stream_cooldown = _get_encounter_rng().randf_range(0.75, 1.1)
 		else:
 			_continuous_stream_cooldown = _get_next_stream_interval(stage, is_behind_target)
 
@@ -2663,8 +2907,8 @@ func try_spawn_formation_with_fallback(stage: int, p_pos: Vector3) -> bool:
 		var s_pos := get_frustum_safe_spawn_pos(p_pos, 35.0, 55.0)
 		if not s_pos.is_finite() or not _spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos):
 			return false
-		var ang := randf() * TAU
-		var second_raw := s_pos + Vector3(cos(ang), 0.0, sin(ang)) * randf_range(8.5, 12.0)
+		var ang := _get_encounter_rng().randf() * TAU
+		var second_raw := s_pos + Vector3(cos(ang), 0.0, sin(ang)) * _get_encounter_rng().randf_range(8.5, 12.0)
 		var second_pos := get_clamped_formation_member_position(second_raw, [s_pos], 8.0, Vector3(cos(ang), 0.0, sin(ang)), false)
 		var second: Node3D = _scene_infantry.instantiate() as Node3D
 		if second:
@@ -2700,21 +2944,21 @@ func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
 		if not spawned.is_empty():
 			return true
 
-	if current_wave >= 6 and stage >= 4 and continuous_air_budget >= 20.0 and can_spawn_formation("elite_encounter") and get_active_air_count("ace_gunships") < cap_ace and randf() > 0.4:
+	if current_wave >= 6 and stage >= 4 and continuous_air_budget >= 20.0 and can_spawn_formation("elite_encounter") and get_active_air_count("ace_gunships") < cap_ace and _get_encounter_rng().randf() > 0.4:
 		var entry := get_air_corridor_entry(p_pos, 45.0, 75.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_elite_air_encounter(entry["position"], entry["heading"])
 			continuous_air_budget -= 20.0
 			return true
 
-	if current_wave >= 6 and stage >= 4 and continuous_air_budget >= 17.0 and can_spawn_formation("electronic_strike") and get_active_air_count("jammers") < cap_jammer and randf() > 0.4:
+	if current_wave >= 6 and stage >= 4 and continuous_air_budget >= 17.0 and can_spawn_formation("electronic_strike") and get_active_air_count("jammers") < cap_jammer and _get_encounter_rng().randf() > 0.4:
 		var entry := get_air_corridor_entry(p_pos, 45.0, 75.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_electronic_strike_group(entry["position"], entry["heading"], true)
 			continuous_air_budget -= 17.0
 			return true
 
-	if current_wave >= 6 and stage >= 3 and continuous_ground_budget >= 40.0 and continuous_air_budget >= 22.0 and can_spawn_formation("combined_arms") and randf() > 0.35:
+	if current_wave >= 6 and stage >= 3 and continuous_ground_budget >= 40.0 and continuous_air_budget >= 22.0 and can_spawn_formation("combined_arms") and _get_encounter_rng().randf() > 0.35:
 		var entry := get_air_corridor_entry(p_pos, 45.0, 72.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_combined_arms_formation(entry["position"], entry["heading"])
@@ -2722,21 +2966,21 @@ func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
 			continuous_air_budget -= 22.0
 			return true
 
-	if current_wave >= 6 and stage >= 3 and continuous_air_budget >= 13.0 and can_spawn_formation("air_intercept") and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.35:
+	if current_wave >= 6 and stage >= 3 and continuous_air_budget >= 13.0 and can_spawn_formation("air_intercept") and get_active_air_count("attack_gunships") < cap_gunship and _get_encounter_rng().randf() > 0.35:
 		var entry := get_air_corridor_entry(p_pos, 42.0, 70.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_air_intercept(entry["position"], entry["heading"], 1)
 			continuous_air_budget -= 13.0
 			return true
 
-	if current_wave >= 6 and stage >= 2 and continuous_air_budget >= 14.0 and can_spawn_formation("harassment_group") and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.3:
+	if current_wave >= 6 and stage >= 2 and continuous_air_budget >= 14.0 and can_spawn_formation("harassment_group") and get_active_air_count("rocket_raiders") < cap_raider and _get_encounter_rng().randf() > 0.3:
 		var entry := get_air_corridor_entry(p_pos, 42.0, 70.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_harassment_group(entry["position"], entry["heading"])
 			continuous_air_budget -= 14.0
 			return true
 
-	if stage >= 2 and continuous_ground_budget >= 55.0 and can_spawn_formation("road_column") and randf() > 0.3:
+	if stage >= 2 and continuous_ground_budget >= 55.0 and can_spawn_formation("road_column") and _get_encounter_rng().randf() > 0.3:
 		var entry := get_authored_ground_spawn("road_column", p_pos, 35.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_road_column(entry["position"], entry["heading"], 3)
@@ -2757,8 +3001,8 @@ func _try_spawn_continuous_formation(stage: int, p_pos: Vector3) -> bool:
 		var entry := get_authored_ground_spawn("infantry", p_pos, 35.0)
 		var s_pos: Vector3 = entry["position"]
 		_spawn_continuous_enemy(_scene_infantry, p_pos, 0.0, s_pos)
-		var ang := randf() * TAU
-		var second_raw := s_pos + Vector3(cos(ang), 0.0, sin(ang)) * randf_range(8.5, 12.0)
+		var ang := _get_encounter_rng().randf() * TAU
+		var second_raw := s_pos + Vector3(cos(ang), 0.0, sin(ang)) * _get_encounter_rng().randf_range(8.5, 12.0)
 		var second_pos := get_clamped_formation_member_position(second_raw, [s_pos], 8.0, Vector3(cos(ang), 0.0, sin(ang)), false)
 		var second: Node3D = _scene_infantry.instantiate() as Node3D
 		if second:
@@ -2799,9 +3043,9 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 
 	# Minimum budget guarantee when below target count to prevent starving
 	if current_living < target_count:
-		continuous_ground_budget = maxf(continuous_ground_budget, 25.0)
-		if continuous_air_budget < 4.0 and stage >= 1:
-			continuous_air_budget = maxf(continuous_air_budget, 4.0)
+		continuous_ground_budget = maxf(continuous_ground_budget, 30.0)
+		if continuous_air_budget < 6.0 and stage >= 1:
+			continuous_air_budget = maxf(continuous_air_budget, 6.0)
 
 	# --- Data-driven profile path (Phase 10A) ---
 	if difficulty_profile != null:
@@ -2829,8 +3073,16 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		var can_spawn_air: bool = (not _early_air_active and (current_wave > 2 or elapsed_survival_time >= 90.0)) and (eff_air < max_air) and (eff_air < air_cap) and (continuous_air_budget >= 4.0)
 		var can_spawn_ground: bool = (ground_living < ground_cap) and (continuous_ground_budget >= 15.0)
 
+		var rng := _get_encounter_rng()
 		var spawn_air_now: bool = false
-		if can_spawn_air and (not can_spawn_ground or eff_air < 2 or randf() < 0.45):
+		var air_chance: float = 0.45
+		if active_roster == ThematicRoster.AIRBORNE_BLITZ:
+			air_chance = 0.65
+		elif active_roster == ThematicRoster.IRON_VANGUARD:
+			air_chance = 0.25
+		elif active_roster == ThematicRoster.GUERRILLA_AMBUSH:
+			air_chance = 0.40
+		if can_spawn_air and (not can_spawn_ground or eff_air < 2 or rng.randf() < air_chance):
 			spawn_air_now = true
 		elif not can_spawn_ground and not can_spawn_air:
 			return
@@ -2840,9 +3092,12 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			var air_scene: PackedScene = _scene_air_scout
 			var air_cost: float = 4.0
 
-			# Around 3 minutes (180s)+, heavy gunship and MiG-17 passes unlock!
-			if elapsed_survival_time >= 180.0 and randf() < 0.30:
-				if randf() < 0.5 and _scene_mig_striker:
+			# In Opening beat (Waves 1-2 / <60s), strictly enforce light scouts (1-2 max)
+			if current_wave <= 2 or elapsed_survival_time < 60.0:
+				air_scene = _scene_air_scout
+				air_cost = 4.0
+			elif (current_wave >= 6 or elapsed_survival_time >= 210.0) and rng.randf() < (0.45 if active_roster == ThematicRoster.AIRBORNE_BLITZ else 0.30):
+				if rng.randf() < 0.5 and _scene_mig_striker:
 					air_scene = _scene_mig_striker
 					air_cost = 8.0
 					air_spawn_alt = clampf(_get_player_altitude() + 6.0, 18.0, 26.0)
@@ -2850,16 +3105,16 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 					air_scene = _scene_air_heavy
 					air_cost = 10.0
 					air_spawn_alt = clampf(_get_player_altitude() + 3.0, 15.0, 22.0)
-			elif current_wave >= 9 and continuous_air_budget >= 12.0 and randf() < 0.20:
+			elif (current_wave >= 6 or elapsed_survival_time >= 240.0) and continuous_air_budget >= 12.0 and rng.randf() < 0.25:
 				air_scene = _scene_air_ace
 				air_cost = 12.0
-			elif (current_wave >= 4 or elapsed_survival_time >= 150.0) and continuous_air_budget >= 8.0 and randf() < 0.30:
+			elif (current_wave >= 6 or elapsed_survival_time >= 165.0) and continuous_air_budget >= 8.0 and rng.randf() < 0.35:
 				air_scene = _scene_air_gunship
 				air_cost = 8.0
-			elif (current_wave >= 3 or elapsed_survival_time >= 90.0) and continuous_air_budget >= 7.0 and randf() < 0.25:
+			elif (current_wave >= 5 or elapsed_survival_time >= 130.0) and continuous_air_budget >= 7.0 and rng.randf() < (0.45 if active_roster == ThematicRoster.GUERRILLA_AMBUSH else 0.25):
 				air_scene = _scene_air_jammer
 				air_cost = 7.0
-			elif (current_wave >= 2 or elapsed_survival_time >= 45.0) and continuous_air_budget >= 6.0 and randf() < 0.35:
+			elif (current_wave >= 3 or elapsed_survival_time >= 60.0) and continuous_air_budget >= 6.0 and rng.randf() < 0.40:
 				air_scene = _scene_air_raider
 				air_cost = 6.0
 			else:
@@ -2870,11 +3125,24 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			continuous_air_budget -= air_cost
 		else:
 			# Spawn 1 ground unit respecting wave weights and caps
-			var weights: Dictionary = target.composition_weights if target else {"fodder": 0.8, "light_shooter": 0.2}
+			var weights: Dictionary = (target.composition_weights if target else {"fodder": 0.8, "light_shooter": 0.2}).duplicate()
+			if RunSeedManager.is_procedural_run:
+				match active_roster:
+					ThematicRoster.IRON_VANGUARD:
+						weights["heavy"] = float(weights.get("heavy", 0.0)) * 2.0 + 0.25
+						weights["armored"] = float(weights.get("armored", 0.0)) * 2.0 + 0.25
+						weights["fodder"] = float(weights.get("fodder", 0.5)) * 0.5
+					ThematicRoster.GUERRILLA_AMBUSH:
+						weights["light_shooter"] = float(weights.get("light_shooter", 0.2)) * 2.5 + 0.3
+						weights["anti_air"] = float(weights.get("anti_air", 0.0)) * 1.5 + 0.1
+					ThematicRoster.AIRBORNE_BLITZ:
+						weights["fodder"] = float(weights.get("fodder", 0.8)) + 0.3
+						weights["heavy"] = float(weights.get("heavy", 0.0)) * 0.4
+
 			var total_w := 0.0
 			for role in weights.keys():
 				total_w += float(weights[role])
-			var roll := randf() * total_w
+			var roll := rng.randf() * total_w
 			var accum := 0.0
 			var chosen_role := "fodder"
 			for role in weights.keys():
@@ -2886,7 +3154,15 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 			var g_scene: PackedScene = _scene_infantry
 			var g_cost: float = 15.0
 
-			if (chosen_role == "anti_air" or chosen_role == "sam") and cur_sam < max_sam and continuous_ground_budget >= 40.0:
+			# In Opening beat (Waves 1-2 / <60s), strictly enforce light units: infantry or buggy (never heavy SAM/Mortar/Tank)
+			if current_wave <= 2 or elapsed_survival_time < 60.0:
+				if rng.randf() < 0.40:
+					g_scene = _scene_buggy
+					g_cost = 18.0
+				else:
+					g_scene = _scene_infantry
+					g_cost = 15.0
+			elif (chosen_role == "anti_air" or chosen_role == "sam") and cur_sam < max_sam and continuous_ground_budget >= 40.0:
 				if current_wave != 5 or cur_mortar == 0:
 					g_scene = _scene_sam
 					g_cost = 40.0
@@ -2902,10 +3178,11 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 				g_scene = _scene_tank
 				g_cost = 28.0
 			elif (chosen_role == "armored" or chosen_role == "medium_armored") and cur_med < max_med and continuous_ground_budget >= 26.0:
-				g_scene = _scene_ifv if randf() < 0.5 else _scene_apc
+				g_scene = _scene_ifv if rng.randf() < (0.7 if active_roster == ThematicRoster.IRON_VANGUARD else 0.5) else _scene_apc
 				g_cost = 26.0 if g_scene == _scene_ifv else 28.0
 			elif chosen_role == "light_shooter" and continuous_ground_budget >= 20.0:
-				if randf() < 0.5:
+				var turret_bias := 0.70 if active_roster == ThematicRoster.GUERRILLA_AMBUSH else 0.50
+				if rng.randf() < turret_bias:
 					var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
 					if t_node:
 						continuous_ground_budget -= 20.0
@@ -2914,7 +3191,11 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 					g_scene = _scene_technical
 					g_cost = 22.0
 			else:
-				if current_visual + 4 <= max_visual and randf() < 0.70:
+				var buggy_bias := 0.65 if active_roster == ThematicRoster.AIRBORNE_BLITZ else 0.30
+				if rng.randf() < buggy_bias:
+					g_scene = _scene_buggy
+					g_cost = 18.0
+				elif current_visual + 4 <= max_visual and rng.randf() < 0.70:
 					g_scene = _scene_infantry
 					g_cost = 15.0
 				else:
@@ -2934,33 +3215,33 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 		var chosen_scene: PackedScene = _scene_infantry
 		var cost: float = 15.0
 
-		if elapsed_survival_time >= 300.0 and continuous_ground_budget >= 40.0 and get_active_unit_count("sam") < cap_sam and randf() > 0.7:
+		if elapsed_survival_time >= 300.0 and continuous_ground_budget >= 40.0 and get_active_unit_count("sam") < cap_sam and _get_encounter_rng().randf() > 0.7:
 			chosen_scene = _scene_sam
 			cost = 40.0
-		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 34.0 and get_active_unit_count("mortar") < cap_mortar and randf() > 0.65:
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 34.0 and get_active_unit_count("mortar") < cap_mortar and _get_encounter_rng().randf() > 0.65:
 			chosen_scene = _scene_mortar
 			cost = 34.0
-		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 35.0 and get_active_unit_count("jammer") < cap_support and randf() > 0.7:
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 35.0 and get_active_unit_count("jammer") < cap_support and _get_encounter_rng().randf() > 0.7:
 			chosen_scene = _scene_ground_jammer
 			cost = 35.0
-		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 28.0 and randf() > 0.5:
+		elif elapsed_survival_time >= 300.0 and continuous_ground_budget >= 28.0 and _get_encounter_rng().randf() > 0.5:
 			chosen_scene = _scene_tank
 			cost = 28.0
-		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 28.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 28.0 and get_active_unit_count("transport") < cap_transport and _get_encounter_rng().randf() > 0.6:
 			chosen_scene = _scene_apc
 			cost = 28.0
-		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 26.0 and randf() > 0.55:
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 26.0 and _get_encounter_rng().randf() > 0.55:
 			chosen_scene = _scene_ifv
 			cost = 26.0
-		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 20.0 and randf() > 0.5:
+		elif elapsed_survival_time >= 120.0 and continuous_ground_budget >= 20.0 and _get_encounter_rng().randf() > 0.5:
 			var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
 			if t_node:
 				continuous_ground_budget -= 20.0
 			chosen_scene = null
-		elif continuous_ground_budget >= 22.0 and randf() > 0.5:
+		elif continuous_ground_budget >= 22.0 and _get_encounter_rng().randf() > 0.5:
 			chosen_scene = _scene_technical
 			cost = 22.0
-		elif continuous_ground_budget >= 18.0 and randf() > 0.4:
+		elif continuous_ground_budget >= 18.0 and _get_encounter_rng().randf() > 0.4:
 			chosen_scene = _scene_buggy
 			cost = 18.0
 		else:
@@ -2976,16 +3257,16 @@ func _spawn_continuous_stream(stage: int, p_pos: Vector3) -> void:
 	var eff_air_fb := get_effective_air_count()
 	var max_air_fb: int = mini(early_air_active_cap, air_cap) if (elapsed_survival_time < 90.0 and current_wave <= 2) else air_cap
 	if not _early_air_active and (current_wave > 2 or elapsed_survival_time >= 90.0) and eff_air_fb < max_air_fb and eff_air_fb < air_cap:
-		if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and randf() > 0.45:
+		if elapsed_survival_time >= 480.0 and continuous_air_budget >= 9.0 and get_active_unit_count("gunship") < cap_gunship and _get_encounter_rng().randf() > 0.45:
 			_spawn_continuous_enemy(_scene_air_gunship, p_pos, p_y)
 			continuous_air_budget -= 9.0
-		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and randf() > 0.6:
+		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 8.0 and get_active_unit_count("jammer") < cap_jammer and _get_encounter_rng().randf() > 0.6:
 			_spawn_continuous_enemy(_scene_air_jammer, p_pos, p_y + 3.0)
 			continuous_air_budget -= 8.0
-		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and randf() > 0.6:
+		elif elapsed_survival_time >= 300.0 and continuous_air_budget >= 7.0 and get_active_unit_count("transport") < cap_transport and _get_encounter_rng().randf() > 0.6:
 			_spawn_continuous_enemy(_scene_air_transport, p_pos, p_y)
 			continuous_air_budget -= 7.0
-		elif elapsed_survival_time >= 120.0 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and randf() > 0.4:
+		elif elapsed_survival_time >= 120.0 and continuous_air_budget >= 6.0 and get_active_unit_count("raider") < cap_raider and _get_encounter_rng().randf() > 0.4:
 			_spawn_continuous_enemy(_scene_air_raider, p_pos, p_y + 2.0)
 			continuous_air_budget -= 6.0
 		elif continuous_air_budget >= 4.0 and get_active_unit_count("scout") < cap_scout:
@@ -3027,7 +3308,7 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 		failed_spawn_attempts += 1
 		return null
 
-	if not is_spawning_allowed():
+	if not forced_pos.is_finite() and not is_spawning_allowed():
 		return null
 
 	var is_air: bool = _is_air_scene(scene)
@@ -3044,7 +3325,7 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 		var pos_val: Vector3 = spawn_data.get("position", Vector3.INF)
 		if not spawn_data.get("success", false) or not pos_val.is_finite():
 			failed_spawn_attempts += 1
-			_continuous_stream_cooldown = randf_range(0.5, 1.0)
+			_continuous_stream_cooldown = _get_encounter_rng().randf_range(0.5, 1.0)
 			return null
 		spawn_pos = pos_val
 		heading = spawn_data.get("heading", Vector3.FORWARD)
@@ -3075,7 +3356,7 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 	var val_res := validate_final_spawn_transform(final_pos, is_air, req_radius)
 	if not val_res.get("valid", false):
 		failed_spawn_attempts += 1
-		_continuous_stream_cooldown = randf_range(0.6, 1.2)
+		_continuous_stream_cooldown = _get_encounter_rng().randf_range(0.6, 1.2)
 		return null
 
 	var enemy: Node3D = scene.instantiate() as Node3D
@@ -3100,7 +3381,7 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 		source_key
 	)
 
-	if elapsed_survival_time > 180.0 and randf() < clampf(0.12 + (elapsed_survival_time - 180.0) / 600.0 * 0.25, 0.12, 0.35):
+	if elapsed_survival_time > 180.0 and _get_encounter_rng().randf() < clampf(0.12 + (elapsed_survival_time - 180.0) / 600.0 * 0.25, 0.12, 0.35):
 		apply_elite_modifier(enemy)
 
 	# Attach headlights to non-infantry ground vehicles for arrival readability
@@ -3118,12 +3399,25 @@ func _spawn_continuous_enemy(scene: PackedScene, player_pos: Vector3, altitude: 
 	var parent := _get_spawn_parent()
 	parent.add_child.call_deferred(enemy)
 	_register_spawned_node(enemy)
+	_spawn_telegraph(final_pos, is_air)
 	if not res_id.is_empty():
 		bind_enemy_to_reservation(res_id, enemy)
 	record_spawn_event(source_key, final_pos)
 	_log_spawn_event(enemy, source_key, sector, final_pos, req_radius)
 	_notify_progress()
 	return enemy
+
+func _spawn_telegraph(pos: Vector3, is_air: bool = false) -> void:
+	if not is_inside_tree():
+		return
+	var teleg_scene: PackedScene = preload("res://scenes/vfx/spawn_telegraph_fx.tscn")
+	if teleg_scene:
+		var fx := teleg_scene.instantiate() as Node3D
+		if fx:
+			fx.transform.origin = pos + (Vector3.ZERO if is_air else Vector3(0.0, 0.15, 0.0))
+			var p := _get_spawn_parent()
+			if p:
+				p.add_child.call_deferred(fx)
 
 func register_mission_enemy(enemy: Node3D) -> void:
 	# Mission targets share the same population bookkeeping and cleanup path as
@@ -3335,6 +3629,23 @@ func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
 		if form.preferred_districts.has(player_district):
 			weight *= 1.75
 
+		match active_roster:
+			ThematicRoster.AIRBORNE_BLITZ:
+				if form.category == 2: # AIR
+					weight *= 2.5
+				elif form.category == 1: # ARMORED
+					weight *= 0.5
+			ThematicRoster.IRON_VANGUARD:
+				if form.category == 1: # ARMORED
+					weight *= 2.5
+				elif form.category == 2: # AIR
+					weight *= 0.4
+			ThematicRoster.GUERRILLA_AMBUSH:
+				if form.category == 3 or form.category == 0: # SUPPORT or FODDER
+					weight *= 2.2
+				elif form.category == 1: # ARMORED
+					weight *= 0.4
+
 		candidates.append(form)
 		weights.append(weight)
 
@@ -3345,7 +3656,7 @@ func select_procedural_formation(p_pos: Vector3) -> FormationDefinition:
 	for w in weights:
 		total_weight += w
 
-	var roll := randf() * total_weight
+	var roll := _get_encounter_rng().randf() * total_weight
 	var accum := 0.0
 	for i in range(candidates.size()):
 		accum += weights[i]
@@ -3571,7 +3882,7 @@ func _get_spawn_parent() -> Node:
 func _get_player() -> Node3D:
 	if is_inside_tree() and get_tree():
 		for p in get_tree().get_nodes_in_group("player"):
-			if is_instance_valid(p) and not p.is_queued_for_deletion():
+			if _is_node_alive_and_not_queued(p):
 				return p as Node3D
 	return null
 
@@ -3586,9 +3897,10 @@ func _spend_budget(config: Dictionary) -> void:
 
 	var player := _get_player()
 	var p_pos: Vector3 = player.global_position if player else Vector3.ZERO
+	var rng := _get_encounter_rng()
 
 	# --- 1. Procedural Combined Arms Formations ---
-	if (allowed.has("gunship") or allowed.has("raider")) and allowed.has("tank") and g_budget >= 45 and a_budget >= 25 and randf() > 0.45:
+	if (allowed.has("gunship") or allowed.has("raider")) and allowed.has("tank") and g_budget >= 45 and a_budget >= 25 and rng.randf() > 0.45:
 		var entry := get_air_corridor_entry(p_pos, 48.0, 75.0)
 		if entry.get("success", false) and entry.get("position", Vector3.INF).is_finite():
 			spawn_combined_arms_formation(entry["position"], entry["heading"])
@@ -3596,12 +3908,12 @@ func _spend_budget(config: Dictionary) -> void:
 			a_budget -= 25
 
 	# --- 2. Ground Tactical Formations ---
-	if allowed.has("sam") and g_budget >= 80 and randf() > 0.4:
+	if allowed.has("sam") and g_budget >= 80 and rng.randf() > 0.4:
 		var sam_pos := get_frustum_safe_spawn_pos(p_pos, 45.0, 72.0)
 		spawn_sam_nest(sam_pos, false)
 		g_budget -= 80
 
-	if allowed.has("tank") and g_budget >= 60 and randf() > 0.35:
+	if allowed.has("tank") and g_budget >= 60 and rng.randf() > 0.35:
 		var col_pos := get_frustum_safe_spawn_pos(p_pos, 45.0, 72.0)
 		var approach := (p_pos - col_pos)
 		approach.y = 0.0
@@ -3610,13 +3922,13 @@ func _spend_budget(config: Dictionary) -> void:
 
 	# --- 3. Remainder Ground Units ---
 	while g_budget >= 15:
-		if allowed.has("tank") and g_budget >= 30 and randf() > 0.5:
+		if allowed.has("tank") and g_budget >= 30 and rng.randf() > 0.5:
 			_spawn_enemy(_scene_tank, p_pos, 0.0)
 			g_budget -= 30
-		elif allowed.has("sam") and g_budget >= 40 and randf() > 0.6:
+		elif allowed.has("sam") and g_budget >= 40 and rng.randf() > 0.6:
 			_spawn_enemy(_scene_sam, p_pos, 0.0)
 			g_budget -= 40
-		elif allowed.has("turret") and g_budget >= 20 and randf() > 0.5:
+		elif allowed.has("turret") and g_budget >= 20 and rng.randf() > 0.5:
 			var t_node := spawn_rooftop_turret(p_pos, 35.0, 95.0, true)
 			if t_node:
 				g_budget -= 20
@@ -3634,10 +3946,10 @@ func _spend_budget(config: Dictionary) -> void:
 	# --- 4. Remainder Air Units ---
 	var p_y: float = _get_player_altitude()
 	while a_budget >= 4:
-		if allowed.has("gunship") and a_budget >= 9 and get_active_air_count("attack_gunships") < cap_gunship and randf() > 0.5:
+		if allowed.has("gunship") and a_budget >= 9 and get_active_air_count("attack_gunships") < cap_gunship and rng.randf() > 0.5:
 			_spawn_enemy(_scene_air_gunship, p_pos, clampf(p_y, 13.0, 18.0))
 			a_budget -= 9
-		elif allowed.has("raider") and a_budget >= 6 and get_active_air_count("rocket_raiders") < cap_raider and randf() > 0.5:
+		elif allowed.has("raider") and a_budget >= 6 and get_active_air_count("rocket_raiders") < cap_raider and rng.randf() > 0.5:
 			_spawn_enemy(_scene_air_raider, p_pos, clampf(p_y, 15.0, 21.0))
 			a_budget -= 6
 		elif allowed.has("scout") and a_budget >= 4 and get_active_air_count("scouts") < cap_scout:
@@ -4014,7 +4326,7 @@ func _get_next_spawn_sector() -> int:
 			candidates.append(i)
 	if candidates.is_empty():
 		_recent_spawn_sectors.clear()
-		return randi() % 8
+		return _get_encounter_rng().randi() % 8
 	return candidates.pick_random()
 
 func _record_spawn_sector(sector: int) -> void:
@@ -4060,7 +4372,7 @@ func _get_safe_perimeter_fallback(player_pos: Vector3, is_air: bool = false, req
 		if not is_spawn_position_clear(test_pt, is_air, required_radius):
 			continue
 
-		var score: float = 100.0 - absf(d - 55.0) + randf_range(0.0, 20.0)
+		var score: float = 100.0 - absf(d - 55.0) + _get_encounter_rng().randf_range(0.0, 20.0)
 		valid_candidates.append({
 			"position": test_pt,
 			"score": score,
@@ -4098,8 +4410,8 @@ func _get_sector_spawn_position(player_pos: Vector3, sector: int, min_dist: floa
 	var base_angle := float(sector) * (TAU / 8.0)
 	var req_rad := float(SEPARATION_RADII["air_default"]) if is_air else float(SEPARATION_RADII["ground_default"])
 	for attempt in range(8):
-		var angle := base_angle + randf_range(-PI / 6.0, PI / 6.0)
-		var dist := randf_range(min_dist, max_dist)
+		var angle := base_angle + _get_encounter_rng().randf_range(-PI / 6.0, PI / 6.0)
+		var dist := _get_encounter_rng().randf_range(min_dist, max_dist)
 		var cand := Vector3(
 			clampf(player_pos.x + cos(angle) * dist, -arena_half_extents + 12.0, arena_half_extents - 12.0),
 			0.0,
@@ -4176,7 +4488,7 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		elif flat_dist > 120.0:
 			score -= 10.0
 
-		score += randf_range(0.0, 25.0)
+		score += _get_encounter_rng().randf_range(0.0, 25.0)
 		scored_candidates.append({ "marker": marker, "score": score, "dist": flat_dist })
 
 	scored_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -4187,15 +4499,15 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 		var marker: Marker3D = cand["marker"]
 		var base_pos: Vector3 = marker.global_position
 
-		var to_center := -base_pos
-		to_center.y = 0.0
-		var fwd := to_center.normalized() if to_center.length_squared() > 0.1 else Vector3.FORWARD
+		var to_player := (player_pos - base_pos)
+		to_player.y = 0.0
+		var fwd := to_player.normalized() if to_player.length_squared() > 0.1 else Vector3.FORWARD
 		var perp := Vector3(-fwd.z, 0.0, fwd.x)
 
 		for attempt in range(6):
 			var side_dir: float = 1.0 if (attempt % 2 == 0) else -1.0
-			var lateral_dist: float = randf_range(6.0, 15.0) if attempt < 4 else randf_range(2.0, 6.0)
-			var depth_off: float = randf_range(-3.0, 6.0)
+			var lateral_dist: float = _get_encounter_rng().randf_range(6.0, 15.0) if attempt < 4 else _get_encounter_rng().randf_range(2.0, 6.0)
+			var depth_off: float = _get_encounter_rng().randf_range(-3.0, 6.0)
 			var spawn_cand := base_pos + (perp * lateral_dist * side_dir) + (fwd * depth_off)
 			spawn_cand.y = base_pos.y
 
@@ -4208,7 +4520,7 @@ func get_authored_ground_spawn(enemy_tag: String = "infantry", player_pos: Vecto
 				return {
 					"success": true,
 					"position": spawn_cand,
-					"heading": heading.normalized(),
+					"heading": heading.normalized() if heading.length_squared() > 0.01 else Vector3.FORWARD,
 					"source_name": marker.name,
 					"source_key": marker.name,
 					"validation_result": "VALID"
@@ -4281,7 +4593,7 @@ func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 38.0, max_dis
 			if cam and (cam.is_position_behind(pos) or not cam.is_position_in_frustum(pos)):
 				score += 20.0
 
-			score += randf_range(0.0, 25.0)
+			score += _get_encounter_rng().randf_range(0.0, 25.0)
 			scored_candidates.append({ "marker": marker, "score": score, "pos": pos })
 
 		scored_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -4299,9 +4611,9 @@ func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 38.0, max_dis
 			for attempt in range(6):
 				var side_dir: float = 1.0 if (attempt % 2 == 0) else -1.0
 				# Add lateral corridor spread (±8-20m) and varied altitude
-				var lateral_dist: float = randf_range(8.0, 20.0) if attempt < 4 else randf_range(4.0, 8.0)
-				var depth_off: float = randf_range(-4.0, 6.0)
-				var alt_jitter: float = randf_range(-2.5, 4.0)
+				var lateral_dist: float = _get_encounter_rng().randf_range(8.0, 20.0) if attempt < 4 else _get_encounter_rng().randf_range(4.0, 8.0)
+				var depth_off: float = _get_encounter_rng().randf_range(-4.0, 6.0)
+				var alt_jitter: float = _get_encounter_rng().randf_range(-2.5, 4.0)
 				var p_y := clampf(_get_player_altitude() + alt_jitter, 13.0, 24.0)
 
 				var spawn_pos := base_pos + (perp * lateral_dist * side_dir) + (dir * depth_off)
@@ -4323,7 +4635,7 @@ func get_air_corridor_entry(player_pos: Vector3, min_dist: float = 38.0, max_dis
 		Vector3(arena_half_extents - 6.0, 18.0, 0.0),  # East
 		Vector3(-arena_half_extents + 6.0, 18.0, 0.0), # West
 	]
-	perimeter_candidates.shuffle()
+	_shuffle_array(perimeter_candidates)
 	for candidate in perimeter_candidates:
 		var flat_dist := Vector2(candidate.x - player_pos.x, candidate.z - player_pos.z).length()
 		var surf_y := _get_surface_height(candidate.x, candidate.z)
@@ -4365,7 +4677,7 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 				free_markers.append(marker)
 
 	if not free_markers.is_empty():
-		free_markers.shuffle()
+		_shuffle_array(free_markers)
 		chosen_marker = free_markers[0]
 		chosen_pos = chosen_marker.global_position
 	else:
@@ -4383,7 +4695,7 @@ func spawn_rooftop_threat(stage: int, player_pos: Vector3) -> Node3D:
 
 	# CommunicationsTower or high stages support SAM, otherwise GroundTurret
 	var scene_to_spawn: PackedScene = _scene_turret
-	if stage >= 3 and (chosen_marker == null or chosen_marker.name == "CommunicationsTower") and randf() > 0.40:
+	if stage >= 3 and (chosen_marker == null or chosen_marker.name == "CommunicationsTower") and _get_encounter_rng().randf() > 0.40:
 		scene_to_spawn = _scene_sam
 
 	if scene_to_spawn == _scene_turret:
@@ -4470,7 +4782,7 @@ func spawn_rooftop_turret(player_pos: Vector3, min_dist: float = 30.0, max_dist:
 					if not req_offscreen or not is_position_in_camera_view(marker.global_position, 80.0):
 						free_markers.append(marker)
 		if not free_markers.is_empty():
-			free_markers.shuffle()
+			_shuffle_array(free_markers)
 			chosen_marker = free_markers[0]
 			chosen_pos = chosen_marker.global_position
 
@@ -4516,12 +4828,12 @@ func _process_pickup_spawning(delta: float) -> void:
 		return
 	_pickup_spawn_timer -= delta
 	if _pickup_spawn_timer <= 0.0:
-		_pickup_spawn_timer = _pickup_spawn_interval + randf_range(-5.0, 7.0)
+		_pickup_spawn_timer = _pickup_spawn_interval + _get_encounter_rng().randf_range(-5.0, 7.0)
 		_try_spawn_authored_pickup()
 
 	_missile_pickup_timer -= delta
 	if _missile_pickup_timer <= 0.0:
-		_missile_pickup_timer = randf_range(_missile_pickup_interval_min, _missile_pickup_interval_max)
+		_missile_pickup_timer = _get_encounter_rng().randf_range(_missile_pickup_interval_min, _missile_pickup_interval_max)
 		spawn_authored_missile_pickup()
 
 func spawn_authored_missile_pickup() -> Node3D:
@@ -5080,7 +5392,7 @@ func spawn_two_direction_pincer(center_target: Vector3, distance: float = 65.0) 
 	var spawned: Array[Node3D] = []
 	var parent := _get_spawn_parent()
 
-	var angle_a := randf() * TAU
+	var angle_a := _get_encounter_rng().randf() * TAU
 	var angle_b := wrapf(angle_a + PI, 0.0, TAU)
 
 	var g_pos := Vector3(
@@ -5180,7 +5492,16 @@ func _spawn_radar_objective() -> void:
 	var radar: Node3D = _scene_radar.instantiate() as Node3D
 	if radar:
 		var spawn_pos := Vector3(-95.0, 0.5, -37.0)
-		if objective_locations_node:
+		var player := _get_player()
+		var p_pos := player.global_position if is_instance_valid(player) else Vector3.ZERO
+		var streamer := get_tree().get_first_node_in_group("city_streamer") as CityWorldStreamer
+		if streamer and RunSeedManager.is_procedural_run:
+			var candidates := streamer.get_objective_candidates(p_pos, 50.0, 160.0)
+			if not candidates.is_empty():
+				var rng := RunSeedManager.get_stream_rng(RunSeedManager.STREAM_FINALE)
+				spawn_pos = candidates[rng.randi_range(0, candidates.size() - 1)]
+				spawn_pos.y = 0.5
+		elif objective_locations_node:
 			var radar_marker := objective_locations_node.get_node_or_null("RadarObjective") as Marker3D
 			if radar_marker:
 				spawn_pos = radar_marker.global_position
@@ -5190,8 +5511,14 @@ func _spawn_radar_objective() -> void:
 		_register_spawned_node(radar)
 
 func _spawn_archon_boss() -> void:
+	if _is_archon_spawned:
+		return
+	var existing_boss := get_tree().get_first_node_in_group("bosses")
+	if is_instance_valid(existing_boss) and not existing_boss.is_queued_for_deletion():
+		return
 	if not _scene_archon or not _scene_archon.can_instantiate():
 		return
+	_is_archon_spawned = true
 	var boss: Node3D = _scene_archon.instantiate() as Node3D
 	if not boss:
 		return
@@ -5231,7 +5558,7 @@ func _spawn_archon_boss() -> void:
 func _on_enemy_destroyed(enemy: Node3D, _points: int) -> void:
 	if _is_air_enemy(enemy) and _early_air_active and current_wave <= 2:
 		if _early_air_timer > early_air_replenish_interval_max or _early_air_timer <= 0.0:
-			_early_air_timer = randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
+			_early_air_timer = _get_encounter_rng().randf_range(early_air_replenish_interval_min, early_air_replenish_interval_max)
 	_wave_enemies.erase(enemy)
 	if EnemyRegistry.instance:
 		EnemyRegistry.instance.unregister_enemy(enemy)

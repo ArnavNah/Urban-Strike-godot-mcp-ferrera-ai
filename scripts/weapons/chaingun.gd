@@ -21,9 +21,14 @@ var ground_damage_multiplier: float = 1.0
 var enemy_hit_limit: int = 1
 
 var current_heat: float = 0.0
+var is_hellfire_active: bool = false
 var is_overheated: bool = false
 var _overheat_timer: float = 0.0
 var _shot_cooldown: float = 0.0
+
+var is_attack_run_active: bool = false
+var attack_run_heat_multiplier: float = 0.5
+var attack_run_cooling_multiplier: float = 1.5
 
 @onready var muzzle: Marker3D = $Muzzle
 
@@ -33,8 +38,20 @@ signal heat_updated(heat: float, max_heat: float, overheated: bool)
 func _ready() -> void:
 	heat_updated.emit(current_heat, 1.0, is_overheated)
 	var eb: Node = get_node_or_null("/root/EventBus")
-	if eb and eb.has_signal("chaingun_heat_changed"):
-		eb.emit_signal("chaingun_heat_changed", current_heat, 1.0, is_overheated)
+	if eb:
+		if eb.has_signal("chaingun_heat_changed"):
+			eb.emit_signal("chaingun_heat_changed", current_heat, 1.0, is_overheated)
+		if eb.has_signal("attack_run_state_changed"):
+			eb.attack_run_state_changed.connect(_on_attack_run_state_changed)
+
+func _on_attack_run_state_changed(active: bool, _dur: float, _max_dur: float) -> void:
+	var was_active := is_attack_run_active
+	is_attack_run_active = active
+	if active and not was_active:
+		is_overheated = false
+		_overheat_timer = 0.0
+		current_heat = minf(current_heat, 0.35)
+		_notify_heat()
 
 func _process(delta: float) -> void:
 	if _shot_cooldown > 0.0:
@@ -49,21 +66,29 @@ func _process(delta: float) -> void:
 		_notify_heat()
 	else:
 		if current_heat > 0.0:
-			current_heat = maxf(0.0, current_heat - cooling_rate * delta)
+			var effective_cooling: float = cooling_rate * (attack_run_cooling_multiplier if is_attack_run_active else 1.0)
+			current_heat = maxf(0.0, current_heat - effective_cooling * delta)
 			_notify_heat()
 
 func try_fire(_target_pos: Vector3 = Vector3.ZERO) -> bool:
-	if is_overheated or _shot_cooldown > 0.0:
+	if not is_hellfire_active and (is_overheated or _shot_cooldown > 0.0):
+		return false
+	elif is_hellfire_active and _shot_cooldown > 0.0:
 		return false
 
 	_shot_cooldown = 1.0 / fire_rate
 	_execute_fire()
 
-	current_heat += heat_per_shot
-	if current_heat >= 1.0:
-		current_heat = 1.0
-		is_overheated = true
-		_overheat_timer = overheat_lockout_duration
+	if not is_hellfire_active:
+		var effective_heat_gain: float = heat_per_shot * (attack_run_heat_multiplier if is_attack_run_active else 1.0)
+		current_heat += effective_heat_gain
+		if current_heat >= 1.0:
+			current_heat = 1.0
+			is_overheated = true
+			_overheat_timer = overheat_lockout_duration
+	else:
+		current_heat = 0.0
+		is_overheated = false
 
 	_notify_heat()
 	return true

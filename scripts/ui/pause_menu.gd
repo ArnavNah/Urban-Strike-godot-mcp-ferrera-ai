@@ -84,6 +84,7 @@ func _on_restart_pressed() -> void:
 	if not visible or _upgrade_is_open():
 		return
 	get_tree().paused = false
+	RunSeedManager.initialize_new_run()
 	get_tree().reload_current_scene()
 
 func _on_menu_pressed() -> void:

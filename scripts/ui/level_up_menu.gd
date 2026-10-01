@@ -44,7 +44,7 @@ func display_cards(choices: Array[Dictionary], earned_level: int = 0) -> bool:
 		_buttons[i].focus_neighbor_right = _buttons[i].get_path_to(_buttons[(i + 1) % _buttons.size()])
 	var header := $CenterContainer/VBoxContainer/Header as Label
 	if header:
-		header.text = "LEVEL %d // CHOOSE UPGRADE" % earned_level if not choices.is_empty() else "LEVEL %d // COMPLETE" % earned_level
+		header.text = "TACTICAL REQUISITION // LEVEL %d" % earned_level if not choices.is_empty() else "TACTICAL REQUISITION // COMPLETE"
 	$CenterContainer/VBoxContainer/Subtitle.text = "Choose one system modification. Each standard upgrade creates strengths and trade-offs." if not choices.is_empty() else "No eligible upgrades remain. Continue to retain your earned progress."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	visible = true
@@ -87,10 +87,6 @@ func _process(_delta: float) -> void:
 	if _joy_accept_held or Input.is_action_pressed("ui_accept") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		return
 	if _closing:
-		# Confirm/weapon input held through the modal must be released before resuming.
-		for action in ["fire_primary", "fire_secondary", "countermeasure_flares", "pause"]:
-			if Input.is_action_pressed(action):
-				return
 		visible = false
 		_closing = false
 		var run := get_tree().get_first_node_in_group("run_state_controller")
@@ -112,6 +108,7 @@ func finish_selection() -> void:
 func _create_card_widget(data: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(275, 410)
+	panel.pivot_offset = Vector2(137.5, 205.0)
 	
 	var is_evo: bool = data.get("is_evolution", false)
 	var rarity: String = str(data.get("rarity", "Evolution" if is_evo else "Common"))
@@ -198,6 +195,9 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 		if "PRIMARY" in raw_cat or "WEAPON" in raw_cat:
 			prefix = "⚔ "
 			cat_col = Color(1.0, 0.72, 0.25)
+		elif "SECONDARY" in raw_cat or "MISSILE" in raw_cat:
+			prefix = "🚀 "
+			cat_col = Color(1.0, 0.50, 0.35)
 		elif "AIRFRAME" in raw_cat or "DEFENSE" in raw_cat:
 			prefix = "🛡 "
 			cat_col = Color(0.25, 0.90, 0.85)
@@ -311,12 +311,59 @@ func _create_card_widget(data: Dictionary) -> PanelContainer:
 	vbox.add_child(btn)
 	_buttons.append(btn)
 
+	var default_border_col: Color = style.border_color
+	var highlight_border_col: Color = default_border_col.lightened(0.35)
+
+	var on_focus = func() -> void:
+		panel.z_index = 3
+		var tw := panel.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(panel, "scale", Vector2(1.05, 1.05), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(style, "border_color", highlight_border_col, 0.12)
+
+	var on_blur = func() -> void:
+		panel.z_index = 0
+		var tw := panel.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(style, "border_color", default_border_col, 0.12)
+
+	btn.focus_entered.connect(on_focus)
+	btn.focus_exited.connect(on_blur)
+	btn.mouse_entered.connect(on_focus)
+	btn.mouse_exited.connect(on_blur)
+
 	return panel
 
 func _on_card_selected(upgrade_id: String) -> void:
 	if not visible or not _selection_ready or _closing:
 		return
 	_selection_ready = false
-	var mgr := get_tree().get_first_node_in_group("upgrade_manager")
-	if mgr:
-		mgr.select_choice(upgrade_id)
+
+	# Play selection punch on chosen card, fade out other cards
+	var chosen_panel: Control = null
+	for i in range(_buttons.size()):
+		var b := _buttons[i]
+		b.disabled = true
+		var parent_panel: Control = b.get_parent().get_parent() as Control
+		var card_id: String = str(_current_choices[i].get("id", "")) if i < _current_choices.size() else ""
+		if card_id == upgrade_id:
+			chosen_panel = parent_panel
+		else:
+			if parent_panel:
+				var fade_tw := parent_panel.create_tween()
+				fade_tw.tween_property(parent_panel, "modulate:a", 0.0, 0.12)
+
+	if chosen_panel:
+		var punch_tw := chosen_panel.create_tween()
+		punch_tw.tween_property(chosen_panel, "scale", Vector2(1.10, 1.10), 0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		punch_tw.tween_interval(0.06)
+		punch_tw.tween_callback(func() -> void:
+			var mgr := get_tree().get_first_node_in_group("upgrade_manager")
+			if mgr:
+				mgr.select_choice(upgrade_id)
+		)
+	else:
+		var mgr := get_tree().get_first_node_in_group("upgrade_manager")
+		if mgr:
+			mgr.select_choice(upgrade_id)

@@ -150,10 +150,36 @@ func _process(delta: float) -> void:
 func set_wave(wave: int) -> void:
 	current_wave = clampi(wave, 1, 10)
 	var cfg: Dictionary = WAVE_TOKEN_CONFIG.get(current_wave, WAVE_TOKEN_CONFIG[1])
-	max_ground_attack_slots = cfg["ground_tokens"]
-	max_air_attack_slots = cfg["air_tokens"]
-	max_concurrent_attackers = cfg["max_attackers"]
-	max_projectile_danger = cfg["danger_cap"]
+	if is_recovery_active:
+		_apply_recovery_throttling()
+	else:
+		max_ground_attack_slots = cfg["ground_tokens"]
+		max_air_attack_slots = cfg["air_tokens"]
+		max_concurrent_attackers = cfg["max_attackers"]
+		max_projectile_danger = cfg["danger_cap"]
+		_cleanup_slots()
+
+var is_recovery_active: bool = false:
+	set(val):
+		if is_recovery_active != val:
+			is_recovery_active = val
+			_apply_recovery_throttling()
+
+func set_recovery_active(active: bool) -> void:
+	is_recovery_active = active
+
+func _apply_recovery_throttling() -> void:
+	var cfg: Dictionary = WAVE_TOKEN_CONFIG.get(current_wave, WAVE_TOKEN_CONFIG[1])
+	if is_recovery_active:
+		max_ground_attack_slots = maxi(1, int(cfg.get("ground_tokens", 2)) - 1)
+		max_air_attack_slots = maxi(1, int(cfg.get("air_tokens", 2)) - 1)
+		max_concurrent_attackers = maxi(1, int(cfg.get("max_attackers", 2)) - 1)
+		max_projectile_danger = maxi(4, int(cfg.get("danger_cap", 6)) - 3)
+	else:
+		max_ground_attack_slots = int(cfg.get("ground_tokens", 2))
+		max_air_attack_slots = int(cfg.get("air_tokens", 2))
+		max_concurrent_attackers = int(cfg.get("max_attackers", 2))
+		max_projectile_danger = int(cfg.get("danger_cap", 6))
 	_cleanup_slots()
 
 var active_heavy_attacks: int:
@@ -348,6 +374,8 @@ func reserve_danger_capacity(source: Variant, amount: int = 1, timeout: float = 
 		"amount": amount,
 		"expiry": _gameplay_time + timeout
 	}
+	if source != null and "has_danger_reservation" in source:
+		source.has_danger_reservation = true
 	return true
 
 ## Standalone projectile danger release (called on hit, expiration, or cancellation)
@@ -359,6 +387,9 @@ func release_danger_capacity(source: Variant, fallback_amount: int = 0) -> void:
 		_active_danger_reservations.erase(source)
 	elif source == null and fallback_amount > 0:
 		current_danger_used = maxi(0, current_danger_used - fallback_amount)
+
+func has_danger_reservation(source: Variant) -> bool:
+	return _active_danger_reservations.has(source)
 
 ## Transfer danger capacity from enemy lease to in-flight projectile
 func transfer_danger_to_projectile(enemy: Node3D, projectile: Variant, timeout: float = 4.0) -> void:
@@ -372,6 +403,8 @@ func transfer_danger_to_projectile(enemy: Node3D, projectile: Variant, timeout: 
 				"amount": danger,
 				"expiry": _gameplay_time + timeout
 			}
+			if projectile != null and "has_danger_reservation" in projectile:
+				projectile.has_danger_reservation = true
 
 func get_ground_tokens_used() -> int:
 	var total: int = 0

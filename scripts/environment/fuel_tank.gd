@@ -22,10 +22,20 @@ const SalvageCrateScene := preload("res://scenes/pickups/salvage_crate.tscn")
 
 func _ready() -> void:
 	add_to_group("destructibles")
+	add_to_group("fuel_tanks")
 	add_to_group("enemies") # Allows targeting and collision with player munitions
 	collision_layer = 4 # Enemy/Destructible layer
 	collision_mask = 1
 	current_health = max_health
+
+	var streamer := get_tree().get_first_node_in_group("city_streamer")
+	if streamer and streamer.has_method("is_object_destroyed"):
+		var p_node := get_parent()
+		while p_node and not (p_node is CityChunk):
+			p_node = p_node.get_parent()
+		if p_node is CityChunk and streamer.is_object_destroyed(p_node.coord, name):
+			queue_free()
+			return
 
 func take_damage(amount: float, _source: Node = null, hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if is_destroyed or amount <= 0.0:
@@ -53,6 +63,14 @@ func _explode() -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
+
+	var streamer := get_tree().get_first_node_in_group("city_streamer")
+	if streamer and streamer.has_method("record_destroyed_object"):
+		var p_node := get_parent()
+		while p_node and not (p_node is CityChunk):
+			p_node = p_node.get_parent()
+		if p_node is CityChunk:
+			streamer.record_destroyed_object(p_node.coord, name)
 
 	var eb: Node = get_node_or_null("/root/EventBus")
 	if eb:

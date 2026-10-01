@@ -17,8 +17,8 @@ var _player: Node3D = null
 var _is_dead: bool = false
 var _has_spawned_rewards: bool = false
 
-var front_rotor: Node3D = null
-var rear_rotor: Node3D = null
+@onready var front_rotor: Node3D = get_node_or_null("Visuals/FrontRotor")
+@onready var rear_rotor: Node3D = get_node_or_null("Visuals/RearRotor")
 @onready var chin_cannon: Node3D = $Visuals/ChinCannon
 @onready var cannon_muzzle: Marker3D = $Visuals/ChinCannon/Muzzle
 @onready var left_engine_fire: GPUParticles3D = $Visuals/LeftEngineFire

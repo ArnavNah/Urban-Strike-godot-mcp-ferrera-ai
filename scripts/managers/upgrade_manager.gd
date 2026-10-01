@@ -22,6 +22,16 @@ var acquired_upgrades: Array[String] = []
 var pending_levels: Array[int] = []
 var is_choice_active: bool = false
 var _offered_ids: Array[String] = []
+var _upgrade_rng: RandomNumberGenerator = null
+
+func _get_upgrade_rng() -> RandomNumberGenerator:
+	if _upgrade_rng == null:
+		if RunSeedManager.is_procedural_run:
+			_upgrade_rng = RunSeedManager.get_stream_rng(RunSeedManager.STREAM_ENCOUNTERS, 0x55AA)
+		else:
+			_upgrade_rng = RandomNumberGenerator.new()
+			_upgrade_rng.seed = 1337
+	return _upgrade_rng
 
 # Legendary limit: Maximum 1 acquired Legendary per run (GDD 15.7)
 var has_acquired_legendary: bool = false
@@ -349,13 +359,13 @@ var upgrade_database: Dictionary = {
 		"name": "🛡️ AEGIS COUNTERMEASURE 🛡️",
 		"category": "EVOLUTION",
 		"rarity": "Evolution",
-		"benefit": "+50 Max Hull, Flare Shockwave & Emergency Stasis Shield at <35% HP",
-		"tradeoff": "Evolution of Reinforced Airframe + Repair Drone",
+		"benefit": "+50 Max Hull, Emergency Stasis Shield (<35% HP) & Escort Micro-Rockets",
+		"tradeoff": "Evolution of Defense (Airframe/Mobility) + Support (Wingmen/Repair Drone)",
 		"current_value": "Standard Airframe",
-		"next_value": "+50 Hull & Emergency Stasis Shield",
+		"next_value": "+50 Hull, Stasis Shield & Wingmen Rocket Refit",
 		"is_evolution": true,
 		"priority": 6,
-		"prerequisites": ["reinforced_airframe", "repair_drone"]
+		"prerequisites": ["reinforced_airframe", "mini_helicopter_support"]
 	}
 }
 
@@ -471,6 +481,7 @@ func reset_run() -> void:
 	mini_heli_range_mult = 1.0
 	mini_heli_has_rockets = false
 	has_deployed_wingmen = false
+	_upgrade_rng = null
 	var tree := get_tree()
 	if tree:
 		for drone in tree.get_nodes_in_group("mini_helicopters"):
@@ -490,7 +501,19 @@ func reset_run() -> void:
 	var run := get_tree().get_first_node_in_group("run_state_controller")
 	if is_instance_valid(run):
 		run.set_pause_reason(&"upgrade", false)
+	if XpGemPool.instance:
+		XpGemPool.instance.reset_pool()
 	_notify_xp()
+
+func get_diagnostics_summary() -> Dictionary:
+	return {
+		"current_level": current_level,
+		"current_xp": current_xp,
+		"xp_needed": xp_needed,
+		"pending_levels": pending_levels.duplicate(),
+		"is_choice_active": is_choice_active,
+		"acquired_count": acquired_upgrades.size()
+	}
 
 func add_xp(amount: int) -> void:
 	if amount <= 0:
@@ -574,17 +597,19 @@ func _is_eligible(upgrade_id: String) -> bool:
 	# Prerequisite synergy checks
 	match upgrade_id:
 		"hellfire_minigun":
-			return (acquired_upgrades.has("twin_barrel") or acquired_upgrades.has("faster_cannon")) and acquired_upgrades.has("overclocked_feed")
+			return (acquired_upgrades.has("twin_barrel") or acquired_upgrades.has("faster_cannon") or acquired_upgrades.has("multi_shot")) and acquired_upgrades.has("overclocked_feed")
 		"siege_cannon":
-			return acquired_upgrades.has("armor_piercing") and acquired_upgrades.has("reinforced_airframe")
+			return acquired_upgrades.has("armor_piercing") and (acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("faster_cannon"))
 		"ap_ricochet_cannon":
-			return acquired_upgrades.has("armor_piercing") and acquired_upgrades.has("ricochet_rounds")
+			return acquired_upgrades.has("armor_piercing") and (acquired_upgrades.has("ricochet_rounds") or acquired_upgrades.has("multi_shot"))
 		"swarm_rockets":
-			return acquired_upgrades.has("rapid_lock") and (acquired_upgrades.has("multi_launch") or acquired_upgrades.has("missile_capacity"))
+			return acquired_upgrades.has("rapid_lock") and (acquired_upgrades.has("multi_launch") or acquired_upgrades.has("missile_capacity") or acquired_upgrades.has("larger_explosions"))
 		"multi_lock_hellfire":
-			return acquired_upgrades.has("rapid_lock") and acquired_upgrades.has("armor_piercing")
+			return acquired_upgrades.has("rapid_lock") and (acquired_upgrades.has("armor_piercing") or acquired_upgrades.has("larger_explosions") or acquired_upgrades.has("multi_launch"))
 		"aegis_airframe":
-			return (acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("movement_boost")) and acquired_upgrades.has("repair_drone")
+			var has_defense := acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("movement_boost") or acquired_upgrades.has("afterburner")
+			var has_support := acquired_upgrades.has("repair_drone") or acquired_upgrades.has("mini_helicopter_support")
+			return (has_defense and has_support) or (acquired_upgrades.has("reinforced_airframe") and acquired_upgrades.has("repair_drone"))
 		_:
 			for p in up.get("prerequisites", []):
 				if not acquired_upgrades.has(p):
@@ -696,7 +721,8 @@ func get_random_choices(count: int) -> Array[Dictionary]:
 				break # Completely exhausted
 			continue
 
-		var chosen_tier := roll_rarity_tier(randf(), not avail_c.is_empty(), not avail_r.is_empty(), not avail_l.is_empty())
+		var rng := _get_upgrade_rng()
+		var chosen_tier := roll_rarity_tier(rng.randf(), not avail_c.is_empty(), not avail_r.is_empty(), not avail_l.is_empty())
 		var pool: Array[Dictionary] = []
 		match chosen_tier:
 			"Common":
@@ -709,10 +735,87 @@ func get_random_choices(count: int) -> Array[Dictionary]:
 		if pool.is_empty():
 			break
 
-		var idx := randi() % pool.size()
-		selected.append(enrich_card_data(pool[idx].duplicate(true)))
+		# Weighted synergy selection within rolled rarity tier
+		var total_tier_weight: float = 0.0
+		for card in pool:
+			total_tier_weight += _calculate_upgrade_offer_weight(str(card.get("id", "")))
+
+		var roll_val: float = rng.randf() * total_tier_weight
+		var picked_card: Dictionary = pool[0]
+		var running_weight: float = 0.0
+		for card in pool:
+			running_weight += _calculate_upgrade_offer_weight(str(card.get("id", "")))
+			if roll_val <= running_weight:
+				picked_card = card
+				break
+
+		selected.append(enrich_card_data(picked_card.duplicate(true)))
 
 	return selected
+
+## Computes build path synergy weights to guide players toward coherent archetypes
+## while keeping diverse alternatives available.
+func _calculate_upgrade_offer_weight(upgrade_id: String) -> float:
+	var weight: float = 1.0
+
+	# 1. Direct Evolution Partner Bonus (+1.6 weight):
+	# If this card pairs with an already acquired upgrade to complete an evolution prerequisite
+	match upgrade_id:
+		"overclocked_feed":
+			if acquired_upgrades.has("twin_barrel") or acquired_upgrades.has("faster_cannon") or acquired_upgrades.has("multi_shot"):
+				weight += 1.6
+		"twin_barrel", "faster_cannon", "multi_shot":
+			if acquired_upgrades.has("overclocked_feed"):
+				weight += 1.6
+		"ricochet_rounds":
+			if acquired_upgrades.has("armor_piercing"):
+				weight += 1.6
+		"armor_piercing":
+			if acquired_upgrades.has("ricochet_rounds") or acquired_upgrades.has("rapid_lock") or acquired_upgrades.has("reinforced_airframe"):
+				weight += 1.6
+		"rapid_lock":
+			if acquired_upgrades.has("multi_launch") or acquired_upgrades.has("missile_capacity") or acquired_upgrades.has("larger_explosions") or acquired_upgrades.has("armor_piercing"):
+				weight += 1.6
+		"multi_launch", "missile_capacity", "larger_explosions":
+			if acquired_upgrades.has("rapid_lock"):
+				weight += 1.6
+		"repair_drone":
+			if acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("mini_helicopter_support") or acquired_upgrades.has("movement_boost") or acquired_upgrades.has("afterburner"):
+				weight += 1.6
+		"reinforced_airframe":
+			if acquired_upgrades.has("repair_drone") or acquired_upgrades.has("mini_helicopter_support") or acquired_upgrades.has("armor_piercing"):
+				weight += 1.6
+		"mini_helicopter_support":
+			if acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("repair_drone") or acquired_upgrades.has("movement_boost") or acquired_upgrades.has("afterburner"):
+				weight += 1.6
+		"movement_boost", "afterburner":
+			if acquired_upgrades.has("mini_helicopter_support") or acquired_upgrades.has("repair_drone") or acquired_upgrades.has("reinforced_airframe"):
+				weight += 1.6
+
+	# 2. General Build Path Affinity Bonus (+0.4 weight):
+	var has_gun_build := (
+		acquired_upgrades.has("twin_barrel") or acquired_upgrades.has("faster_cannon")
+		or acquired_upgrades.has("multi_shot") or acquired_upgrades.has("overclocked_feed")
+		or acquired_upgrades.has("armor_piercing") or acquired_upgrades.has("ricochet_rounds")
+	)
+	var has_missile_build := (
+		acquired_upgrades.has("rapid_lock") or acquired_upgrades.has("multi_launch")
+		or acquired_upgrades.has("missile_capacity") or acquired_upgrades.has("larger_explosions")
+	)
+	var has_defense_build := (
+		acquired_upgrades.has("reinforced_airframe") or acquired_upgrades.has("repair_drone")
+		or acquired_upgrades.has("mini_helicopter_support") or acquired_upgrades.has("afterburner")
+		or acquired_upgrades.has("movement_boost")
+	)
+
+	if has_gun_build and upgrade_id in ["twin_barrel", "faster_cannon", "multi_shot", "overclocked_feed", "armor_piercing", "ricochet_rounds"]:
+		weight += 0.4
+	elif has_missile_build and upgrade_id in ["rapid_lock", "multi_launch", "missile_capacity", "larger_explosions"]:
+		weight += 0.4
+	elif has_defense_build and upgrade_id in ["reinforced_airframe", "repair_drone", "mini_helicopter_support", "afterburner", "movement_boost"]:
+		weight += 0.4
+
+	return weight
 
 func enrich_card_data(card: Dictionary) -> Dictionary:
 	var enriched := card.duplicate(true)
@@ -879,48 +982,52 @@ func get_upgrade_next_value(upgrade_id: String) -> String:
 func get_upgrade_evolution_synergy(upgrade_id: String) -> String:
 	match upgrade_id:
 		"twin_barrel", "faster_cannon", "overclocked_feed":
-			return "Synergy: Builds toward Hellfire Minigun"
+			return "Synergy: Gun Barrage (Builds toward Hellfire Minigun)"
+		"multi_shot":
+			return "Synergy: Gun Barrage (Builds toward Hellfire Minigun & AP Ricochet)"
 		"armor_piercing":
-			return "Synergy: Builds toward Siege Cannon & AP Ricochet"
-		"reinforced_airframe":
-			return "Synergy: Builds toward Siege Cannon & Aegis"
+			return "Synergy: Gun Barrage (Builds toward Siege Cannon & AP Ricochet)"
 		"ricochet_rounds":
-			return "Synergy: Builds toward AP Ricochet Cannon"
+			return "Synergy: Gun Barrage (Builds toward AP Ricochet Cannon)"
 		"rapid_lock":
-			return "Synergy: Builds toward Swarm Rockets & Multi-Lock"
-		"multi_launch", "missile_capacity":
-			return "Synergy: Builds toward Swarm Rockets"
-		"movement_boost", "repair_drone":
-			return "Synergy: Builds toward Aegis Airframe"
+			return "Synergy: Missile Hunter (Builds toward Swarm Rockets & Multi-Lock)"
+		"multi_launch", "missile_capacity", "larger_explosions":
+			return "Synergy: Missile Hunter (Builds toward Swarm Rockets)"
+		"reinforced_airframe":
+			return "Synergy: Defensive Squadron (Builds toward Aegis Airframe)"
+		"mini_helicopter_support":
+			return "Synergy: Defensive Squadron (Builds toward Aegis Airframe & Escorts)"
+		"movement_boost", "repair_drone", "afterburner":
+			return "Synergy: Defensive Squadron (Builds toward Aegis Airframe)"
 		"hellfire_minigun":
-			return "EVOLUTION: Twin Barrel + Overclocked Feed"
+			return "EVOLUTION: High-Cadence Autocannon + Overclocked Feed"
 		"siege_cannon":
 			return "EVOLUTION: Armor-Piercing + Reinforced Airframe"
 		"ap_ricochet_cannon":
-			return "EVOLUTION: Armor-Piercing + Ricochet Rounds"
+			return "EVOLUTION: Armor-Piercing + Ricochet / Multi-Shot"
 		"swarm_rockets":
-			return "EVOLUTION: Rapid Lock + Multi-Launch"
+			return "EVOLUTION: Rapid Lock + Missile Pod Racks / Salvo"
 		"multi_lock_hellfire":
-			return "EVOLUTION: Rapid Lock + Armor-Piercing"
+			return "EVOLUTION: Rapid Lock + Heavy Ordnance / Armor-Piercing"
 		"aegis_airframe":
-			return "EVOLUTION: Reinforced Airframe + Repair Drone"
+			return "EVOLUTION: Airframe / Speed + Wingmen / Repair Drone"
 		_:
 			return ""
 
 func get_upgrade_prerequisites_text(upgrade_id: String) -> String:
 	match upgrade_id:
 		"hellfire_minigun":
-			return "Requires: [Twin Barrel or Feeder] + [Overclocked Feed]"
+			return "Requires: [Twin Barrel, Feeder, or Multi-Shot] + [Overclocked Feed]"
 		"siege_cannon":
-			return "Requires: [Armor-Piercing] + [Reinforced Airframe]"
+			return "Requires: [Armor-Piercing] + [Reinforced Airframe or Feeder]"
 		"ap_ricochet_cannon":
-			return "Requires: [Armor-Piercing] + [Ricochet Rounds]"
+			return "Requires: [Armor-Piercing] + [Ricochet Rounds or Multi-Shot]"
 		"swarm_rockets":
-			return "Requires: [Rapid Lock] + [Multi-Launch or Rack]"
+			return "Requires: [Rapid Lock] + [Multi-Launch, Racks, or Warheads]"
 		"multi_lock_hellfire":
-			return "Requires: [Rapid Lock] + [Armor-Piercing]"
+			return "Requires: [Rapid Lock] + [Armor-Piercing, Warheads, or Multi-Launch]"
 		"aegis_airframe":
-			return "Requires: [Airframe or Turbine] + [Repair Drone]"
+			return "Requires: [Airframe, Speed, or Afterburner] + [Wingmen or Repair Drone]"
 		_:
 			return ""
 
@@ -936,6 +1043,7 @@ func select_choice(upgrade_id: String) -> bool:
 	pending_levels.pop_front()
 	_offered_ids.clear()
 	is_choice_active = false
+	Engine.time_scale = 1.0
 	if pending_levels.is_empty():
 		var menu := get_tree().get_first_node_in_group("level_up_menu")
 		if menu and menu.has_method("finish_selection"):
@@ -1103,6 +1211,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 			gun.current_heat = 0.0
 			gun.is_overheated = false
 			gun._overheat_timer = 0.0
+			gun.is_hellfire_active = true
+			gun.damage_per_shot *= 1.15
 			gun._notify_heat()
 		"siege_cannon":
 			if not gun:
@@ -1136,6 +1246,40 @@ func apply_upgrade(upgrade_id: String) -> bool:
 			player.health_changed.emit(player.current_health, player.max_health)
 			if EventBus:
 				EventBus.player_health_changed.emit(player.current_health, player.max_health)
+
+			# Defensive Squadron Overhaul: Upgrade companion stats and enable micro-rockets
+			mini_heli_has_rockets = true
+			mini_heli_damage_mult = 1.35
+			mini_heli_fire_rate_mult = 1.25
+
+			# If wingmen are deployed, restore any missing aircraft and upgrade active ones
+			if has_deployed_wingmen:
+				var mini_scene: PackedScene = load("res://scenes/companions/mini_helicopter.tscn")
+				var spawn_parent: Node = player.get_parent() if player.get_parent() else get_tree().current_scene
+				if not spawn_parent:
+					spawn_parent = get_tree().root
+				var slot_configs: Dictionary = {
+					"left": Vector3(-8.2, 0.6, 3.8),
+					"right": Vector3(8.2, 0.6, 3.8)
+				}
+				var occupied := get_occupied_wingman_slots()
+				for slot_key in ["left", "right"]:
+					if not occupied.has(slot_key) and mini_scene:
+						var offset: Vector3 = slot_configs[slot_key]
+						var drone: MiniHelicopter = mini_scene.instantiate() as MiniHelicopter
+						if drone:
+							drone.slot_id = slot_key
+							drone.player_target = player
+							drone.set_formation_slot(offset, slot_key)
+							spawn_parent.add_child(drone)
+							var yaw_basis: Basis = MiniHelicopter.get_player_yaw_basis(player)
+							var start_pos: Vector3 = player.global_position + (yaw_basis * Vector3(offset.x, 0.0, offset.z)) + Vector3(0.0, offset.y, 0.0)
+							drone.global_position = start_pos
+
+				for living in get_living_wingmen():
+					living.max_health = 90.0
+					living.current_health = 90.0
+					living.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
 		_:
 			return false
 

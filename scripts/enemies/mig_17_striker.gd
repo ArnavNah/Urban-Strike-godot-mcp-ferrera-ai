@@ -299,15 +299,19 @@ func _spawn_rewards() -> void:
 	if _has_spawned_rewards:
 		return
 	_has_spawned_rewards = true
-	var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
-	if xp_scene:
-		var gem := xp_scene.instantiate() as Node3D
-		if gem:
-			gem.transform.origin = global_position
-			if gem.has_method("set_xp_value"):
-				gem.set_xp_value(xp_reward)
-			var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
-			p.add_child.call_deferred(gem)
+	var spawn_pos := global_position
+	if XpGemPool.instance:
+		XpGemPool.instance.spawn_gem(spawn_pos, xp_reward)
+	else:
+		var xp_scene: PackedScene = preload("res://scenes/pickups/xp_gem.tscn")
+		if xp_scene:
+			var gem := xp_scene.instantiate() as Node3D
+			if gem:
+				if "xp_value" in gem:
+					gem.xp_value = xp_reward
+				gem.transform.origin = spawn_pos
+				var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
+				p.add_child.call_deferred(gem)
 
 func _clean_despawn() -> void:
 	# Exited player airspace cleanly - unregister without reward drops or token leaks

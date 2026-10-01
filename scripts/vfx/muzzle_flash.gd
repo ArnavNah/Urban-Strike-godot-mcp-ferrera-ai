@@ -35,11 +35,11 @@ func play(is_enemy: bool = false, base_scale: float = 1.4, dir: Vector3 = Vector
 	if not _player_flash_mat:
 		_player_flash_mat = StandardMaterial3D.new()
 		_player_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_player_flash_mat.albedo_color = Color(1.0, 0.92, 0.45, 1.0)
+		_player_flash_mat.albedo_color = Color(2.0, 1.8, 0.9, 1.0)
 	if not _enemy_flash_mat:
 		_enemy_flash_mat = StandardMaterial3D.new()
 		_enemy_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_enemy_flash_mat.albedo_color = Color(1.0, 0.42, 0.12, 1.0)
+		_enemy_flash_mat.albedo_color = Color(2.5, 0.9, 0.25, 1.0)
 
 	if mesh_instance:
 		mesh_instance.material_override = _enemy_flash_mat if is_enemy else _player_flash_mat

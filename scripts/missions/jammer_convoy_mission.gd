@@ -119,6 +119,11 @@ func on_success(director: Node) -> void:
 
 func cleanup() -> void:
 	super.cleanup()
+	if is_instance_valid(jammer_unit) and not jammer_unit.is_queued_for_deletion():
+		jammer_unit.queue_free()
 	jammer_unit = null
 	target_node = null
+	for escort in escort_units:
+		if is_instance_valid(escort) and not escort.is_queued_for_deletion():
+			escort.queue_free()
 	escort_units.clear()

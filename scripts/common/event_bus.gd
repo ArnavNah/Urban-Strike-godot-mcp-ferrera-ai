@@ -17,6 +17,18 @@ signal manual_aim_state_changed(is_manual: bool)
 @warning_ignore("unused_signal")
 signal enemy_destroyed(enemy: Node3D, points: int)
 @warning_ignore("unused_signal")
+signal kills_updated(total_kills: int)
+@warning_ignore("unused_signal")
+signal score_updated(total_score: int, points_earned: int, multiplier: float, combo_streak: int)
+@warning_ignore("unused_signal")
+signal combo_timer_updated(time_remaining: float, max_time: float, multiplier: float)
+@warning_ignore("unused_signal")
+signal attack_run_state_changed(is_active: bool, duration: float, max_duration: float)
+@warning_ignore("unused_signal")
+signal attack_run_cooldown_updated(current: float, maximum: float)
+@warning_ignore("unused_signal")
+signal hover_hazard_state_changed(is_hazard: bool)
+@warning_ignore("unused_signal")
 signal game_paused(is_paused: bool)
 @warning_ignore("unused_signal")
 signal camera_shake_requested(trauma_amount: float)
@@ -103,7 +115,7 @@ signal boss_defeated()
 @warning_ignore("unused_signal")
 signal salvage_updated(run_salvage: int)
 @warning_ignore("unused_signal")
-signal damage_number_spawned(pos: Vector3, amount: float, is_critical: bool)
+signal damage_number_spawned(pos: Vector3, amount: float, is_critical: bool, metadata: Dictionary)
 @warning_ignore("unused_signal")
 signal border_warning_changed(is_warning: bool, return_direction: Vector3, distance_to_edge: float)
 @warning_ignore("unused_signal")
@@ -129,29 +141,62 @@ func _setup_default_inputs() -> void:
 
 	_add_action_key("strafe_left", KEY_Q)
 	_add_action_key("strafe_right", KEY_E)
+	_add_action_joypad_button("strafe_left", JOY_BUTTON_LEFT_SHOULDER)
+	_add_action_joypad_button("strafe_right", JOY_BUTTON_RIGHT_SHOULDER)
 
 	_add_action_key("ascend", KEY_SPACE)
 	_add_action_key("descend", KEY_SHIFT)
 	_add_action_key("descend", KEY_C)
+	_add_action_joypad_button("ascend", JOY_BUTTON_A)
+	_add_action_joypad_button("descend", JOY_BUTTON_B)
+	_add_action_joypad_button("heli_climb", JOY_BUTTON_A)
+	_add_action_joypad_button("heli_descend", JOY_BUTTON_B)
 
 	_add_action_mouse("fire_primary", MOUSE_BUTTON_LEFT)
+	_add_action_joypad_motion("fire_primary", JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_add_action_joypad_button("fire_primary", JOY_BUTTON_RIGHT_SHOULDER)
+
 	_add_action_mouse("fire_secondary", MOUSE_BUTTON_RIGHT)
 	_add_action_key("fire_secondary", KEY_F)
-	_add_action_key("countermeasure_flares", KEY_X)
+	_add_action_joypad_button("fire_secondary", JOY_BUTTON_X)
 
-	# Dedicated aim_override actions (Shift key or Middle Mouse or Gamepad LT)
+	_add_action_key("countermeasure_flares", KEY_X)
+	_add_action_joypad_button("countermeasure_flares", JOY_BUTTON_Y)
+
+	# Dedicated aim_override actions (Shift key, Middle Mouse, Gamepad LT / LB)
 	_add_action_key("aim_override", KEY_SHIFT)
 	_add_action_mouse("aim_override", MOUSE_BUTTON_MIDDLE)
+	_add_action_joypad_motion("aim_override", JOY_AXIS_TRIGGER_LEFT, 1.0)
+	_add_action_joypad_button("aim_override", JOY_BUTTON_LEFT_SHOULDER)
 
-	# Tactical Evade / Barrel Roll
-	_add_action_key("evade", KEY_SPACE)
-	_add_action_joypad_button("evade", JOY_BUTTON_B)
+	# Tactical Evade / Barrel Roll:
+	# Purge conflicting Space and Joypad B events so altitude controls don't trigger evade
+	if InputMap.has_action("evade"):
+		for existing in InputMap.action_get_events("evade"):
+			if existing is InputEventKey and existing.physical_keycode == KEY_SPACE:
+				InputMap.action_erase_event("evade", existing)
+			elif existing is InputEventJoypadButton and existing.button_index == JOY_BUTTON_B:
+				InputMap.action_erase_event("evade", existing)
+	_add_action_key("evade", KEY_ALT)
+	_add_action_key("evade", KEY_Z)
+	_add_action_joypad_button("evade", JOY_BUTTON_LEFT_STICK)
+	_add_action_joypad_button("evade", JOY_BUTTON_RIGHT_STICK)
 
 	# Dual-stick aim axes
 	_add_action_joypad_motion("aim_left", JOY_AXIS_RIGHT_X, -1.0)
 	_add_action_joypad_motion("aim_right", JOY_AXIS_RIGHT_X, 1.0)
 	_add_action_joypad_motion("aim_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_action_joypad_motion("aim_down", JOY_AXIS_RIGHT_Y, 1.0)
+
+	# Flight throttle & turn axes for gamepad left stick
+	_add_action_joypad_motion("move_forward", JOY_AXIS_LEFT_Y, -1.0)
+	_add_action_joypad_motion("move_backward", JOY_AXIS_LEFT_Y, 1.0)
+	_add_action_joypad_motion("move_left", JOY_AXIS_LEFT_X, -1.0)
+	_add_action_joypad_motion("move_right", JOY_AXIS_LEFT_X, 1.0)
+	_add_action_joypad_motion("heli_throttle_forward", JOY_AXIS_LEFT_Y, -1.0)
+	_add_action_joypad_motion("heli_throttle_reverse", JOY_AXIS_LEFT_Y, 1.0)
+	_add_action_joypad_motion("heli_turn_left", JOY_AXIS_LEFT_X, -1.0)
+	_add_action_joypad_motion("heli_turn_right", JOY_AXIS_LEFT_X, 1.0)
 
 	# UI navigation with Gamepad
 	_add_action_joypad_button("ui_accept", JOY_BUTTON_A)
@@ -160,7 +205,9 @@ func _setup_default_inputs() -> void:
 	_add_action_key("camera_orbit_left", KEY_J)
 	_add_action_key("camera_orbit_right", KEY_L)
 	_add_action_key("camera_recenter", KEY_R)
+	_add_action_joypad_button("camera_recenter", JOY_BUTTON_BACK)
 	_add_action_key("pause", KEY_ESCAPE)
+	_add_action_joypad_button("pause", JOY_BUTTON_START)
 
 func _add_action_key(action: StringName, keycode: Key) -> void:
 	if not InputMap.has_action(action):

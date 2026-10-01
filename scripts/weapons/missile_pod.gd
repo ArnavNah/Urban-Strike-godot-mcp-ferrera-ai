@@ -46,12 +46,22 @@ func reset_ammo() -> void:
 	if eb and eb.has_signal("missile_ammo_changed"):
 		eb.emit_signal("missile_ammo_changed", current_missiles, max_missiles)
 
+var is_attack_run_active: bool = false
+var attack_run_lock_multiplier: float = 0.65
+
 func _ready() -> void:
 	if not missile_scene:
 		missile_scene = preload("res://scenes/weapons/guided_missile.tscn")
 	current_missiles = max_missiles
 	emit_signal("ammo_changed", current_missiles, max_missiles)
 	_notify_ammo_deferred.call_deferred()
+
+	var eb: Node = get_node_or_null("/root/EventBus")
+	if eb and eb.has_signal("attack_run_state_changed"):
+		eb.attack_run_state_changed.connect(_on_attack_run_state_changed)
+
+func _on_attack_run_state_changed(active: bool, _dur: float, _max_dur: float) -> void:
+	is_attack_run_active = active
 
 func _notify_ammo_deferred() -> void:
 	var eb: Node = get_node_or_null("/root/EventBus")
@@ -105,7 +115,8 @@ func _is_jammed() -> bool:
 func _update_lock_progress(delta: float) -> void:
 	if is_instance_valid(current_target) and not current_target.is_queued_for_deletion():
 		if lock_progress < 1.0:
-			var eff_duration: float = lock_duration * (1.6 if _is_jammed() else 1.0)
+			var lock_mult: float = attack_run_lock_multiplier if is_attack_run_active else 1.0
+			var eff_duration: float = lock_duration * lock_mult * (1.6 if _is_jammed() else 1.0)
 			lock_progress = minf(1.0, lock_progress + (delta / eff_duration))
 			if lock_progress >= 1.0:
 				is_locked = true

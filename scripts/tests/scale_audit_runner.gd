@@ -127,17 +127,18 @@ func _ready() -> void:
 				if visuals_node:
 					out.append("    FlightTiltPivot/%s Scale: %s" % [visuals_node.name, str(visuals_node.scale)])
 
-			# Extra inspection for collision shape
-			var col := inst.find_child("*Collision*", true, false) as CollisionShape3D
-			if col and col.shape:
-				if col.shape is BoxShape3D:
-					out.append("    Collision Box: %s" % str((col.shape as BoxShape3D).size))
-				elif col.shape is CapsuleShape3D:
-					var cs := col.shape as CapsuleShape3D
-					out.append("    Collision Capsule: Radius=%.2f m, Height=%.2f m" % [cs.radius, cs.height])
-				elif col.shape is CylinderShape3D:
-					var cyl := col.shape as CylinderShape3D
-					out.append("    Collision Cylinder: Radius=%.2f m, Height=%.2f m" % [cyl.radius, cyl.height])
+			# Extra inspection for collision shape (non-player)
+			if item_name != "Player Helicopter":
+				var col := inst.find_child("*Collision*", true, false) as CollisionShape3D
+				if col and col.shape:
+					if col.shape is BoxShape3D:
+						out.append("    Collision Box: %s" % str((col.shape as BoxShape3D).size))
+					elif col.shape is CapsuleShape3D:
+						var cs := col.shape as CapsuleShape3D
+						out.append("    Collision Capsule: Radius=%.2f m, Height=%.2f m" % [cs.radius, cs.height])
+					elif col.shape is CylinderShape3D:
+						var cyl := col.shape as CylinderShape3D
+						out.append("    Collision Cylinder: Radius=%.2f m, Height=%.2f m" % [cyl.radius, cyl.height])
 
 			inst.queue_free()
 
@@ -164,7 +165,7 @@ func _calculate_node_visual_aabb(node: Node, root_xform: Transform3D) -> AABB:
 
 		if curr is Node3D and (curr as Node3D).top_level and curr != node:
 			continue
-		if curr is GPUParticles3D or curr is CPUParticles3D:
+		if curr is GPUParticles3D or curr is CPUParticles3D or curr is Light3D or curr is Decal or curr is FogVolume:
 			continue
 
 		if curr is VisualInstance3D:

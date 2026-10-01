@@ -6,17 +6,17 @@
 [resource]
 render_priority = 0
 shader = ExtResource("1_02kfw")
-shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/albedo_color = Color(0.12, 0.13, 0.15, 1)
 shader_parameter/albedo_texture = ExtResource("2_xxu6i")
-shader_parameter/use_texture = true
+shader_parameter/use_texture = false
 shader_parameter/shadow_factor = 0.38
-shader_parameter/midtone_factor = 0.45
-shader_parameter/shadow_threshold = 0.25
-shader_parameter/midtone_threshold = 0.65
-shader_parameter/step_smoothness = 0.03
-shader_parameter/specular_size = 0.08
-shader_parameter/specular_intensity = 0.18
-shader_parameter/specular_smoothness = 0.02
+shader_parameter/midtone_factor = 0.72
+shader_parameter/shadow_threshold = 0.2
+shader_parameter/midtone_threshold = 0.55
+shader_parameter/step_smoothness = 0.12
+shader_parameter/specular_size = 0.04
+shader_parameter/specular_intensity = 0.05
+shader_parameter/specular_smoothness = 0.04
 shader_parameter/rim_size = 0.5
 shader_parameter/rim_intensity = 0.0
 shader_parameter/rim_smoothness = 0.08

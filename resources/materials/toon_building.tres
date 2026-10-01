@@ -6,7 +6,7 @@
 [resource]
 render_priority = 0
 shader = ExtResource("1_uie2c")
-shader_parameter/albedo_color = Color(1, 1, 1, 1)
+shader_parameter/albedo_color = Color(0.92, 0.91, 0.89, 1)
 shader_parameter/albedo_texture = ExtResource("2_6nt1a")
 shader_parameter/use_texture = true
 shader_parameter/shadow_factor = 0.4

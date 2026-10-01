@@ -15,8 +15,19 @@ func _ready() -> void:
 	super._ready()
 	if is_completed:
 		return
+	var saved := BaseEncounter.get_encounter_state(encounter_id)
+	if saved.get("used", false):
+		is_completed = true
+		queue_free()
+		return
+
 	_build_visuals()
-	_spawn_guards.call_deferred()
+
+	if saved.get("unlocked", false):
+		is_unlocked = true
+		_update_unlocked_visuals()
+	else:
+		_spawn_guards.call_deferred()
 
 func _build_visuals() -> void:
 	_container_mesh = MeshInstance3D.new()
@@ -52,16 +63,21 @@ func _spawn_guards() -> void:
 		_update_unlocked_visuals()
 		return
 
-	# Spawn 2 guardian tanks around the perimeter
-	var offsets: Array[Vector3] = [
-		Vector3(-12.0, 0.5, -8.0),
-		Vector3(12.0, 0.5, 8.0)
-	]
+	# Align 2 guardian tanks along the primary road/corridor axis
+	var offsets: Array[Vector3] = []
+	if absf(position.x) < 5.0:
+		# Road runs along Z
+		offsets = [Vector3(0.0, 0.5, -14.0), Vector3(0.0, 0.5, 14.0)]
+	else:
+		# Road runs along X
+		offsets = [Vector3(-14.0, 0.5, 0.0), Vector3(14.0, 0.5, 0.0)]
+
 	for off in offsets:
 		var tank: Node3D = tank_scene.instantiate() as Node3D
 		if tank:
 			parent.add_child(tank)
 			tank.global_position = global_position + off
+			tank.add_to_group("cache_guards")
 			guards.append(tank)
 
 func _physics_process(delta: float) -> void:
@@ -75,12 +91,18 @@ func _physics_process(delta: float) -> void:
 		var has_living_guards: bool = false
 		for g in guards:
 			if is_instance_valid(g) and not g.is_queued_for_deletion():
-				if "is_alive" in g and not bool(g.get("is_alive")):
-					continue
+				var alive_val = g.get("is_alive")
+				if alive_val != null:
+					if not bool(alive_val):
+						continue
+				elif g.has_meta("is_alive"):
+					if not bool(g.get_meta("is_alive")):
+						continue
 				has_living_guards = true
 				break
 		if not has_living_guards and not guards.is_empty():
 			is_unlocked = true
+			BaseEncounter.set_encounter_state(encounter_id, {"unlocked": true})
 			_update_unlocked_visuals()
 
 	# If unlocked, check player collection
@@ -97,20 +119,52 @@ func _update_unlocked_visuals() -> void:
 		var mat := _container_mesh.material_override as StandardMaterial3D
 		mat.albedo_color = Color(0.12, 0.35, 0.22, 1.0)
 
-func _collect_cache(_player: PlayerHelicopter) -> void:
+func _collect_cache(player: PlayerHelicopter) -> void:
+	BaseEncounter.set_encounter_state(encounter_id, {"used": true})
 	complete_encounter()
 
 	# 1. Trigger free upgrade draft in UpgradeManager
 	if UpgradeManager.instance:
 		UpgradeManager.instance.queue_free_upgrade_choice()
 
-	# 2. Banked salvage bonus
-	var data := SaveSystem.load_data()
-	var cur_salvage: int = int(data.get("salvage", 0))
-	data["salvage"] = cur_salvage + 75
-	SaveSystem.save_data(data)
+	# 2. Munitions reward: replenish 6 missiles
+	if is_instance_valid(player) and player.missile_pod and player.missile_pod.has_method("replenish_ammo"):
+		player.missile_pod.replenish_ammo(6)
 
-	# 3. Floating salvage / visual completion
+	# 3. Banked salvage bonus
+	var gm := get_tree().get_first_node_in_group("game_manager")
+	if gm and gm.has_method("add_salvage"):
+		gm.call("add_salvage", 80)
+	else:
+		var data := SaveSystem.load_data()
+		var cur_salvage: int = int(data.get("salvage", 0))
+		data["salvage"] = cur_salvage + 80
+		SaveSystem.save_data(data)
+
+	# 4. Burst of salvage gems around container
+	var gem_scene: PackedScene = load("res://scenes/pickups/xp_gem.tscn")
+	var parent := get_parent() if get_parent() else get_tree().current_scene
+	if gem_scene and parent:
+		for i in range(4):
+			var angle: float = (float(i) / 4.0) * TAU
+			var spawn_pos: Vector3 = global_position + Vector3(cos(angle) * 2.5, 1.0, sin(angle) * 2.5)
+			var gem: Node3D = gem_scene.instantiate() as Node3D
+			if gem:
+				parent.add_child(gem)
+				gem.global_position = spawn_pos
+				if "xp_value" in gem:
+					gem.set("xp_value", 25)
+
+	# 5. Visual completion
 	if _status_light:
 		_status_light.light_energy = 0.0
 	queue_free()
+
+func get_encounter_display_type() -> String:
+	return "CACHE"
+
+func get_encounter_status_text() -> String:
+	return "READY" if is_unlocked else "LOCKED"
+
+func get_encounter_color() -> Color:
+	return Color(0.20, 0.95, 0.40, 1.0) if is_unlocked else Color(0.95, 0.22, 0.22, 1.0)

@@ -316,16 +316,15 @@ func _update_auto_target() -> void:
 				c["score"] = cur_target_score
 				valid_candidates.append(c)
 
-	# Update LoS grace state for current target
+	# Update LoS grace state for current target: strictly report true only when line of sight is clear
 	if cur_target_los_clean:
 		_los_break_timer = 0.0
 		_current_target_has_los = true
 	elif is_instance_valid(current_target):
 		_los_break_timer += ACQUISITION_INTERVAL
-		if _los_break_timer < LOS_LOST_GRACE_TIME:
-			_current_target_has_los = true
-		else:
-			_current_target_has_los = false
+		# While in grace period, retain target node but flag LoS as false to stop firing into geometry
+		_current_target_has_los = false
+		if _los_break_timer >= LOS_LOST_GRACE_TIME:
 			cur_target_score = -INF
 	else:
 		_current_target_has_los = false
@@ -345,7 +344,9 @@ func _update_auto_target() -> void:
 	if is_instance_valid(current_target) and cur_target_score > -INF:
 		var req_multiplier: float = 1.0 + switch_score_threshold_ratio
 		if _stickiness_timer > 0.0:
-			req_multiplier += 0.15 # Stronger resistance while sticky
+			req_multiplier += 0.20 # Stronger resistance while sticky
+		elif _current_target_has_los:
+			req_multiplier += 0.10 # Stability buffer while engaged with clean LoS
 
 		if best_candidate != null and best_candidate != current_target:
 			if best_score > cur_target_score * req_multiplier:
@@ -379,6 +380,29 @@ func _calculate_candidate_score(enemy: Node3D, dist: float, local_yaw: float, ca
 	# Mission-aware priority bonus
 	var mission_bonus: float = _get_mission_priority_bonus(enemy)
 
+	# Threat urgency bonus: enemies actively lining up or attacking the player
+	var active_threat_bonus: float = 0.0
+	if is_instance_valid(enemy):
+		var is_attacking: bool = (
+			enemy.get("_has_air_slot") == true
+			or enemy.get("_has_attack_slot") == true
+			or (enemy.has_meta("_has_attack_slot") and bool(enemy.get_meta("_has_attack_slot")))
+		)
+		if is_attacking:
+			active_threat_bonus += 0.75
+		var is_telegraphing: bool = (
+			enemy.get("_is_telegraphing") == true
+			or (enemy.has_meta("_is_telegraphing") and bool(enemy.get_meta("_is_telegraphing")))
+		)
+		if is_telegraphing:
+			active_threat_bonus += 0.50
+		var is_charging: bool = (
+			enemy.get("current_state") == 3
+			or (enemy.has_meta("is_charging") and bool(enemy.get_meta("is_charging")))
+		)
+		if is_charging:
+			active_threat_bonus += 0.60
+
 	# Density-aware filtering: at high density (> 20), distant low-threat grunts suffer penalty
 	if candidate_count > 20 and threat_weight <= 0.25 and dist > 25.0:
 		if absf(local_yaw) > deg_to_rad(45.0):
@@ -390,11 +414,15 @@ func _calculate_candidate_score(enemy: Node3D, dist: float, local_yaw: float, ca
 		+ close_threat_bonus
 		+ threat_weight * 2.0
 		+ mission_bonus
+		+ active_threat_bonus
 	)
 
 	# Persistence bonus for current target
 	if enemy == current_target:
 		total_score += persistence_score_bonus
+		if _current_target_has_los:
+			# Firm engagement commitment bonus: prevent flickering away while actively engaging target in line of sight
+			total_score += 0.45
 
 	return total_score
 

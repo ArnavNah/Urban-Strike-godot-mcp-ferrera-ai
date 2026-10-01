@@ -12,12 +12,11 @@ void vertex() {
 		float dist_scale = clamp(dist * 0.025, 0.5, 1.3);
 		float thickness = outline_width * dist_scale;
 		VERTEX += NORMAL * thickness;
+	} else {
+		POSITION = vec4(0.0);
 	}
 }
 
 void fragment() {
-	if (!enabled || outline_width <= 0.0001) {
-		discard;
-	}
 	ALBEDO = outline_color.rgb;
 }

@@ -4,6 +4,7 @@
 [ext_resource type="Material" uid="uid://bukd2vyvym2tt" path="res://resources/materials/toon_turret_base.tres" id="3_f77e0"]
 [ext_resource type="PackedScene" uid="uid://dcv1wotw7mu08" path="res://assets/vehicles/enemies/bosses/archon_body.glb" id="3_h10ul"]
 [ext_resource type="Material" uid="uid://bpdsadu6qhs2x" path="res://resources/materials/toon_boss_archon.tres" id="6_hu2py"]
+[ext_resource type="PackedScene" uid="uid://ckn2vv40x2gsb" path="res://assets/vehicles/enemies/bosses/archon_propeller.glb" id="7_prop"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_Boss"]
 size = Vector3(9.5, 6.7, 18.5)
@@ -82,5 +83,11 @@ transform = Transform3D(-3.715468e-07, 0, 8.5, 0, 8.5, 0, -8.5, 0, -3.715468e-07
 
 [node name="Mesh" parent="Visuals/Model" index="0" unique_id=1910400869]
 surface_material_override/0 = ExtResource("6_hu2py")
+
+[node name="FrontRotor" parent="Visuals" unique_id=1910400870 instance=ExtResource("7_prop")]
+transform = Transform3D(5.5, 0, 0, 0, 5.5, 0, 0, 0, 5.5, 0, 1.85, -2.5)
+
+[node name="RearRotor" parent="Visuals" unique_id=1910400871 instance=ExtResource("7_prop")]
+transform = Transform3D(5.5, 0, 0, 0, 5.5, 0, 0, 0, 5.5, 0, 2.15, 2.5)
 
 [editable path="Visuals/Model"]

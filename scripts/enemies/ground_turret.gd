@@ -331,7 +331,15 @@ func _fire_shot() -> bool:
 	var fire_dir: Vector3
 	if is_instance_valid(_player_node):
 		var to_player := (_player_node.global_position - muzzle_pos).normalized()
-		var spread := Vector3(randf_range(-0.02, 0.02), randf_range(-0.015, 0.015), randf_range(-0.02, 0.02))
+		var is_hovering: bool = _player_node.has_method("is_hover_hazard_active") and _player_node.call("is_hover_hazard_active")
+		var spread_factor: float = 0.15 if is_hovering else 1.0
+		if _player_node.has_method("get_horizontal_speed") and float(_player_node.call("get_horizontal_speed")) > 12.0:
+			spread_factor *= 1.8
+		var spread := Vector3(
+			randf_range(-0.02, 0.02) * spread_factor,
+			randf_range(-0.015, 0.015) * spread_factor,
+			randf_range(-0.02, 0.02) * spread_factor
+		)
 		fire_dir = (to_player + spread).normalized()
 	else:
 		fire_dir = (-barrel.global_transform.basis.z if barrel else -head.global_transform.basis.z).normalized()

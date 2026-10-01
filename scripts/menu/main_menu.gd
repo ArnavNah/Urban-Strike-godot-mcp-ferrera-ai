@@ -44,6 +44,7 @@ func _ready() -> void:
 	if "--1080p" in user_args or "--1920x1080" in user_args:
 		DisplayServer.window_set_size(Vector2i(1920, 1080))
 
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_resolve_scene_nodes()
 	_disable_menu_background_physics()
 	_init_static_camera()
@@ -196,10 +197,14 @@ func _play_focus_sound() -> void:
 	_play_ui_audio(SOUND_FOCUS, -15.0)
 
 func _play_ui_audio(stream: AudioStream, vol_db: float = -14.0) -> void:
+	if not is_inside_tree():
+		return
 	if not ui_sound_player:
 		ui_sound_player = AudioStreamPlayer.new()
 		ui_sound_player.name = "UISoundPlayer"
 		add_child(ui_sound_player)
+	if not ui_sound_player.is_inside_tree():
+		return
 	ui_sound_player.stream = stream
 	ui_sound_player.volume_db = vol_db
 	ui_sound_player.play()
@@ -319,6 +324,7 @@ func _on_play_pressed() -> void:
 		tw.tween_property(menu_column, "position:y", menu_column.position.y + 12.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 	tw.chain().tween_callback(func() -> void:
+		RunSeedManager.initialize_new_run()
 		get_tree().change_scene_to_file("res://scenes/ui/loading_screen.tscn")
 	)
 

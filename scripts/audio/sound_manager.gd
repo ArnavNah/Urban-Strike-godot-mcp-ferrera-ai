@@ -113,6 +113,8 @@ func _ready() -> void:
 			EventBus.missile_pickup_collected.connect(_on_missile_pickup_collected)
 		if EventBus.has_signal("xp_collected"):
 			EventBus.xp_collected.connect(_on_xp_collected)
+		if EventBus.has_signal("attack_run_state_changed"):
+			EventBus.attack_run_state_changed.connect(_on_attack_run_state_changed)
 		if EventBus.has_signal("setting_changed"):
 			EventBus.setting_changed.connect(_on_setting_changed)
 
@@ -323,6 +325,18 @@ func _on_xp_collected(_amount: int) -> void:
 	var freq: float = pentatonic[_xp_combo_step % pentatonic.size()]
 	_xp_combo_step += 1
 	_play_tone(alert_player, freq, 0.08)
+
+var _is_attack_run_active_sound: bool = false
+
+func _on_attack_run_state_changed(is_active: bool, _duration: float, _max_duration: float) -> void:
+	if is_active != _is_attack_run_active_sound:
+		_is_attack_run_active_sound = is_active
+		if is_active:
+			# 3-note ascending major triad chime on start (A4, C#5, E5)
+			_play_arpeggio(alert_player, [440.0, 554.37, 659.25], 0.08)
+		else:
+			# 2-note subtle descending chirp on end (C#5, A4)
+			_play_arpeggio(alert_player, [554.37, 440.0], 0.07)
 
 func _play_arpeggio(player: AudioStreamPlayer, freqs: Array[float], note_dur: float) -> void:
 	if not player or freqs.is_empty():

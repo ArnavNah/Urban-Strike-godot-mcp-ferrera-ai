@@ -65,22 +65,28 @@ func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_dam
 	if not _player_mat:
 		_player_mat = StandardMaterial3D.new()
 		_player_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_player_mat.albedo_color = Color(1.0, 0.88, 0.25, 1.0)
+		_player_mat.albedo_color = Color(1.8, 1.6, 0.55, 1.0)
+		_player_mat.emission_enabled = true
+		_player_mat.emission = Color(1.0, 0.90, 0.30, 1.0)
+		_player_mat.emission_energy_multiplier = 3.0
 	if not _enemy_mat:
 		_enemy_mat = StandardMaterial3D.new()
 		_enemy_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_enemy_mat.albedo_color = Color(1.0, 0.32, 0.1, 1.0)
+		_enemy_mat.albedo_color = Color(2.4, 0.75, 0.18, 1.0)
+		_enemy_mat.emission_enabled = true
+		_enemy_mat.emission = Color(1.0, 0.28, 0.05, 1.0)
+		_enemy_mat.emission_energy_multiplier = 4.0
 
 	if _is_player_projectile:
 		speed = 150.0
 		if mesh_instance:
 			mesh_instance.material_override = _player_mat
-			mesh_instance.scale = Vector3.ONE
+			mesh_instance.scale = Vector3(1.0, 1.0, 1.8)
 	else:
 		speed = 68.0 # High-readability dodgeable bullet speed
 		if mesh_instance:
 			mesh_instance.material_override = _enemy_mat
-			mesh_instance.scale = Vector3(1.3, 1.3, 1.3)
+			mesh_instance.scale = Vector3(1.35, 1.35, 2.5)
 
 	# Safe look_at without gimbal lock crashes on steep vertical shots
 	if _direction.length_squared() > 0.001:
@@ -180,16 +186,22 @@ func _handle_hit(collider: Object, hit_pos: Vector3, hit_norm: Vector3) -> void:
 			if gm and gm.has_method("record_attributed_damage"):
 				gm.call("record_attributed_damage", applied_dmg, weapon_source)
 			var is_dead: bool = false
-			if "current_health" in target_obj and float(target_obj.get("current_health")) <= 0.0:
-				is_dead = true
-			elif "is_alive" in target_obj and not bool(target_obj.get("is_alive")):
-				is_dead = true
+			if "current_health" in target_obj:
+				var ch_val: Variant = target_obj.get("current_health")
+				if ch_val != null and float(ch_val) <= 0.0:
+					is_dead = true
+			elif "is_alive" in target_obj:
+				var alive_val: Variant = target_obj.get("is_alive")
+				if alive_val != null and not bool(alive_val):
+					is_dead = true
 			if is_dead and gm and gm.has_method("record_attributed_kill"):
 				gm.call("record_attributed_kill", weapon_source)
 
 	var is_shield_hit := false
 	if is_player_unit and is_instance_valid(target_obj):
-		if bool(target_obj.get("has_ghost_rotor")) and "_ghost_rotor_timer" in target_obj and float(target_obj.get("_ghost_rotor_timer")) <= 0.0:
+		var ghost_val: Variant = target_obj.get("has_ghost_rotor")
+		var timer_val: Variant = target_obj.get("_ghost_rotor_timer")
+		if ghost_val != null and bool(ghost_val) and timer_val != null and float(timer_val) <= 0.0:
 			is_shield_hit = true
 
 	if not (siege_round and already_hit):
@@ -261,7 +273,7 @@ func deactivate() -> void:
 		shooter_node.on_projectile_miss()
 	shooter_node = null
 	has_hit_target = false
-	if has_danger_reservation and CombatDirector.instance:
+	if CombatDirector.instance and (has_danger_reservation or CombatDirector.instance.has_danger_reservation(self)):
 		CombatDirector.instance.release_danger_capacity(self, 1)
 		has_danger_reservation = false
 	_is_active = false

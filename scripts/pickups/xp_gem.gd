@@ -106,8 +106,11 @@ func activate(pos: Vector3, val: int) -> void:
 	is_active = true
 	_is_collected = false
 	xp_value = val
-	global_position = pos
-	_base_y = pos.y
+	var safe_pos := pos
+	if safe_pos.y < 0.5:
+		safe_pos.y = 0.5
+	global_position = safe_pos
+	_base_y = safe_pos.y
 	_bob_timer = randf() * TAU
 	_current_speed = 0.0
 	_target_player = null
@@ -134,6 +137,12 @@ func deactivate() -> void:
 	monitorable = false
 	monitoring = false
 	_target_player = null
+	_current_speed = 0.0
+	current_state = State.IDLE
+
+func set_xp_value(val: int) -> void:
+	xp_value = val
+	_apply_visual_style()
 
 func _apply_visual_style() -> void:
 	if not mesh:
@@ -198,12 +207,14 @@ func _try_collect(player: PlayerHelicopter) -> bool:
 	return collect(player)
 
 func _play_collection_fx() -> void:
+	if VfxPool.instance:
+		VfxPool.instance.spawn_sparks(global_position, Vector3.UP, false, true)
 	if is_pooled:
 		if mesh and is_inside_tree():
 			var tw := create_tween()
 			_collection_tween = tw
-			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
-			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
+			tw.tween_property(mesh, "scale", Vector3(2.2, 2.2, 2.2), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 			tw.tween_callback(deactivate)
 		else:
 			deactivate()
@@ -211,8 +222,8 @@ func _play_collection_fx() -> void:
 		if mesh and is_inside_tree():
 			var tw := create_tween()
 			_collection_tween = tw
-			tw.tween_property(mesh, "scale", Vector3(1.8, 1.8, 1.8), 0.05)
-			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06)
+			tw.tween_property(mesh, "scale", Vector3(2.2, 2.2, 2.2), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(mesh, "scale", Vector3(0.01, 0.01, 0.01), 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 			tw.tween_callback(queue_free)
 		else:
 			queue_free()
@@ -233,8 +244,6 @@ func _is_line_of_sight_clear(target_pos: Vector3) -> bool:
 func magnetize_to(player: Node3D) -> void:
 	if not is_instance_valid(player) or _is_collected or not is_active:
 		return
-	if not _is_line_of_sight_clear(player.global_position):
-		return
 	_target_player = player
 	current_state = State.MAGNETIZED
 	if _current_speed < initial_magnet_speed:
@@ -250,8 +259,8 @@ func _get_target_pos() -> Vector3:
 	if _target_player.has_node("StableTrackingPoint"):
 		var marker: Node3D = _target_player.get_node("StableTrackingPoint") as Node3D
 		if marker:
-			return marker.global_position
-	return _target_player.global_position + Vector3(0.0, 0.4, 0.0)
+			return _target_player.global_transform * marker.transform.origin
+	return _target_player.global_position + Vector3(0.0, 1.2, 0.0)
 
 func _physics_process(delta: float) -> void:
 	if _is_collected or not is_active:
@@ -289,8 +298,7 @@ func _physics_process(delta: float) -> void:
 				var to_player := active_player.global_position - global_position
 				var flat_d := Vector2(to_player.x, to_player.z).length()
 				if to_player.length() <= collection_radius or (flat_d <= collection_radius_xz and absf(to_player.y) <= collection_height):
-					if _is_line_of_sight_clear(active_player.global_position):
-						collect(active_player)
+					collect(active_player)
 		return
 
 	# Magnetized state: locks onto player stable tracking point with full relative velocity feed-forward

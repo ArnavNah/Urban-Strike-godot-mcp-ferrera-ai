@@ -99,11 +99,11 @@ func get_aim_input() -> Vector2:
 
 
 func is_precision_aiming() -> bool:
-	return Input.is_action_pressed("precision_aim")
+	return Input.is_action_pressed("precision_aim") or Input.is_action_pressed("aim_override")
 
 
 func is_boosting() -> bool:
-	return Input.is_action_pressed("boost")
+	return Input.is_action_pressed("boost") or Input.is_action_pressed("evade")
 
 
 static func _radial_curve(

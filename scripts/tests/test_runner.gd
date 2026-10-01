@@ -11,6 +11,7 @@ func append_log(line: String, log_lines: Array[String]) -> void:
 		f.close()
 
 func _ready() -> void:
+	RunSeedManager.reset()
 	var out_path := ProjectSettings.globalize_path("res://test_results.txt")
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	if f:
@@ -122,6 +123,18 @@ func _ready() -> void:
 	success = test_polish_and_fixes(log_lines) and success
 	append_log("Running test 51 (Tier 1 & Tier 2: Downwash, engine audio, battle damage, evade, winch rescue & HUD)...", log_lines)
 	success = test_tier1_and_tier2_systems_and_hud(log_lines) and success
+	append_log("Running test 52 (Air model variety, Megabonk multiplier & hover hazard)...", log_lines)
+	success = test_air_models_megabonk_score_and_hover_hazard(log_lines) and success
+	append_log("Running test 53 (Menu & loading screen seamless integration)...", log_lines)
+	success = test_menu_and_loading_screen_seamlessness(log_lines) and success
+	append_log("Running test 54 (Phase 3 Encounter pacing, separation & finale)...", log_lines)
+	success = test_phase3_encounter_pacing_separation_and_finale(log_lines) and success
+	append_log("Running test 55 (Phase 4 Rewards: placement validity, chunk lifecycle, supply stops & guarded cache)...", log_lines)
+	success = test_phase4_rewards_placement_lifecycle_and_benefits(log_lines) and success
+	append_log("Running test 56 (Phase 5 Attack Run gunship payoff, benefits, cooldown & resets)...", log_lines)
+	success = test_phase5_attack_run_activation_benefits_expiry_and_resets(log_lines) and success
+	append_log("Running test 57 (Phase 2 Build paths, offer eligibility, evolution prerequisites & XP carry-over)...", log_lines)
+	success = test_phase2_build_paths_evolutions_and_xp_pacing(log_lines) and success
 
 	if success:
 		append_log("=== ALL HELI-STRIKE VERTICAL SLICE TESTS PASSED! ===", log_lines)
@@ -133,8 +146,9 @@ func _ready() -> void:
 
 	# Flush deferred deletion queue over process frames to allow all queue_free()
 	# invocations to be completely purged from Godot's ObjectDB before shutdown.
-	await get_tree().process_frame
-	await get_tree().process_frame
+	for _i in range(5):
+		await get_tree().physics_frame
+		await get_tree().process_frame
 
 	get_tree().quit(0 if success else 1)
 
@@ -295,7 +309,31 @@ func test_missiles_and_flares(logs: Array[String]) -> bool:
 		dummy_target.queue_free()
 		return false
 
-	logs.append("  -> 0.95s missile lock and countermeasure flares verified.")
+	# Test GuidedMissile direct hit high-value payload multiplier (1.6x = 72.0 damage)
+	var gm_scene := load("res://scenes/weapons/guided_missile.tscn") as PackedScene
+	var missile: GuidedMissile = gm_scene.instantiate() as GuidedMissile
+	add_child(missile)
+
+	var dummy_tank: TargetDummy = TargetDummy.new()
+	dummy_tank.max_health = 180.0
+	dummy_tank.current_health = 180.0
+	dummy_tank.add_to_group("tanks")
+	dummy_tank.add_to_group("armored_enemies")
+	add_child(dummy_tank)
+
+	missile._apply_target_damage(dummy_tank, Vector3.ZERO, true, 0.0)
+	if absf(dummy_tank.current_health - (180.0 - 72.0)) > 0.01:
+		logs.append("FAIL: High-value direct missile hit did not deal 72.0 damage (health: %.2f, expected: %.2f)" % [dummy_tank.current_health, 180.0 - 72.0])
+		missile.queue_free()
+		dummy_tank.queue_free()
+		pod.queue_free()
+		dummy_target.queue_free()
+		flare.queue_free()
+		return false
+	missile.queue_free()
+	dummy_tank.queue_free()
+
+	logs.append("  -> 0.95s missile lock, countermeasure flares, and direct high-value payload (72.0 dmg) verified.")
 	pod.queue_free()
 	dummy_target.queue_free()
 	flare.queue_free()
@@ -527,7 +565,37 @@ func test_targeting_stickiness_and_mission_priority(logs: Array[String]) -> bool
 		ts.queue_free()
 		return false
 
-	logs.append("  -> Targeting stickiness (0.25s), hysteresis bonus (+0.35), and mission-priority scoring verified.")
+	# Test active threat bonus
+	ts.current_target = null
+	var threat_dummy: Node3D = Node3D.new()
+	threat_dummy.name = "ThreatDummy"
+	threat_dummy.set_meta("_has_attack_slot", true)
+	add_child(threat_dummy)
+	var passive_score: float = ts._calculate_candidate_score(grunt, 30.0, 0.0, 5)
+	var threat_score: float = ts._calculate_candidate_score(threat_dummy, 30.0, 0.0, 5)
+	if threat_score <= passive_score:
+		logs.append("FAIL: Active threat with attack slot did not receive urgency bonus (threat: %.2f, passive: %.2f)" % [threat_score, passive_score])
+		grunt.queue_free()
+		radar.queue_free()
+		threat_dummy.queue_free()
+		ts.queue_free()
+		return false
+	threat_dummy.queue_free()
+
+	# Test engagement stability bonus when LoS is clean
+	ts.current_target = grunt
+	ts._current_target_has_los = false
+	var score_no_clean_los: float = ts._calculate_candidate_score(grunt, 30.0, 0.0, 5)
+	ts._current_target_has_los = true
+	var grunt_score_with_clean_los: float = ts._calculate_candidate_score(grunt, 30.0, 0.0, 5)
+	if grunt_score_with_clean_los <= score_no_clean_los:
+		logs.append("FAIL: Clean LoS engagement bonus not applied to current_target")
+		grunt.queue_free()
+		radar.queue_free()
+		ts.queue_free()
+		return false
+
+	logs.append("  -> Targeting stickiness (0.25s), active threat urgency, hysteresis (+0.35), clean LoS commitment (+0.45), and mission-priority scoring verified.")
 	grunt.queue_free()
 	radar.queue_free()
 	ts.queue_free()
@@ -629,6 +697,7 @@ func test_formations_and_mission_consequences(logs: Array[String]) -> bool:
 		if is_instance_valid(unit):
 			(unit as Node).queue_free()
 
+	sd.remove_from_group("spawn_director")
 	sd.queue_free()
 
 	# 4. Test Endless Mode & Extraction setup in GameManager
@@ -3891,6 +3960,9 @@ func test_dynamic_strike_missions(logs: Array[String]) -> bool:
 
 	jammer_inst.remove_from_group("jammers")
 	jammer_inst.queue_free()
+	for escort in jammer_mission.escort_units:
+		if is_instance_valid(escort) and not escort.is_queued_for_deletion():
+			escort.queue_free()
 
 	if not m2.check_completion():
 		append_log("FAIL: Jammer Convoy mission failed to register completion", logs)
@@ -5110,6 +5182,45 @@ func test_phase_10b_low_difficulty_enemy_ai_and_combat_director(logs: Array[Stri
 		return false
 	cd.release_danger_capacity("shotB", 3)
 
+	# 6b. Regression test: transfer_danger_to_projectile and deactivation release
+	var danger_enemy := Node3D.new()
+	danger_enemy.name = "DangerEnemy"
+	root_node.add_child(danger_enemy)
+	cd.request_attack_permission(danger_enemy, 1, true, false, false, 2)
+	var proj_scene := load("res://scenes/weapons/projectile.tscn") as PackedScene
+	var test_proj: Node3D = proj_scene.instantiate() as Node3D
+	root_node.add_child(test_proj)
+	cd.transfer_danger_to_projectile(danger_enemy, test_proj, 3.0)
+	if not test_proj.get("has_danger_reservation"):
+		append_log("FAIL: [Step 6b] Projectile has_danger_reservation not set after transfer", logs)
+		root_node.queue_free()
+		return false
+	test_proj.call("deactivate")
+	if cd.current_danger_used != 0 or cd.has_danger_reservation(test_proj):
+		append_log("FAIL: [Step 6b] Danger capacity leaked after projectile deactivate (used: %d)" % cd.current_danger_used, logs)
+		root_node.queue_free()
+		return false
+	cd.release_attack_permission(danger_enemy)
+	test_proj.queue_free()
+	danger_enemy.queue_free()
+
+	# 6c. Regression test: AirEnemyController slot release on non-attack state transition
+	var scout_scene := load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
+	var air_ctrl: AirEnemyController = scout_scene.instantiate() as AirEnemyController
+	root_node.add_child(air_ctrl)
+	air_ctrl.set("_arming_timer", 0.0)
+	air_ctrl.call("_request_air_slot")
+	if not air_ctrl._has_air_slot:
+		append_log("FAIL: [Step 6c] AirEnemyController failed to acquire initial air slot", logs)
+		root_node.queue_free()
+		return false
+	air_ctrl.call("_transition_to", AirEnemyController.State.REPOSITION)
+	if air_ctrl._has_air_slot or cd.get_air_tokens_used() != 0:
+		append_log("FAIL: [Step 6c] AirEnemyController leaked air slot after transition to REPOSITION", logs)
+		root_node.queue_free()
+		return false
+	air_ctrl.queue_free()
+
 	# 7. Watchdog Leaked Reservation Cleanup
 	var leaked_enemy := Node3D.new()
 	leaked_enemy.name = "LeakedEnemy"
@@ -6146,7 +6257,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 		var r_id := spawn_director.reserve_spawn_position(pt, 12.0, "ground", "SafeRoadPoint_%d" % i, 0, 10.0)
 		safe_reservations.append(r_id)
 
-	var fallback_all_busy := spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
+	var fallback_all_busy: Dictionary = spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
 	if fallback_all_busy.get("success", true):
 		append_log("FAIL: Case 4 - Fallback succeeded when all safe road points were occupied/reserved", logs)
 		root_node.queue_free()
@@ -6162,7 +6273,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 			break
 
 	if released_index >= 0:
-		var fallback_one_free := spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
+		var fallback_one_free: Dictionary = spawn_director._get_safe_perimeter_fallback(player.global_position, false, 10.0)
 		if not fallback_one_free.get("success", false):
 			append_log("FAIL: Case 4 - Fallback failed to pick the single available free road point", logs)
 			root_node.queue_free()
@@ -6259,7 +6370,7 @@ func test_spawn_director_separation_reservations_and_regression(logs: Array[Stri
 		root_node.queue_free()
 		return false
 
-	var tank_min_sep: float = float(SpawnDirector.SEPARATION_RADII["tank"]) # 12.0m
+	var tank_min_sep: float = float(spawn_director.SEPARATION_RADII["tank"]) # 12.0m
 	for i in range(column_units.size()):
 		for j in range(i + 1, column_units.size()):
 			var u_i := column_units[i]
@@ -6916,20 +7027,20 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	# Sub-step 3: Frustum and Viewport rejection
 	manager.set_preset("medium")
 	# Behind camera (Z = 25m, cam is at Z = 15m facing -Z)
-	EventBus.damage_number_spawned.emit(Vector3(0.0, 10.0, 25.0), 10.0, false)
+	EventBus.damage_number_spawned.emit(Vector3(0.0, 10.0, 25.0), 10.0, false, {})
 	if manager.get_active_count() != 0:
 		append_log("FAIL: Behind-camera position was not rejected!", logs)
 		vp.queue_free()
 		return false
 	# Out-of-range (>150m)
-	EventBus.damage_number_spawned.emit(Vector3(0.0, 0.0, -200.0), 10.0, false)
+	EventBus.damage_number_spawned.emit(Vector3(0.0, 0.0, -200.0), 10.0, false, {})
 	if manager.get_active_count() != 0:
 		append_log("FAIL: Distant position (>150m) was not rejected!", logs)
 		vp.queue_free()
 		return false
 	# In-view position
 	var visible_pos := Vector3(0.0, 0.0, 0.0)
-	EventBus.damage_number_spawned.emit(visible_pos, 10.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 10.0, false, {})
 	if manager.get_active_count() != 1:
 		append_log("FAIL: In-view position should be accepted, got %d" % manager.get_active_count(), logs)
 		vp.queue_free()
@@ -6943,7 +7054,7 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	manager.set_preset("medium")
 	for i in range(200):
 		var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
-		EventBus.damage_number_spawned.emit(visible_pos + offset, float(i + 1), (i % 5 == 0))
+		EventBus.damage_number_spawned.emit(visible_pos + offset, float(i + 1), (i % 5 == 0), {})
 	if manager.get_active_count() != 40:
 		append_log("FAIL: 200-burst on Medium should cap at 40, got %d" % manager.get_active_count(), logs)
 		vp.queue_free()
@@ -6966,7 +7077,7 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	manager.set_preset("low") # Cap = 24
 	for i in range(200):
 		var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
-		EventBus.damage_number_spawned.emit(visible_pos + offset, 75.0, true)
+		EventBus.damage_number_spawned.emit(visible_pos + offset, 75.0, true, {})
 	if manager.get_active_count() != 24:
 		append_log("FAIL: Second burst on Low should cap at 24, got %d" % manager.get_active_count(), logs)
 		vp.queue_free()
@@ -6998,7 +7109,7 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	manager.set_preset("high") # Cap = 56
 	for i in range(200):
 		var offset := Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
-		EventBus.damage_number_spawned.emit(visible_pos + offset, 20.0 + float(i) * 0.01, false)
+		EventBus.damage_number_spawned.emit(visible_pos + offset, 20.0 + float(i) * 0.01, false, {})
 	if manager.get_active_count() != 56:
 		append_log("FAIL: Third burst on High should cap at 56, got %d" % manager.get_active_count(), logs)
 		vp.queue_free()
@@ -7010,7 +7121,7 @@ func test_damage_number_pooling_and_limits(logs: Array[String]) -> bool:
 	var dmg_step := 10.0
 	for h in range(50):
 		dummy_hp -= dmg_step
-		EventBus.damage_number_spawned.emit(visible_pos, dmg_step, false)
+		EventBus.damage_number_spawned.emit(visible_pos, dmg_step, false, {})
 	if dummy_hp != 0.0:
 		append_log("FAIL: Damage application corrupted! Expected 0, got %f" % dummy_hp, logs)
 		vp.queue_free()
@@ -7116,7 +7227,7 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 
 	# Sub-step 3: Removal of arbitrary numeric threshold logic (large 50.0 hit without crit metadata stays NORMAL)
 	deactivate_all.call()
-	EventBus.damage_number_spawned.emit(visible_pos, 50.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 50.0, false, {})
 	var lbl_large_normal := get_active_label.call() as DamageNumber
 	if not lbl_large_normal:
 		append_log("FAIL: [Step 3] Large damage label not spawned", logs)
@@ -7176,7 +7287,7 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 	deactivate_all.call()
 
 	# Zero-damage hit via damage_number_spawned is also suppressed
-	EventBus.damage_number_spawned.emit(visible_pos, 0.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 0.0, false, {})
 	var lbl_zero := get_active_label.call() as DamageNumber
 	if lbl_zero:
 		append_log("FAIL: [Step 5] Zero-damage hit should be suppressed, but spawned label: '%s'" % lbl_zero.text, logs)
@@ -7202,8 +7313,8 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 
 	# Sub-step 7: Duplicate prevention within same frame
 	deactivate_all.call()
-	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false)
-	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false, {})
+	EventBus.damage_number_spawned.emit(visible_pos, 33.0, false, {})
 	if manager.get_active_count() != 1:
 		append_log("FAIL: [Step 7] Duplicate event was not prevented in same frame! Active count: %d" % manager.get_active_count(), logs)
 		vp.queue_free()
@@ -7211,15 +7322,15 @@ func test_damage_number_categories_and_player_damage(logs: Array[String]) -> boo
 	deactivate_all.call()
 	append_log("  -> Sub-step 7: Same-frame duplicate damage event dropped successfully (active count strictly 1).", logs)
 
-	# Sub-step 8: Preserving existing 3-argument callers
+	# Sub-step 8: Standard 4-argument callers with empty metadata
 	deactivate_all.call()
-	EventBus.damage_number_spawned.emit(visible_pos, 18.0, false)
+	EventBus.damage_number_spawned.emit(visible_pos, 18.0, false, {})
 	if manager.get_active_count() != 1:
-		append_log("FAIL: [Step 8] Legacy 3-argument caller failed to spawn label", logs)
+		append_log("FAIL: [Step 8] Standard 4-argument caller failed to spawn label", logs)
 		vp.queue_free()
 		return false
 	deactivate_all.call()
-	append_log("  -> Sub-step 8: Legacy 3-argument signal callers verified with 0 runtime errors.", logs)
+	append_log("  -> Sub-step 8: Standard 4-argument signal callers verified with 0 runtime errors.", logs)
 
 	manager._disconnect_events()
 	vp.queue_free()
@@ -7979,6 +8090,160 @@ func test_polish_and_fixes(logs: Array[String]) -> bool:
 	vic_menu.queue_free()
 	append_log("  -> Sub-step 6: VictoryScreen focus navigation loop and audio feedback verified.", logs)
 
+	# --- Sub-step 7: Gamepad Controller Disambiguation & RT Aim Protection ---
+	var evade_events := InputMap.action_get_events("evade")
+	for ev in evade_events:
+		if ev is InputEventKey and ev.physical_keycode == KEY_SPACE:
+			append_log("FAIL: KEY_SPACE still bound to evade (conflicts with ascend)", logs)
+			return false
+		if ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_B:
+			append_log("FAIL: JOY_BUTTON_B still bound to evade (conflicts with descend)", logs)
+			return false
+
+	var has_l3_evade := false
+	for ev in evade_events:
+		if ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_LEFT_STICK:
+			has_l3_evade = true
+	if not has_l3_evade:
+		append_log("FAIL: JOY_BUTTON_LEFT_STICK not bound to evade", logs)
+		return false
+
+	var descend_events := InputMap.action_get_events("descend")
+	var has_b_descend := false
+	for ev in descend_events:
+		if ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_B:
+			has_b_descend = true
+	if not has_b_descend:
+		append_log("FAIL: JOY_BUTTON_B not bound to descend", logs)
+		return false
+
+	var test_player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var test_player: PlayerHelicopter = test_player_scene.instantiate() as PlayerHelicopter
+	add_child(test_player)
+	test_player.global_position = Vector3(0, 10, 0)
+
+	# Verify fire_primary (RT) without right-stick or mouse input does not hijack auto-aim
+	Input.action_press("fire_primary")
+	test_player._handle_aim_input(0.016)
+	if test_player.targeting_system.is_manual_aim:
+		append_log("FAIL: fire_primary hijacked aim to screen mouse without right-stick or mouse input", logs)
+		Input.action_release("fire_primary")
+		test_player.queue_free()
+		return false
+	Input.action_release("fire_primary")
+
+	# Verify gamepad aim_override (LT) without mouse buttons triggers forward precision lock
+	Input.action_press("aim_override")
+	test_player._handle_aim_input(0.016)
+	if not test_player.targeting_system.is_manual_aim:
+		append_log("FAIL: Gamepad aim_override did not trigger precision forward lock", logs)
+		Input.action_release("aim_override")
+		test_player.queue_free()
+		return false
+	Input.action_release("aim_override")
+	test_player.targeting_system._set_manual_aim(false)
+
+	# Verify right stick deflection past deadzone activates dual-stick manual aim
+	Input.action_press("aim_right", 0.8)
+	test_player._handle_aim_input(0.016)
+	if not test_player.targeting_system.is_manual_aim:
+		append_log("FAIL: Right stick deflection did not activate 360 dual-stick aim", logs)
+		Input.action_release("aim_right")
+		test_player.queue_free()
+		return false
+	Input.action_release("aim_right")
+
+	test_player.queue_free()
+	append_log("  -> Sub-step 7: Gamepad controller disambiguation, RT aim safety & dual-stick response verified.", logs)
+
+	# --- Sub-step 8: Tank & Air Telegraphs and HUD Lock Styling ---
+	var mock_player := Node3D.new()
+	mock_player.name = "MockPlayerForTelegraphs"
+	add_child(mock_player)
+	mock_player.global_position = Vector3(0, 10, 0)
+
+	var tank_scene := load("res://scenes/enemies/tank.tscn") as PackedScene
+	var test_tank: Tank = tank_scene.instantiate() as Tank
+	add_child(test_tank)
+	test_tank.global_position = Vector3(0, 0, -25)
+	test_tank._player = mock_player
+
+	# In ACQUIRE / REPOSITIONING, laser beam should be hidden
+	test_tank._transition_to(Tank.State.ACQUIRE)
+	if test_tank._laser_beam_mesh and test_tank._laser_beam_mesh.visible:
+		append_log("FAIL: Tank laser beam visible when not charging", logs)
+		test_tank.queue_free()
+		mock_player.queue_free()
+		return false
+
+	# In CHARGING, laser beam should activate
+	test_tank.current_state = Tank.State.CHARGING
+	test_tank._update_charging_telegraph()
+	if not test_tank._laser_beam_mesh or not test_tank._laser_beam_mesh.visible:
+		append_log("FAIL: Tank laser beam not visible during State.CHARGING", logs)
+		test_tank.queue_free()
+		mock_player.queue_free()
+		return false
+
+	test_tank._transition_to(Tank.State.REPOSITIONING)
+	if test_tank._laser_beam_mesh.visible:
+		append_log("FAIL: Tank laser beam failed to hide on leaving CHARGING", logs)
+		test_tank.queue_free()
+		mock_player.queue_free()
+		return false
+	test_tank.queue_free()
+
+	# Air Enemy Rocket Raider telegraph
+	var air_scene := load("res://scenes/enemies/air_scout_helicopter.tscn") as PackedScene
+	var air_raider: AirEnemyController = air_scene.instantiate() as AirEnemyController
+	add_child(air_raider)
+	air_raider.global_position = Vector3(0, 15, -20)
+	air_raider._player = mock_player
+	air_raider._is_telegraphing = true
+	air_raider._update_rocket_telegraph()
+	if not air_raider._rocket_laser_mesh or not air_raider._rocket_laser_mesh.visible:
+		append_log("FAIL: Air raider rocket laser not visible during telegraph", logs)
+		air_raider.queue_free()
+		mock_player.queue_free()
+		return false
+
+	air_raider._is_telegraphing = false
+	air_raider._update_rocket_telegraph()
+	if air_raider._rocket_laser_mesh.visible:
+		append_log("FAIL: Air raider rocket laser failed to hide after telegraph", logs)
+		air_raider.queue_free()
+		mock_player.queue_free()
+		return false
+	air_raider.queue_free()
+	mock_player.queue_free()
+
+	# HUD Reticle Missile Locked Styling
+	var test_hud_scene := load("res://scenes/ui/hud.tscn") as PackedScene
+	var test_hud: HUD = test_hud_scene.instantiate() as HUD
+	add_child(test_hud)
+	test_hud._is_manual_aim = false
+	test_hud._is_missile_locked = true
+	var dummy_tgt := Node3D.new()
+	add_child(dummy_tgt)
+	dummy_tgt.global_position = Vector3(0, 0, -20)
+	test_hud._current_target = dummy_tgt
+	test_hud._update_target_reticle(0.016)
+
+	if test_hud.target_reticle.visible:
+		var has_emerald := false
+		for c in test_hud.target_reticle.get_children():
+			if c is ColorRect and (c as ColorRect).color.g > 0.9 and (c as ColorRect).color.r < 0.4:
+				has_emerald = true
+				break
+		if not has_emerald:
+			append_log("FAIL: Target reticle during missile lock does not display emerald styling", logs)
+			dummy_tgt.queue_free()
+			test_hud.queue_free()
+			return false
+	dummy_tgt.queue_free()
+	test_hud.queue_free()
+	append_log("  -> Sub-step 8: Tank charging laser, rocket raider telegraph, and HUD emerald lock styling verified.", logs)
+
 	append_log("  -> Test 50 PASSED: Polish & fixes (dual-stick aim, reticle styling, UI focus & EventBus) fully validated.", logs)
 	return true
 
@@ -8254,3 +8519,1332 @@ func test_tier1_and_tier2_systems_and_hud(logs: Array[String]) -> bool:
 	append_log("  -> Sub-step 6: HUD survivor and crate screen-edge projection math verified.", logs)
 	append_log("  -> Test 51 PASSED: Tier 1, Tier 2 & Tier 1 HUD systems fully validated.", logs)
 	return true
+
+func test_air_models_megabonk_score_and_hover_hazard(logs: Array[String]) -> bool:
+	logs.append("[TEST 52] Air Models Variety, Megabonk Multipliers & Hover Hazard...")
+	var test_root := Node3D.new()
+	test_root.name = "Test52Root"
+	add_child(test_root)
+
+	# --- Sub-step 1: Air Model Variety & Liveries ---
+	var air_scenes: Array[String] = [
+		"res://scenes/enemies/air_scout_helicopter.tscn",
+		"res://scenes/enemies/air_rocket_raider.tscn",
+		"res://scenes/enemies/air_attack_gunship.tscn",
+		"res://scenes/enemies/air_jammer_helicopter.tscn",
+		"res://scenes/enemies/air_heavy_gunship.tscn",
+		"res://scenes/enemies/air_transport_helicopter.tscn",
+		"res://scenes/enemies/air_ace_gunship.tscn",
+		"res://scenes/enemies/mig_17_striker.tscn"
+	]
+
+	for sc_path in air_scenes:
+		var sc := load(sc_path) as PackedScene
+		if not sc or not sc.can_instantiate():
+			append_log("FAIL: Unable to load or instantiate air enemy scene: %s" % sc_path, logs)
+			test_root.queue_free()
+			return false
+		var inst := sc.instantiate() as Node3D
+		test_root.add_child(inst)
+		var visuals := inst.find_child("Visuals", true, false) as Node3D
+		if not visuals:
+			append_log("FAIL: Air enemy scene %s missing Visuals node" % sc_path, logs)
+			test_root.queue_free()
+			return false
+		if sc_path.contains("transport"):
+			var trans_model := visuals.find_child("Model", true, false)
+			if not trans_model:
+				append_log("FAIL: Air transport helicopter scene does not have 3D Model", logs)
+				test_root.queue_free()
+				return false
+		elif sc_path.contains("ace"):
+			var ace_model := visuals.find_child("Model", true, false)
+			if not ace_model:
+				append_log("FAIL: Air ace gunship scene does not have 3D Model", logs)
+				test_root.queue_free()
+				return false
+		inst.queue_free()
+
+	append_log("  -> Sub-step 1: All 8 air enemy scenes (including upgraded GLB transport & ace) verified.", logs)
+
+	# --- Sub-step 2: Megabonk Score & Multiplier Engine ---
+	var gm_script: GDScript = load("res://scripts/common/game_manager.gd")
+	var gm: GameManager = gm_script.new() as GameManager
+	test_root.add_child(gm)
+
+	if gm.combo_multiplier != 1.0 or gm.combo_streak != 0 or gm.total_score != 0:
+		append_log("FAIL: Initial GameManager score/combo metrics invalid", logs)
+		test_root.queue_free()
+		return false
+
+	for _i in range(3):
+		gm.call("_on_enemy_destroyed", null, 100)
+	if gm.combo_multiplier < 1.5 or gm.enemies_killed != 3:
+		append_log("FAIL: 3 kills did not reach 1.5x multiplier (got %.1fx, kills: %d)" % [gm.combo_multiplier, gm.enemies_killed], logs)
+		test_root.queue_free()
+		return false
+
+	for _i in range(7):
+		gm.call("_on_enemy_destroyed", null, 100)
+	if gm.combo_multiplier < 2.5 or gm.enemies_killed != 10:
+		append_log("FAIL: 10 kills did not reach 2.5x multiplier (got %.1fx)" % gm.combo_multiplier, logs)
+		test_root.queue_free()
+		return false
+
+	for _i in range(30):
+		gm.call("_on_enemy_destroyed", null, 100)
+	if gm.combo_multiplier < 5.0 or gm.enemies_killed != 40:
+		append_log("FAIL: 40 kills did not reach 5.0x MEGABONK multiplier (got %.1fx)" % gm.combo_multiplier, logs)
+		test_root.queue_free()
+		return false
+
+	if gm.total_score <= 4000:
+		append_log("FAIL: Total score did not scale with multiplier (score: %d)" % gm.total_score, logs)
+		test_root.queue_free()
+		return false
+
+	var dummy_tank := StaticBody3D.new()
+	dummy_tank.add_to_group("fuel_tanks")
+	test_root.add_child(dummy_tank)
+	var kills_before := gm.enemies_killed
+	gm.call("_on_enemy_destroyed", dummy_tank, 50)
+	if gm.enemies_killed != kills_before:
+		append_log("FAIL: Fuel tank destruction incorrectly incremented enemies_killed", logs)
+		test_root.queue_free()
+		return false
+	dummy_tank.queue_free()
+
+	gm.combo_timer = 0.0
+	gm.call("_decay_combo")
+	if gm.combo_multiplier >= 5.0:
+		append_log("FAIL: Combo multiplier did not decay after _decay_combo (got %.1fx)" % gm.combo_multiplier, logs)
+		test_root.queue_free()
+		return false
+
+	var tel: Dictionary = gm.get_run_telemetry("TEST")
+	if int(tel.get("enemies_killed", 0)) != 40 or int(tel.get("total_score", 0)) == 0 or float(tel.get("max_multiplier", 1.0)) < 5.0:
+		append_log("FAIL: GameManager telemetry missing score/multiplier metrics", logs)
+		test_root.queue_free()
+		return false
+
+	gm.queue_free()
+	append_log("  -> Sub-step 2: Megabonk score multipliers (1.0x-5.0x), combo decay, and verified kills validated.", logs)
+
+	# --- Sub-step 3: Stationary Hover Hazard Monitoring ---
+	var player_sc := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player := player_sc.instantiate() as CharacterBody3D
+	test_root.add_child(player)
+	player.add_to_group("player")
+
+	player.velocity = Vector3.ZERO
+	for _i in range(130):
+		player.call("_physics_process", 0.0166)
+	if not player.call("is_hover_hazard_active"):
+		append_log("FAIL: Stationary player did not trigger hover hazard after 2.1s", logs)
+		test_root.queue_free()
+		return false
+
+	for _i in range(40):
+		player.velocity = Vector3(24.0, 0.0, 0.0)
+		player.call("_physics_process", 0.0166)
+	if player.call("is_hover_hazard_active"):
+		append_log("FAIL: High-speed player did not clear hover hazard", logs)
+		test_root.queue_free()
+		return false
+
+	player.remove_from_group("player")
+	player.queue_free()
+	append_log("  -> Sub-step 3: Stationary hover hazard (>2.0s stationary) and high-speed recovery validated.", logs)
+
+	# --- Sub-step 4: HUD Score Card & Hover Banner ---
+	var hud_sc := load("res://scenes/ui/hud.tscn") as PackedScene
+	var hud := hud_sc.instantiate() as HUD
+	test_root.add_child(hud)
+
+	if not hud.score_label or not hud.kills_label or not hud.multiplier_badge or not hud.combo_bar or not hud.hover_hazard_banner:
+		append_log("FAIL: HUD missing ScoreCard or HoverHazard nodes", logs)
+		test_root.queue_free()
+		return false
+
+	hud.call("_on_kills_updated", 48)
+	if not hud.kills_label.text.contains("48"):
+		append_log("FAIL: HUD kills label did not update with verified kills (got '%s')" % hud.kills_label.text, logs)
+		test_root.queue_free()
+		return false
+
+	hud.call("_on_score_updated", 125000, 500, 3.0, 15)
+	if not hud.multiplier_badge.text.contains("3.0x"):
+		append_log("FAIL: HUD multiplier badge did not update with multiplier tier (got '%s')" % hud.multiplier_badge.text, logs)
+		test_root.queue_free()
+		return false
+
+	hud.call("_on_hover_hazard_state_changed", true)
+	if not hud.hover_hazard_banner.visible:
+		append_log("FAIL: HUD hover hazard banner did not become visible when hazard active", logs)
+		test_root.queue_free()
+		return false
+
+	hud.call("_on_hover_hazard_state_changed", false)
+	if hud.hover_hazard_banner.visible:
+		append_log("FAIL: HUD hover hazard banner did not hide when hazard cleared", logs)
+		test_root.queue_free()
+		return false
+
+	hud.queue_free()
+	test_root.queue_free()
+	append_log("  -> Sub-step 4: HUD ScoreCard, live kills, multiplier badge, and hover banner fully validated.", logs)
+	append_log("  -> Test 52 PASSED: Air model variety, Megabonk multiplier & hover hazard fully verified.", logs)
+	return true
+
+func test_menu_and_loading_screen_seamlessness(logs: Array[String]) -> bool:
+	append_log("[TEST 53] Testing MainMenu & LoadingScreen Seamless Integration...", logs)
+	var test_root := Node3D.new()
+	test_root.name = "Test53Root"
+	add_child(test_root)
+
+	# --- Sub-step 1: MainMenu Scene Integrity & Tactical Navigation ---
+	var menu_scene: PackedScene = load("res://scenes/menu/main_menu.tscn") as PackedScene
+	if not menu_scene or not menu_scene.can_instantiate():
+		append_log("FAIL: Could not load res://scenes/menu/main_menu.tscn", logs)
+		test_root.queue_free()
+		return false
+
+	var menu: MainMenu = menu_scene.instantiate() as MainMenu
+	test_root.add_child(menu)
+
+	var play_btn: Button = menu.find_child("PlayButton", true, false) as Button
+	var hangar_btn: Button = menu.find_child("HangarButton", true, false) as Button
+	var settings_btn: Button = menu.find_child("SettingsButton", true, false) as Button
+	var quit_btn: Button = menu.find_child("QuitButton", true, false) as Button
+
+	if not play_btn or not hangar_btn or not settings_btn or not quit_btn:
+		append_log("FAIL: MainMenu missing one or more tactical navigation buttons", logs)
+		test_root.queue_free()
+		return false
+
+	if play_btn.focus_neighbor_top != play_btn.get_path_to(quit_btn) or play_btn.focus_neighbor_bottom != play_btn.get_path_to(hangar_btn):
+		append_log("FAIL: MainMenu focus neighbors do not form a closed navigation loop", logs)
+		test_root.queue_free()
+		return false
+
+	# Test Settings overlay open & close
+	menu.call("_open_settings_menu")
+	var settings_overlay: Control = menu.get("_settings_overlay")
+	if not settings_overlay or not settings_overlay.visible:
+		append_log("FAIL: Settings overlay failed to open from MainMenu", logs)
+		test_root.queue_free()
+		return false
+
+	menu.call("_close_settings_menu")
+	if settings_overlay:
+		settings_overlay.visible = false
+
+	# Test 3D background animation physics
+	var anim_before: float = menu.get("_anim_time")
+	menu.call("_physics_process", 0.05)
+	var anim_after: float = menu.get("_anim_time")
+	if anim_after <= anim_before:
+		append_log("FAIL: MainMenu background physics process did not update animation time", logs)
+		test_root.queue_free()
+		return false
+
+	append_log("  -> Sub-step 1: MainMenu scene integrity, cyclic focus loop, settings overlay, and 3D skyline validated.", logs)
+
+	# --- Sub-step 2: Transition Curtain & Run Seed Initialization ---
+	menu.call("_on_play_pressed")
+	if not menu.get("_is_transitioning"):
+		append_log("FAIL: _on_play_pressed did not engage _is_transitioning state", logs)
+		test_root.queue_free()
+		return false
+
+	var curtain: ColorRect = menu.find_child("PlayTransitionCurtain", true, false) as ColorRect
+	if not curtain:
+		append_log("FAIL: PlayTransitionCurtain was not created", logs)
+		test_root.queue_free()
+		return false
+
+	menu.queue_free()
+	append_log("  -> Sub-step 2: MainMenu to LoadingScreen transition curtain and lock validated.", logs)
+
+	# --- Sub-step 3: LoadingScreen Asynchronous Loading & Visual Polish ---
+	var loading_scene: PackedScene = load("res://scenes/ui/loading_screen.tscn") as PackedScene
+	if not loading_scene or not loading_scene.can_instantiate():
+		append_log("FAIL: Could not load res://scenes/ui/loading_screen.tscn", logs)
+		test_root.queue_free()
+		return false
+
+	var ls: LoadingScreen = loading_scene.instantiate() as LoadingScreen
+	test_root.add_child(ls)
+
+	if not ls.title_label or not ls.status_label or not ls.progress_bar or not ls.radar_reticle:
+		append_log("FAIL: LoadingScreen missing essential status or radar reticle nodes", logs)
+		test_root.queue_free()
+		return false
+
+	# Test threaded loading of battlefield
+	ls.min_display_time = 0.2
+	ls.start_load("res://scenes/battlefield/battlefield.tscn")
+
+	var loaded := false
+	for _i in range(150):
+		ls._process(0.016)
+		if ls.get("_loaded_scene") != null and ls.get("_progress_smooth") >= 99.9:
+			loaded = true
+			break
+		OS.delay_msec(10)
+
+	if not loaded:
+		append_log("FAIL: LoadingScreen failed to load battlefield.tscn to 100% progress", logs)
+		test_root.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: LoadingScreen threaded loading, smooth progress interpolation, and tactical status validated.", logs)
+
+	# --- Sub-step 4: Seamless Battlefield Handoff & Architecture Integrity ---
+	var loaded_scene: PackedScene = ls.get("_loaded_scene") as PackedScene
+	var bf: Battlefield = loaded_scene.instantiate() as Battlefield
+	if not bf:
+		append_log("FAIL: Failed to instantiate Battlefield from loaded scene", logs)
+		test_root.queue_free()
+		return false
+	test_root.add_child(bf)
+
+	if not bf.player or not bf.camera_rig or not bf.wave_manager:
+		append_log("FAIL: Battlefield missing core player, camera rig, or wave manager nodes", logs)
+		test_root.queue_free()
+		return false
+
+	if not EnemyRegistry.instance or not VfxPool.instance or not FlarePool.instance or not XpGemPool.instance:
+		append_log("FAIL: One or more Battlefield zero-GC singletons/pools not initialized", logs)
+		test_root.queue_free()
+		return false
+
+	bf.free()
+	ls.free()
+	test_root.free()
+	append_log("  -> Sub-step 4: Battlefield instantiation, singleton pools, and camera handoff fully validated.", logs)
+	append_log("  -> Test 53 PASSED: Menu and loading screen seamless integration verified.", logs)
+	return true
+
+func test_phase3_encounter_pacing_separation_and_finale(logs: Array[String]) -> bool:
+	append_log("[TEST 54] Testing Phase 3 Encounter Pacing, Spawn Separation & Finale Completion...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test54Root"
+	add_child(root_node)
+
+	# --- Sub-step 1: Spawn Separation & Opening Population Bounds ---
+	var dummy_player := Node3D.new()
+	dummy_player.name = "TestPlayer"
+	dummy_player.add_to_group("player")
+	root_node.add_child(dummy_player)
+	dummy_player.global_position = Vector3(10.0, 14.0, 10.0)
+
+	var sd := SpawnDirector.new()
+	sd.name = "TestSpawnDirector"
+	root_node.add_child(sd)
+	sd.is_wave_active = true
+	sd.continuous_air_budget = 20.0
+
+	var wm_scene: PackedScene = load("res://scenes/managers/wave_manager.tscn") as PackedScene
+	var wm: WaveManager = wm_scene.instantiate() as WaveManager
+	wm.name = "TestWaveManager"
+	wm.current_state = WaveManager.State.ACTIVE_WAVE
+	wm.total_waves = 10
+	wm.current_wave_index = 1
+	wm.spawn_director = sd
+	root_node.add_child(wm)
+
+	# Test Initial Encounter Planning
+	var planned := sd.call("_plan_initial_encounter_positions", Vector3.ZERO) as Array[Dictionary]
+	if planned.size() < 3:
+		append_log("FAIL: _plan_initial_encounter_positions returned %d positions, expected 3" % planned.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var distinct_sources: Dictionary = {}
+	for i in range(planned.size()):
+		var p1: Vector3 = planned[i]["position"]
+		var s_key: String = str(planned[i].get("source_key", ""))
+		distinct_sources[s_key] = true
+		var dist_to_player := p1.distance_to(Vector3.ZERO)
+		if dist_to_player < 35.0:
+			append_log("FAIL: Initial planned spawn %d is within player standoff margin (%.1fm < 35.0m)" % [i, dist_to_player], logs)
+			root_node.queue_free()
+			return false
+
+		for j in range(i + 1, planned.size()):
+			var p2: Vector3 = planned[j]["position"]
+			var sep: float = p1.distance_to(p2)
+			if sep < 18.0:
+				append_log("FAIL: Initial planned spawns %d and %d violate >=18m separation (dist = %.1fm)" % [i, j, sep], logs)
+				root_node.queue_free()
+				return false
+
+	if distinct_sources.size() < 2:
+		append_log("FAIL: Initial planned spawns did not use at least 2 distinct sources/sectors (used %d)" % distinct_sources.size(), logs)
+		root_node.queue_free()
+		return false
+
+	# Clean reservations from planned initial encounter so population caps are clear for early air
+	for u in planned:
+		sd.release_reservation(u["res_id"])
+
+	# Test Opening Beat Air Threats (Wave 1 & 2 / <60s)
+	sd.current_wave = 1
+	sd.elapsed_survival_time = 15.0
+	sd._early_air_active = true
+	sd._early_air_timer = 0.0
+
+	var early_air_cap: int = sd.early_air_active_cap
+	if early_air_cap != 2:
+		append_log("FAIL: Early air active cap is %d, expected 2" % early_air_cap, logs)
+		root_node.queue_free()
+		return false
+
+	# Simulate early air spawn in Opening beat
+	sd._pending_air_spawns.clear()
+	sd._process_early_air_spawning(0.1)
+
+	if sd._pending_air_spawns.is_empty():
+		append_log("FAIL: _process_early_air_spawning did not queue early air threat", logs)
+		root_node.queue_free()
+		return false
+
+	for spawn_entry in sd._pending_air_spawns:
+		var scene: PackedScene = spawn_entry.get("scene") as PackedScene
+		if scene != sd._scene_air_scout:
+			append_log("FAIL: Early air queued non-scout scene during opening beat (scene = %s)" % str(scene), logs)
+			root_node.queue_free()
+			return false
+		var spawn_pos: Vector3 = spawn_entry.get("position", Vector3.ZERO)
+		var dist_to_p := spawn_pos.distance_to(Vector3.ZERO)
+		if dist_to_p < 40.0:
+			append_log("FAIL: Early air spawn within 40m standoff (dist = %.1fm)" % dist_to_p, logs)
+			root_node.queue_free()
+			return false
+
+	append_log("  -> Sub-step 1: Initial encounter spawn separation (>=18m), distinct entrance sources, and Opening light scout enforcement validated.", logs)
+
+	# --- Sub-step 2: Formations & Encounter Recipe Progression ---
+	sd._load_procedural_formations()
+	if sd.procedural_formations.size() != 12:
+		append_log("FAIL: Expected 12 procedural formations, got %d" % sd.procedural_formations.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var required_middle := ["troop_insertion", "air_harassment", "armored_patrol", "sam_defense"]
+	var required_later := ["fire_support", "reinforcement_drop", "combined_arms", "armored_push", "gunship_escort"]
+
+	for form in sd.procedural_formations:
+		if required_middle.has(form.formation_id):
+			if form.min_elapsed_time < 60.0 or form.min_elapsed_time > 140.0:
+				append_log("FAIL: Middle-beat formation '%s' min_elapsed_time out of expected range [60, 140]: %.1fs" % [form.formation_id, form.min_elapsed_time], logs)
+				root_node.queue_free()
+				return false
+		elif required_later.has(form.formation_id):
+			if form.min_elapsed_time < 160.0 or form.min_elapsed_time > 480.0:
+				append_log("FAIL: Later-beat formation '%s' min_elapsed_time out of expected range [160, 480]: %.1fs" % [form.formation_id, form.min_elapsed_time], logs)
+				root_node.queue_free()
+				return false
+
+	# Test Seeded Formation Selection in Middle beat
+	sd.current_wave = 4
+	sd.elapsed_survival_time = 110.0
+	sd.continuous_ground_budget = 60.0
+	sd.continuous_air_budget = 30.0
+	sd._early_air_active = false
+
+	var selected_f1: FormationDefinition = sd.select_procedural_formation(Vector3.ZERO)
+	if not selected_f1:
+		append_log("FAIL: select_procedural_formation returned null for Middle beat", logs)
+		root_node.queue_free()
+		return false
+
+	sd.formation_history.append(selected_f1.formation_id)
+	sd.formation_category_history.append(selected_f1.category)
+
+	var selected_f2: FormationDefinition = sd.select_procedural_formation(Vector3.ZERO)
+	if not selected_f2:
+		append_log("FAIL: Second select_procedural_formation returned null", logs)
+		root_node.queue_free()
+		return false
+
+	if selected_f2.formation_id == selected_f1.formation_id:
+		append_log("FAIL: select_procedural_formation repeated same formation immediately", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 2: All 12 encounter recipes with progression unlock timings (Middle: 60-140s, Later: 160-480s) and anti-repetition selection validated.", logs)
+
+	# --- Sub-step 3: Recovery Window & CombatDirector Throttling ---
+	var cd := CombatDirector.instance
+	if not cd:
+		cd = CombatDirector.new()
+		root_node.add_child(cd)
+
+	cd.set_wave(7)
+	var standard_attackers: int = cd.max_concurrent_attackers
+	var standard_danger: int = cd.max_projectile_danger
+
+	# Engage recovery mode
+	cd.set_recovery_active(true)
+	if not cd.is_recovery_active:
+		append_log("FAIL: CombatDirector.is_recovery_active failed to engage", logs)
+		root_node.queue_free()
+		return false
+
+	if cd.max_concurrent_attackers >= standard_attackers or cd.max_projectile_danger >= standard_danger:
+		append_log("FAIL: Recovery mode did not throttle concurrent attackers or danger budget (standard=%d/%d, recovery=%d/%d)" % [
+			standard_attackers, standard_danger, cd.max_concurrent_attackers, cd.max_projectile_danger
+		], logs)
+		root_node.queue_free()
+		return false
+
+	# Disengage recovery mode
+	cd.set_recovery_active(false)
+	if cd.max_concurrent_attackers != standard_attackers or cd.max_projectile_danger != standard_danger:
+		append_log("FAIL: Disengaging recovery mode did not restore standard wave attack limits", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: Recovery window attack throttling in CombatDirector validated.", logs)
+
+	# --- Sub-step 4: Finale Completion & Authoritative Victory ---
+	wm.total_waves = 10
+	wm.current_wave_index = 10
+	wm.spawn_director = sd
+
+	# Spawn a minor enemy to test post-boss cleanup
+	var dummy_enemy := Node3D.new()
+	dummy_enemy.name = "MinorDummyEnemy"
+	root_node.add_child(dummy_enemy)
+	wm.register_spawned_enemy(dummy_enemy)
+
+	if wm._active_enemies.size() != 1:
+		append_log("FAIL: Dummy enemy not registered with WaveManager", logs)
+		root_node.queue_free()
+		return false
+
+	var mission_completed_signal := {"fired": false}
+	var mission_cb := func(_id: String, _title: String, _rew: String): mission_completed_signal["fired"] = true
+	if EventBus and EventBus.has_signal("mission_completed"):
+		EventBus.mission_completed.connect(mission_cb)
+
+	# Trigger Boss Defeated in Wave 10
+	wm._on_boss_defeated()
+
+	if wm.current_state != WaveManager.State.RUN_COMPLETE:
+		append_log("FAIL: WaveManager did not transition to RUN_COMPLETE after boss defeated on wave 10", logs)
+		if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+			EventBus.mission_completed.disconnect(mission_cb)
+		root_node.queue_free()
+		return false
+
+	if not wm._active_enemies.is_empty():
+		append_log("FAIL: WaveManager did not clean up surviving minor enemies on run victory", logs)
+		if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+			EventBus.mission_completed.disconnect(mission_cb)
+		root_node.queue_free()
+		return false
+
+	if cd.max_ground_attack_slots != 0 or cd.max_air_attack_slots != 0:
+		append_log("FAIL: CombatDirector attack slots were not zeroed on run victory", logs)
+		if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+			EventBus.mission_completed.disconnect(mission_cb)
+		root_node.queue_free()
+		return false
+
+	if sd.is_wave_active:
+		append_log("FAIL: SpawnDirector spawning not stopped on run victory", logs)
+		if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+			EventBus.mission_completed.disconnect(mission_cb)
+		root_node.queue_free()
+		return false
+
+	if not bool(mission_completed_signal["fired"]):
+		append_log("FAIL: EventBus.mission_completed not emitted on authoritative run victory", logs)
+		if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+			EventBus.mission_completed.disconnect(mission_cb)
+		root_node.queue_free()
+		return false
+
+	if EventBus and EventBus.has_signal("mission_completed") and EventBus.mission_completed.is_connected(mission_cb):
+		EventBus.mission_completed.disconnect(mission_cb)
+
+	root_node.queue_free()
+	append_log("  -> Sub-step 4: Wave 10 Boss defeat authoritative victory transition, minor enemy cleanup, attack suppression, and completion signal validated.", logs)
+	append_log("  -> Test 54 PASSED: Phase 3 Encounter Pacing, Separation & Finale Completion verified.", logs)
+	return true
+
+func test_phase4_rewards_placement_lifecycle_and_benefits(logs: Array[String]) -> bool:
+	append_log("[TEST 55] Phase 4 Rewards: placement validity, chunk lifecycle, supply stops & guarded cache...", logs)
+	var root_node := Node3D.new()
+	root_node.name = "Test55_Root"
+	add_child(root_node)
+
+	# --- Sub-step 1: Corridor Placement Validity & Building Clearance ---
+	var chunk := CityChunk.new()
+	chunk.name = "TestChunk_HighRise"
+	chunk.coord = Vector2i(1, 0) # playable district chunk
+	chunk.district_type = CityChunk.DistrictType.HIGH_RISE
+	root_node.add_child(chunk)
+	chunk.global_position = Vector3(128.0, 0.0, 0.0)
+
+	var chunk_rng := RandomNumberGenerator.new()
+	chunk_rng.seed = 42
+	chunk._build_buildings_stage_1(chunk_rng)
+	chunk._build_buildings_stage_2(chunk_rng)
+	chunk._populate_gameplay_candidates()
+
+	if chunk.safe_open_positions.is_empty():
+		append_log("FAIL: CityChunk safe_open_positions is empty after candidate extraction", logs)
+		root_node.queue_free()
+		return false
+
+	for pos in chunk.safe_open_positions:
+		var local_pos: Vector3 = pos - chunk.global_position
+		var clearance: float = chunk._get_min_distance_to_buildings(local_pos)
+		if clearance < 6.8: # Tolerance for 7.0m threshold
+			append_log("FAIL: Safe open position %s has building clearance < 7m (got %.2f)" % [str(pos), clearance], logs)
+			root_node.queue_free()
+			return false
+		# Check within playable district bounds (|pos| <= 160.0m)
+		if absf(pos.x) > 160.0 or absf(pos.z) > 160.0:
+			append_log("FAIL: Safe open position %s is outside playable district bounds (<= 160m)" % str(pos), logs)
+			root_node.queue_free()
+			return false
+
+	append_log("  -> Sub-step 1: Flight corridor candidate positions guarantee >= 7.0m building clearance within playable district.", logs)
+
+	# --- Sub-step 2: Supply Stop Immediate Benefits & Fallback ---
+	BaseEncounter.reset_run_encounters()
+
+	var player_scene := load("res://scenes/player/player_helicopter.tscn") as PackedScene
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	player.name = "TestPlayer"
+	root_node.add_child(player)
+	player.global_position = Vector3(0.0, 2.0, 0.0)
+
+	# Damage player hull
+	player.current_health = 50.0
+	player.max_health = 100.0
+
+	var repair_stop := RewardLocation.new()
+	repair_stop.name = "TestRepairStop"
+	repair_stop.encounter_id = "test_repair_1_0"
+	repair_stop.chunk_coord = Vector2i(1, 0)
+	repair_stop.reward_type = RewardLocation.RewardType.REPAIR_STATION
+	root_node.add_child(repair_stop)
+	repair_stop.global_position = player.global_position
+
+	# Trigger repair stop physics process
+	repair_stop._physics_process(0.1)
+
+	if player.current_health < 95.0:
+		append_log("FAIL: Repair Stop did not immediately heal player hull by +50 HP (got %.1f)" % player.current_health, logs)
+		root_node.queue_free()
+		return false
+
+	if not repair_stop.is_completed or not BaseEncounter.is_encounter_completed("test_repair_1_0"):
+		append_log("FAIL: Repair Stop was not marked completed in BaseEncounter run persistence", logs)
+		root_node.queue_free()
+		return false
+
+	# Test Ammo Depot
+	if player.missile_pod:
+		player.missile_pod.current_missiles = 0
+
+	var ammo_stop := RewardLocation.new()
+	ammo_stop.name = "TestAmmoStop"
+	ammo_stop.encounter_id = "test_ammo_1_0"
+	ammo_stop.chunk_coord = Vector2i(1, 0)
+	ammo_stop.reward_type = RewardLocation.RewardType.AMMO_DEPOT
+	root_node.add_child(ammo_stop)
+	ammo_stop.global_position = player.global_position
+
+	ammo_stop._physics_process(0.1)
+
+	if player.missile_pod and player.missile_pod.current_missiles < 6:
+		append_log("FAIL: Ammo Depot did not replenish missiles to full (got %d)" % player.missile_pod.current_missiles, logs)
+		root_node.queue_free()
+		return false
+
+	if not ammo_stop.is_completed or not BaseEncounter.is_encounter_completed("test_ammo_1_0"):
+		append_log("FAIL: Ammo Depot was not marked completed in BaseEncounter run persistence", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 2: Supply stops grant immediate understandable benefit (+50 HP or +6 missiles) and persist completion.", logs)
+
+	# --- Sub-step 3: Guarded Cache Combat Lock, Free Upgrade Draft & Single Collection ---
+	var up_mgr := UpgradeManager.instance
+	if not up_mgr:
+		up_mgr = UpgradeManager.new()
+		root_node.add_child(up_mgr)
+
+	var initial_pending: int = up_mgr.pending_levels.size()
+
+	var cache := GuardedCache.new()
+	cache.name = "TestGuardedCache"
+	cache.encounter_id = "test_cache_0_1"
+	cache.chunk_coord = Vector2i(0, 1)
+	root_node.add_child(cache)
+	cache.global_position = Vector3(0.0, 0.5, 30.0)
+
+	# Manually spawn dummy guards
+	var dummy_tank1 := Node3D.new()
+	dummy_tank1.set_meta("is_alive", true)
+	root_node.add_child(dummy_tank1)
+	var dummy_tank2 := Node3D.new()
+	dummy_tank2.set_meta("is_alive", true)
+	root_node.add_child(dummy_tank2)
+	cache.guards = [dummy_tank1, dummy_tank2]
+
+	# Place player at distance during guard engagement
+	player.global_position = cache.global_position + Vector3(50.0, 1.0, 0.0)
+	cache._physics_process(0.1)
+
+	if cache.is_unlocked:
+		append_log("FAIL: Guarded Cache unlocked while guards were still alive", logs)
+		root_node.queue_free()
+		return false
+
+	if up_mgr.pending_levels.size() != initial_pending:
+		append_log("FAIL: Free upgrade draft queued before guards were defeated", logs)
+		root_node.queue_free()
+		return false
+
+	# Neutralize guards while player is still outside activation range
+	dummy_tank1.set_meta("is_alive", false)
+	dummy_tank2.set_meta("is_alive", false)
+	cache._physics_process(0.1)
+
+	if not cache.is_unlocked:
+		append_log("FAIL: Guarded Cache did not unlock after guards were eliminated", logs)
+		root_node.queue_free()
+		return false
+
+	var state := BaseEncounter.get_encounter_state("test_cache_0_1")
+	if not state.get("unlocked", false):
+		append_log("FAIL: Guarded Cache did not persist unlocked state across chunk streaming", logs)
+		root_node.queue_free()
+		return false
+
+	# Move player into range to collect
+	player.global_position = cache.global_position + Vector3(0.0, 1.0, 0.0)
+	cache._physics_process(0.1)
+
+	if not cache.is_completed or not BaseEncounter.is_encounter_completed("test_cache_0_1"):
+		append_log("FAIL: Guarded Cache did not complete upon collection", logs)
+		root_node.queue_free()
+		return false
+
+	if up_mgr.pending_levels.size() != initial_pending + 1:
+		append_log("FAIL: Guarded Cache did not queue free upgrade draft (expected %d, got %d)" % [initial_pending + 1, up_mgr.pending_levels.size()], logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: Guarded Cache locked combat state, free upgrade draft reward, and persistence validated.", logs)
+
+	# --- Sub-step 4: Chunk Streaming Lifecycle & Single Collection ---
+	# Re-instantiating an encounter that was already completed must cleanly self-terminate
+	var duplicate_cache := GuardedCache.new()
+	duplicate_cache.encounter_id = "test_cache_0_1"
+	duplicate_cache.chunk_coord = Vector2i(0, 1)
+	root_node.add_child(duplicate_cache)
+
+	if not duplicate_cache.is_completed or not duplicate_cache.is_queued_for_deletion():
+		append_log("FAIL: Re-instantiating completed encounter did not self-terminate via queue_free()", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 4: Chunk streaming lifecycle preserves single collection and prevents duplicate rewards.", logs)
+
+	# --- Sub-step 5: Supply Beacon Zone Hold ---
+	var beacon := SupplyBeacon.new()
+	beacon.name = "TestSupplyBeacon"
+	beacon.encounter_id = "test_beacon_minus1_0"
+	beacon.chunk_coord = Vector2i(-1, 0)
+	root_node.add_child(beacon)
+	beacon.global_position = Vector3(-30.0, 0.5, 0.0)
+
+	if absf(beacon.capture_time_required - 6.0) > 0.1:
+		append_log("FAIL: SupplyBeacon capture_time_required is not 6.0s (got %.1f)" % beacon.capture_time_required, logs)
+		root_node.queue_free()
+		return false
+
+	player.global_position = beacon.global_position + Vector3(0.0, 2.0, 0.0)
+
+	# Hold zone for full duration
+	beacon._physics_process(6.2)
+
+	if not beacon.is_completed or not BaseEncounter.is_encounter_completed("test_beacon_minus1_0"):
+		append_log("FAIL: SupplyBeacon did not complete after full 6.0s capture duration", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 5: Supply Beacon 6.0s zone hold capture and rewards verified.", logs)
+
+	# --- Sub-step 6: HUD & Minimap Recognition Interface ---
+	var enc_repair := RewardLocation.new()
+	enc_repair.reward_type = RewardLocation.RewardType.REPAIR_STATION
+	var enc_ammo := RewardLocation.new()
+	enc_ammo.reward_type = RewardLocation.RewardType.AMMO_DEPOT
+	var enc_cache := GuardedCache.new()
+	var enc_beacon := SupplyBeacon.new()
+
+	if enc_repair.get_encounter_display_type() != "REPAIR" or enc_ammo.get_encounter_display_type() != "AMMO":
+		append_log("FAIL: RewardLocation returned unexpected display types", logs)
+		root_node.queue_free()
+		return false
+
+	if enc_cache.get_encounter_display_type() != "CACHE" or enc_cache.get_encounter_status_text() != "LOCKED":
+		append_log("FAIL: GuardedCache returned unexpected display type or status", logs)
+		root_node.queue_free()
+		return false
+
+	if enc_beacon.get_encounter_display_type() != "BEACON":
+		append_log("FAIL: SupplyBeacon returned unexpected display type", logs)
+		root_node.queue_free()
+		return false
+
+	enc_repair.free()
+	enc_ammo.free()
+	enc_cache.free()
+	enc_beacon.free()
+
+	append_log("  -> Sub-step 6: Polymorphic encounter display interface for HUD & Minimap verified.", logs)
+
+	root_node.queue_free()
+	append_log("  -> Test 55 PASSED: Phase 4 Rewards, Placement Validity, Lifecycle & Benefits verified.", logs)
+	return true
+
+func test_phase5_attack_run_activation_benefits_expiry_and_resets(logs: Array[String]) -> bool:
+	logs.append("[TEST 56] Phase 5 Attack Run Gunship Payoff, Weapon Multipliers, Expiry, Cooldown & Resets...")
+	var root_node := Node3D.new()
+	root_node.name = "Test56Root"
+	add_child(root_node)
+
+	# --- Sub-step 1: Attack Run Activation & Stationary Hover Prevention ---
+	for p in get_tree().get_nodes_in_group("player"):
+		p.remove_from_group("player")
+
+	var player := CharacterBody3D.new()
+	player.name = "TestPlayer56"
+	player.add_to_group("player")
+	root_node.add_child(player)
+	player.velocity = Vector3.ZERO # Stationary hover
+
+	var gm_script := load("res://scripts/common/game_manager.gd") as GDScript
+	var gm: GameManager = gm_script.new() as GameManager
+	root_node.add_child(gm)
+
+	# Check default configuration
+	if gm.attack_run_combo_milestone != 10 or gm.attack_run_duration != 6.0 or gm.attack_run_cooldown != 20.0:
+		append_log("FAIL: GameManager Attack Run baseline configuration mismatch (milestone=%d, dur=%.1f, cd=%.1f)" % [
+			gm.attack_run_combo_milestone, gm.attack_run_duration, gm.attack_run_cooldown
+		], logs)
+		root_node.queue_free()
+		return false
+
+	# Score 10 kills while stationary
+	for _i in range(10):
+		gm.call("_on_enemy_destroyed", null, 100)
+
+	if gm.combo_streak != 10:
+		append_log("FAIL: Expected combo_streak to be 10, got %d" % gm.combo_streak, logs)
+		root_node.queue_free()
+		return false
+
+	if gm.is_attack_run_active:
+		append_log("FAIL: Attack Run activated while player was stationary (anti-camping rule violated)", logs)
+		root_node.queue_free()
+		return false
+
+	# Now give player active forward movement >= attack_run_min_speed (4.0 m/s)
+	player.velocity = Vector3(5.5, 0.0, 0.0)
+	# Trigger check
+	gm.call("_check_attack_run_trigger")
+
+	if not gm.is_attack_run_active:
+		append_log("FAIL: Attack Run failed to activate when moving at 5.5 m/s with combo >= 10", logs)
+		root_node.queue_free()
+		return false
+
+	if gm.attack_runs_triggered != 1 or absf(gm.attack_run_timer - 6.0) > 0.05:
+		append_log("FAIL: Attack run state metrics mismatch: triggered=%d, timer=%.2f" % [gm.attack_runs_triggered, gm.attack_run_timer], logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 1: Milestone activation (10 streak) & stationary camping prevention verified.", logs)
+
+	# --- Sub-step 2: Weapon Benefits (Chaingun Heat & Missile Pod Lock) ---
+	var cg := Chaingun.new()
+	cg.name = "TestChaingun"
+	var dummy_muzzle := Marker3D.new()
+	dummy_muzzle.name = "Muzzle"
+	cg.add_child(dummy_muzzle)
+	root_node.add_child(cg)
+
+	# Simulate active Attack Run on Chaingun
+	cg.call("_on_attack_run_state_changed", true, 6.0, 6.0)
+	if not cg.is_attack_run_active:
+		append_log("FAIL: Chaingun is_attack_run_active did not update to true", logs)
+		root_node.queue_free()
+		return false
+
+	# Baseline heat per shot is 0.027. Under Attack Run (0.5 mult), it should be 0.0135
+	var heat_before := cg.current_heat
+	cg.try_fire()
+	var heat_delta := cg.current_heat - heat_before
+	var expected_heat: float = cg.heat_per_shot * 0.5
+	if absf(heat_delta - expected_heat) > 0.001:
+		append_log("FAIL: Chaingun heat per shot was not reduced by 50%% (expected %.4f, got %.4f)" % [expected_heat, heat_delta], logs)
+		root_node.queue_free()
+		return false
+
+	# Chaingun cooling rate verification (use 0.95 to avoid clamping at 0.0)
+	cg.current_heat = 0.95
+	cg._process(1.0)
+	var expected_cooling: float = cg.cooling_rate * 1.5 # +50% cooling
+	var actual_cooling: float = 0.95 - cg.current_heat
+	if absf(actual_cooling - expected_cooling) > 0.01:
+		append_log("FAIL: Chaingun cooling rate was not boosted by 50%% (expected %.3f, got %.3f)" % [expected_cooling, actual_cooling], logs)
+		root_node.queue_free()
+		return false
+
+	# MissilePod lock speed verification
+	var mp := MissilePod.new()
+	mp.name = "TestMissilePod"
+	var left_m := Marker3D.new()
+	left_m.name = "LeftMuzzle"
+	mp.add_child(left_m)
+	var right_m := Marker3D.new()
+	right_m.name = "RightMuzzle"
+	mp.add_child(right_m)
+	root_node.add_child(mp)
+	mp.call("_on_attack_run_state_changed", true, 6.0, 6.0)
+	if not mp.is_attack_run_active:
+		append_log("FAIL: MissilePod is_attack_run_active did not update to true", logs)
+		root_node.queue_free()
+		return false
+
+	# Target lock progress under Attack Run:
+	var dummy_target := Node3D.new()
+	root_node.add_child(dummy_target)
+	mp.current_target = dummy_target
+	mp.lock_progress = 0.0
+	mp._process(0.2) # Advance 0.2s
+	# Expected progress: 0.2 / (lock_duration * 0.65)
+	var expected_progress: float = 0.2 / (mp.lock_duration * 0.65)
+	if absf(mp.lock_progress - expected_progress) > 0.02:
+		append_log("FAIL: MissilePod lock-on progress did not scale by 35%% speedup (expected %.3f, got %.3f)" % [expected_progress, mp.lock_progress], logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 2: Weapon benefits (50% heat cut, +50% cooling, 35% faster lock) verified.", logs)
+
+	# --- Sub-step 3: Penalizing Careless Flight (Damage Reduction) ---
+	var timer_before := gm.attack_run_timer
+	gm.call("_on_player_damaged", 15.0, Vector3.ZERO, Vector3.FORWARD, false) # Unshielded damage
+	if absf((timer_before - 1.5) - gm.attack_run_timer) > 0.05:
+		append_log("FAIL: Taking unshielded damage did not reduce Attack Run timer by 1.5s (before=%.2f, after=%.2f)" % [timer_before, gm.attack_run_timer], logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 3: Damage penalty (-1.5s timer on unshielded hit) verified.", logs)
+
+	# --- Sub-step 4: Hard Expiry & Cooldown Lockout (Anti-Infinite Chaining) ---
+	# Fast-forward until timer expires
+	gm._process(gm.attack_run_timer + 0.1)
+
+	if gm.is_attack_run_active:
+		append_log("FAIL: Attack Run did not end after timer expired", logs)
+		root_node.queue_free()
+		return false
+
+	if absf(gm.attack_run_cooldown_remaining - 20.0) > 0.1:
+		append_log("FAIL: Cooldown was not set to 20.0s upon expiry (got %.2f)" % gm.attack_run_cooldown_remaining, logs)
+		root_node.queue_free()
+		return false
+
+	# Attempt to trigger Attack Run again during cooldown while moving and combo >= 10
+	gm.call("_on_enemy_destroyed", null, 100)
+	if gm.is_attack_run_active:
+		append_log("FAIL: Attack Run triggered during active cooldown (infinite chain prevention failed)", logs)
+		root_node.queue_free()
+		return false
+
+	# Fast-forward through cooldown
+	gm._process(20.5)
+	if gm.attack_run_cooldown_remaining > 0.0:
+		append_log("FAIL: Cooldown failed to clear after 20.5s (got %.2f)" % gm.attack_run_cooldown_remaining, logs)
+		root_node.queue_free()
+		return false
+
+	# Refresh combo streak to 10 to simulate active continuous combat
+	gm.combo_streak = 10
+	gm.combo_timer = 3.5
+
+	# Now trigger should succeed
+	gm.call("_check_attack_run_trigger")
+	if not gm.is_attack_run_active or gm.attack_runs_triggered != 2:
+		append_log("FAIL: Attack Run could not re-trigger after full cooldown expired", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 4: Hard 6.0s expiry, 20.0s cooldown lockout & anti-chaining verified.", logs)
+
+	# --- Sub-step 5: Clean Reset on Death, Boss Victory & Telemetry ---
+	# Test Death reset
+	gm.call("_on_player_died")
+	if gm.is_attack_run_active or gm.attack_run_timer > 0.0 or gm.attack_run_cooldown_remaining > 0.0:
+		append_log("FAIL: Attack Run state did not cleanly reset on player death", logs)
+		root_node.queue_free()
+		return false
+
+	# Re-activate and test Boss Victory reset
+	gm.is_attack_run_active = true
+	gm.attack_run_timer = 5.0
+	gm.call("_on_boss_defeated")
+	if gm.is_attack_run_active or gm.attack_run_timer > 0.0:
+		append_log("FAIL: Attack Run state did not cleanly reset on boss defeat", logs)
+		root_node.queue_free()
+		return false
+
+	# Telemetry validation
+	var stats := gm.get_run_telemetry("VICTORY")
+	if not stats.has("attack_runs_triggered") or stats["attack_runs_triggered"] != 2:
+		append_log("FAIL: Run telemetry missing or incorrect attack_runs_triggered (got %s)" % str(stats.get("attack_runs_triggered")), logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 5: Clean reset on death/victory and combat telemetry accounting verified.", logs)
+
+	# --- Sub-step 6: HUD Banner Setup & State Visuals ---
+	var hud_scene := load("res://scenes/ui/hud.tscn") as PackedScene
+	var hud: HUD = hud_scene.instantiate() as HUD
+	root_node.add_child(hud)
+	hud._setup_attack_run_banner()
+
+	if not hud.attack_run_banner or not hud.attack_run_label:
+		append_log("FAIL: HUD failed to create AttackRunBanner or AttackRunLabel", logs)
+		root_node.queue_free()
+		return false
+
+	# Activate HUD banner
+	hud._on_attack_run_state_changed(true, 5.5, 6.0)
+	if not hud.attack_run_banner.visible or not hud.attack_run_label.text.contains("ATTACK RUN"):
+		append_log("FAIL: HUD banner not visible or missing label text on active state", logs)
+		root_node.queue_free()
+		return false
+
+	# Deactivate HUD banner
+	hud._on_attack_run_state_changed(false, 0.0, 6.0)
+	if hud.attack_run_banner.visible:
+		append_log("FAIL: HUD banner remained visible after attack run ended", logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 6: HUD banner tactical display, timing readout & clean hide verified.", logs)
+
+	# Cleanup
+	player.remove_from_group("player")
+	root_node.queue_free()
+	append_log("  -> Test 56 PASSED: Phase 5 Attack Run Gunship Payoff, Benefits, Expiry & Resets verified.", logs)
+	return true
+
+func test_phase2_build_paths_evolutions_and_xp_pacing(logs: Array[String]) -> bool:
+	logs.append("[TEST 57] Phase 2: Three Build Paths, Evolution Prerequisites, Synergy Weights & XP Carry-Over...")
+	var root_node := Node3D.new()
+	root_node.name = "Test57Root"
+	add_child(root_node)
+
+	var player_scene: PackedScene = load("res://scenes/player/player_helicopter.tscn")
+	var player: PlayerHelicopter = player_scene.instantiate() as PlayerHelicopter
+	root_node.add_child(player)
+	player.is_alive = true
+	player.set_control_enabled(true)
+
+	var mgr_script: GDScript = load("res://scripts/managers/upgrade_manager.gd")
+	var mgr_scene: PackedScene = load("res://scenes/managers/upgrade_manager.tscn")
+	var mgr: UpgradeManager = null
+	if mgr_scene:
+		mgr = mgr_scene.instantiate() as UpgradeManager
+	else:
+		mgr = mgr_script.new() as UpgradeManager
+	root_node.add_child(mgr)
+	mgr.reset_run()
+	mgr.guarantee_mini_heli_on_first_offer = false
+
+	# --- Step 1: Offer Eligibility for All Three Build Paths ---
+	var gun_cards := ["faster_cannon", "twin_barrel", "multi_shot", "armor_piercing", "overclocked_feed", "ricochet_rounds"]
+	for gc in gun_cards:
+		if not mgr._is_eligible(gc):
+			append_log("FAIL: Gun barrage card %s should be eligible with active chaingun" % gc, logs)
+			root_node.queue_free()
+			return false
+
+	var missile_cards := ["larger_explosions", "missile_capacity", "rapid_lock", "multi_launch"]
+	for mc in missile_cards:
+		if not mgr._is_eligible(mc):
+			append_log("FAIL: Missile hunter card %s should be eligible with active missile pod" % mc, logs)
+			root_node.queue_free()
+			return false
+
+	var defense_cards := ["reinforced_airframe", "movement_boost", "afterburner", "repair_drone", "mini_helicopter_support"]
+	for dc in defense_cards:
+		if not mgr._is_eligible(dc):
+			append_log("FAIL: Defensive squadron card %s should be eligible" % dc, logs)
+			root_node.queue_free()
+			return false
+
+	# Subsystem dependency checks
+	var temp_gun = player.chaingun
+	player.chaingun = null
+	for gc in gun_cards:
+		if mgr._is_eligible(gc):
+			append_log("FAIL: Gun card %s should be ineligible when chaingun is missing" % gc, logs)
+			root_node.queue_free()
+			return false
+	player.chaingun = temp_gun
+
+	var temp_pod = player.missile_pod
+	player.missile_pod = null
+	for mc in missile_cards:
+		if mgr._is_eligible(mc):
+			append_log("FAIL: Missile card %s should be ineligible when missile pod is missing" % mc, logs)
+			root_node.queue_free()
+			return false
+	player.missile_pod = temp_pod
+
+	# Dead player ineligibility
+	player.is_alive = false
+	if mgr._is_eligible("reinforced_airframe") or mgr._is_eligible("faster_cannon") or mgr._is_eligible("rapid_lock"):
+		append_log("FAIL: Upgrades should be ineligible when player is dead", logs)
+		root_node.queue_free()
+		return false
+	player.is_alive = true
+
+	# Support Wingmen eligibility dynamic behavior
+	mgr.has_deployed_wingmen = true
+	mgr.acquired_upgrades.append("mini_helicopter_support")
+	var mini_scene: PackedScene = load("res://scenes/companions/mini_helicopter.tscn")
+	var drone_left: MiniHelicopter = mini_scene.instantiate() as MiniHelicopter
+	drone_left.slot_id = "left"
+	drone_left.player_target = player
+	drone_left.is_alive = true
+	drone_left.add_to_group("mini_helicopters")
+	root_node.add_child(drone_left)
+
+	var drone_right: MiniHelicopter = mini_scene.instantiate() as MiniHelicopter
+	drone_right.slot_id = "right"
+	drone_right.player_target = player
+	drone_right.is_alive = true
+	drone_right.add_to_group("mini_helicopters")
+	root_node.add_child(drone_right)
+
+	if mgr._is_eligible("mini_helicopter_support"):
+		append_log("FAIL: mini_helicopter_support should be ineligible when both wingmen are alive", logs)
+		root_node.queue_free()
+		return false
+
+	# Destroy one wingman
+	drone_left.is_alive = false
+	drone_left.remove_from_group("mini_helicopters")
+	if not mgr._is_eligible("mini_helicopter_support"):
+		append_log("FAIL: mini_helicopter_support should be eligible to restore lost wingman", logs)
+		root_node.queue_free()
+		return false
+
+	drone_left.queue_free()
+	drone_right.queue_free()
+	mgr.acquired_upgrades.clear()
+	mgr.has_deployed_wingmen = false
+
+	append_log("  -> Sub-step 1: Offer eligibility for all 3 build paths verified.", logs)
+
+	# --- Step 2: Evolution Prerequisites and Priority for all 3 Build Paths ---
+	# Path 1: Gun Barrage Evolution (Hellfire Minigun & AP Ricochet Cannon)
+	if mgr._is_eligible("hellfire_minigun") or mgr._is_eligible("ap_ricochet_cannon"):
+		append_log("FAIL: Gun evolutions should not be eligible without prerequisites", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.append("twin_barrel")
+	mgr.acquired_upgrades.append("overclocked_feed")
+	if not mgr._is_eligible("hellfire_minigun"):
+		append_log("FAIL: Hellfire Minigun should be eligible with twin_barrel + overclocked_feed", logs)
+		root_node.queue_free()
+		return false
+
+	var gun_evo_choices := mgr.get_random_choices(3)
+	if gun_evo_choices.is_empty() or gun_evo_choices[0].get("id") != "hellfire_minigun":
+		append_log("FAIL: Hellfire Minigun not presented in slot 0", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+
+	# Path 2: Missile Hunter Evolution (Swarm Rockets & Multi-Lock)
+	if mgr._is_eligible("swarm_rockets") or mgr._is_eligible("multi_lock_hellfire"):
+		append_log("FAIL: Missile evolutions should not be eligible without prerequisites", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.append("rapid_lock")
+	mgr.acquired_upgrades.append("multi_launch")
+	if not mgr._is_eligible("swarm_rockets"):
+		append_log("FAIL: Swarm Rockets should be eligible with rapid_lock + multi_launch", logs)
+		root_node.queue_free()
+		return false
+
+	var missile_evo_choices := mgr.get_random_choices(3)
+	if missile_evo_choices.is_empty() or missile_evo_choices[0].get("id") != "swarm_rockets":
+		append_log("FAIL: Swarm Rockets not presented in slot 0", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+
+	# Path 3: Defensive Squadron Evolution (Aegis Airframe)
+	if mgr._is_eligible("aegis_airframe"):
+		append_log("FAIL: Aegis Airframe should not be eligible without prerequisites", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.append("reinforced_airframe")
+	mgr.acquired_upgrades.append("mini_helicopter_support")
+	if not mgr._is_eligible("aegis_airframe"):
+		append_log("FAIL: Aegis Airframe should be eligible with reinforced_airframe + mini_helicopter_support", logs)
+		root_node.queue_free()
+		return false
+
+	var defense_evo_choices := mgr.get_random_choices(3)
+	if defense_evo_choices.is_empty() or defense_evo_choices[0].get("id") != "aegis_airframe":
+		append_log("FAIL: Aegis Airframe not presented in slot 0", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+	append_log("  -> Sub-step 2: Evolution prerequisites and slot 0 priority for all 3 paths verified.", logs)
+
+	# --- Step 3: Synergy Weighting within Rolled Tiers ---
+	var base_feed_weight: float = mgr._calculate_upgrade_offer_weight("overclocked_feed")
+	if absf(base_feed_weight - 1.0) > 0.01:
+		append_log("FAIL: Base weight for unacquired card should be 1.0 (got %.2f)" % base_feed_weight, logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.append("twin_barrel")
+	var boosted_feed_weight: float = mgr._calculate_upgrade_offer_weight("overclocked_feed")
+	if absf(boosted_feed_weight - 3.0) > 0.01:
+		append_log("FAIL: overclocked_feed synergy weight should be 3.0 with twin_barrel acquired (got %.2f)" % boosted_feed_weight, logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+
+	mgr.acquired_upgrades.append("rapid_lock")
+	var boosted_missile_weight: float = mgr._calculate_upgrade_offer_weight("multi_launch")
+	if absf(boosted_missile_weight - 3.0) > 0.01:
+		append_log("FAIL: multi_launch synergy weight should be 3.0 with rapid_lock acquired (got %.2f)" % boosted_missile_weight, logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+
+	mgr.acquired_upgrades.append("reinforced_airframe")
+	var boosted_drone_weight: float = mgr._calculate_upgrade_offer_weight("mini_helicopter_support")
+	if absf(boosted_drone_weight - 3.0) > 0.01:
+		append_log("FAIL: mini_helicopter_support synergy weight should be 3.0 with reinforced_airframe acquired (got %.2f)" % boosted_drone_weight, logs)
+		root_node.queue_free()
+		return false
+
+	mgr.acquired_upgrades.clear()
+	append_log("  -> Sub-step 3: Dynamic build synergy weighting for all 3 paths verified.", logs)
+
+	# --- Step 4: XP Curve Pacing & Carry-Over Progression ---
+	if mgr.get_required_xp_for_level(1) != 50 or mgr.get_required_xp_for_level(2) != 90 or \
+	   mgr.get_required_xp_for_level(3) != 140 or mgr.get_required_xp_for_level(4) != 200 or \
+	   mgr.get_required_xp_for_level(5) != 256:
+		append_log("FAIL: XP curve pacing values mismatch for 5-minute progression", logs)
+		root_node.queue_free()
+		return false
+
+	mgr.reset_run()
+	mgr.guarantee_mini_heli_on_first_offer = false
+
+	# 50 + 90 + 35 = 175 XP -> Level 3, pending = [2, 3], current_xp = 35
+	mgr.add_xp(175)
+	if mgr.current_level != 3 or mgr.current_xp != 35 or mgr.pending_levels.size() != 2:
+		append_log("FAIL: XP carry-over failed (lvl=%d, xp=%d [expected 35], pending=%s)" % [mgr.current_level, mgr.current_xp, str(mgr.pending_levels)], logs)
+		root_node.queue_free()
+		return false
+
+	if mgr.pending_levels[0] != 2 or mgr.pending_levels[1] != 3:
+		append_log("FAIL: Pending levels sequence incorrect: %s" % str(mgr.pending_levels), logs)
+		root_node.queue_free()
+		return false
+
+	append_log("  -> Sub-step 4: XP thresholds and carry-over integrity verified.", logs)
+
+	# --- Step 5: Determinism & Clean Exhausted Pool Fallback ---
+	RunSeedManager.is_procedural_run = false
+	var seed_mgr1 := mgr_script.new() as UpgradeManager
+	root_node.add_child(seed_mgr1)
+	seed_mgr1.reset_run()
+	seed_mgr1.guarantee_mini_heli_on_first_offer = false
+	var c1 := seed_mgr1.get_random_choices(3)
+
+	var seed_mgr2 := mgr_script.new() as UpgradeManager
+	root_node.add_child(seed_mgr2)
+	seed_mgr2.reset_run()
+	seed_mgr2.guarantee_mini_heli_on_first_offer = false
+	var c2 := seed_mgr2.get_random_choices(3)
+
+	if c1.size() != c2.size():
+		append_log("FAIL: Seeded choices size mismatch", logs)
+		root_node.queue_free()
+		return false
+
+	for i in range(c1.size()):
+		if c1[i].get("id") != c2[i].get("id"):
+			append_log("FAIL: Seed determinism mismatch at index %d (%s vs %s)" % [i, c1[i].get("id"), c2[i].get("id")], logs)
+			root_node.queue_free()
+			return false
+
+	seed_mgr1.queue_free()
+	seed_mgr2.queue_free()
+
+	for key in mgr.upgrade_database:
+		if not mgr.acquired_upgrades.has(key):
+			mgr.acquired_upgrades.append(key)
+
+	var exhausted_res := mgr.get_random_choices(3)
+	if not exhausted_res.is_empty():
+		append_log("FAIL: Exhausted catalog should return empty array", logs)
+		root_node.queue_free()
+		return false
+
+	var menu_scene: PackedScene = load("res://scenes/ui/level_up_menu.tscn")
+	var menu: LevelUpMenu = null
+	if menu_scene:
+		menu = menu_scene.instantiate() as LevelUpMenu
+	else:
+		var menu_script: GDScript = load("res://scripts/ui/level_up_menu.gd")
+		menu = menu_script.new() as LevelUpMenu
+	root_node.add_child(menu)
+	menu.display_cards([], 10)
+	if menu._buttons.size() != 1 or menu._buttons[0].text != "CONTINUE":
+		append_log("FAIL: LevelUpMenu failed to create CONTINUE button for exhausted pool", logs)
+		root_node.queue_free()
+		return false
+
+	menu.queue_free()
+	player.remove_from_group("player")
+	root_node.queue_free()
+	append_log("  -> Sub-step 5: Determinism and exhausted pool fallback verified.", logs)
+	append_log("  -> Test 57 PASSED: Phase 2 Build Paths, Evolutions, Synergy & XP Pacing verified.", logs)
+	return true
+

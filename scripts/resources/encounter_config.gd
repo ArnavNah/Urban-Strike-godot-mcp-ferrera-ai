@@ -9,10 +9,10 @@ extends Resource
 @export var escalation_duration: float = 480.0 ## 8 minutes to reach peak intensity
 
 @export_category("Budget & Threat Rates")
-@export var base_ground_budget_rate: float = 12.0 ## Ground budget points accumulated per second at start
-@export var base_air_budget_rate: float = 6.0 ## Air budget points accumulated per second at start
-@export var max_ground_budget_rate: float = 34.0 ## Ground budget points accumulated per second at peak
-@export var max_air_budget_rate: float = 18.0 ## Air budget points accumulated per second at peak
+@export var base_ground_budget_rate: float = 26.0 ## Ground budget points accumulated per second at start
+@export var base_air_budget_rate: float = 12.0 ## Air budget points accumulated per second at start
+@export var max_ground_budget_rate: float = 45.0 ## Ground budget points accumulated per second at peak
+@export var max_air_budget_rate: float = 22.0 ## Air budget points accumulated per second at peak
 @export var budget_curve_power: float = 1.35 ## Exponential growth factor for budget curve
 
 @export_category("Population Caps")
@@ -53,8 +53,8 @@ extends Resource
 
 @export_category("Early Air Threat Tuning")
 @export var early_air_enabled: bool = true
-@export var early_air_first_arrival_min: float = 3.0 ## First arrival 3-5 seconds after player control begins
-@export var early_air_first_arrival_max: float = 5.0
+@export var early_air_first_arrival_min: float = 0.5 ## First arrival 0.5-1.2 seconds after player control begins
+@export var early_air_first_arrival_max: float = 1.2
 @export var early_air_active_cap: int = 2 ## Initially allow 1-2 active light flying enemies
 @export var early_air_replenish_interval_min: float = 1.5 ## Replenish quickly: roughly 1.5-3.0 seconds between arrivals
 @export var early_air_replenish_interval_max: float = 3.0

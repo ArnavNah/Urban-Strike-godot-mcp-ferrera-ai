@@ -91,10 +91,16 @@ func _connect_buttons() -> void:
 
 	# Setup linear focus loop between buttons
 	if return_button and deploy_again_button:
-		return_button.focus_neighbor_right = deploy_again_button.get_path()
-		return_button.focus_neighbor_left = deploy_again_button.get_path()
-		deploy_again_button.focus_neighbor_left = return_button.get_path()
-		deploy_again_button.focus_neighbor_right = return_button.get_path()
+		if is_inside_tree() and return_button.is_inside_tree() and deploy_again_button.is_inside_tree():
+			return_button.focus_neighbor_right = return_button.get_path_to(deploy_again_button)
+			return_button.focus_neighbor_left = return_button.get_path_to(deploy_again_button)
+			deploy_again_button.focus_neighbor_left = deploy_again_button.get_path_to(return_button)
+			deploy_again_button.focus_neighbor_right = deploy_again_button.get_path_to(return_button)
+		else:
+			return_button.focus_neighbor_right = NodePath("../DeployAgainButton")
+			return_button.focus_neighbor_left = NodePath("../DeployAgainButton")
+			deploy_again_button.focus_neighbor_left = NodePath("../ReturnButton")
+			deploy_again_button.focus_neighbor_right = NodePath("../ReturnButton")
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -205,10 +211,11 @@ func _populate_telemetry() -> void:
 	if wave_value_label:
 		wave_value_label.text = "STAGE %d / 10" % current_stage
 
-	# 3. Hostiles Destroyed
+	# 3. Hostiles Destroyed & Score
 	var kills: int = gm.enemies_killed if gm else 0
+	var score: int = gm.total_score if gm else 0
 	if kills_value_label:
-		kills_value_label.text = "%d KILLS" % kills
+		kills_value_label.text = "%d KILLS (%s PTS)" % [kills, _format_number(score)]
 
 	# 4. Total Damage & Source Attribution Breakdown
 	var dmg: float = gm.damage_dealt if gm else 0.0
@@ -293,6 +300,7 @@ func _on_deploy_again_pressed() -> void:
 	_play_ui_audio(SOUND_CONFIRM, -12.0)
 	deploy_again_requested.emit()
 
+	RunSeedManager.initialize_new_run()
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().reload_current_scene()
@@ -307,3 +315,14 @@ func _on_return_pressed() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().change_scene_to_file("res://scenes/hangar/hangar.tscn")
+
+func _format_number(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return out
