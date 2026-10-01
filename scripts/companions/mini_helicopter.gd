@@ -115,6 +115,11 @@ func _ready() -> void:
 	_update_health_display()
 	_notify_wingmen_status.call_deferred()
 
+	if sfx and not sfx.stream:
+		var sm: Node = get_tree().get_first_node_in_group("sound_manager")
+		if sm and sm.has_method("get_wingman_gun_stream"):
+			sfx.stream = sm.call("get_wingman_gun_stream")
+
 func _setup_toon_materials() -> void:
 	var drone_mat: Material = load("res://resources/materials/toon_escort_drone.tres")
 	var drone_prop_mat: Material = load("res://resources/materials/toon_escort_drone_prop.tres")

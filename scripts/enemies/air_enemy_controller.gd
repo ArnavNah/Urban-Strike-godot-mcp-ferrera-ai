@@ -1119,6 +1119,8 @@ func _fire_missile_at_player() -> void:
 		var p := get_tree().current_scene if get_tree().current_scene else get_tree().root
 		p.add_child.call_deferred(missile)
 		missile.call_deferred("launch", muzzle_pos, fire_dir, _player, false)
+		if EventBus and EventBus.has_signal("enemy_fired_weapon"):
+			EventBus.enemy_fired_weapon.emit(self, muzzle_pos, fire_dir, true)
 
 func _deploy_cargo() -> void:
 	has_deployed_cargo = true

@@ -15,6 +15,10 @@ run/main_scene="res://scenes/menu/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
+
 [autoload]
 
 EventBus="*res://scripts/common/event_bus.gd"
@@ -232,13 +236,17 @@ camera_toggle_mode={
 ]
 }
 
+[audio]
+
+busses/default_bus_layout="res://default_bus_layout.tres"
+
 [layer_names]
 
 3d_physics/layer_1="World"
 3d_physics/layer_2="Player"
 3d_physics/layer_3="Enemies"
 3d_physics/layer_4="PlayerProjectiles"
-3d_physics/layer_5="EnemyProjectiles"
+3d_physics/layer_5="Pickups"
 
 [physics]
 
@@ -247,6 +255,5 @@ common/physics_interpolation=true
 
 [rendering]
 
-rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

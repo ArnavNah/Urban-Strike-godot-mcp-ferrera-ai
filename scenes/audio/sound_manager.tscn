@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/audio/sound_manager.gd" id="1_sound"]
 
-[node name="SoundManager" type="Node"]
+[node name="SoundManager" type="Node" groups=["sound_manager"]]
 script = ExtResource("1_sound")
 
 [node name="ChaingunPlayer" type="AudioStreamPlayer" parent="."]
@@ -10,3 +10,7 @@ script = ExtResource("1_sound")
 [node name="AlertPlayer" type="AudioStreamPlayer" parent="."]
 
 [node name="ExplosionPlayer" type="AudioStreamPlayer" parent="."]
+
+[node name="MissilePlayer" type="AudioStreamPlayer" parent="."]
+
+[node name="HudPlayer" type="AudioStreamPlayer" parent="."]

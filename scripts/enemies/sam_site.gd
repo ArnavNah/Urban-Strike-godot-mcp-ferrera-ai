@@ -235,6 +235,8 @@ func _fire_missile() -> void:
 		missile.call_deferred("launch", spawn_pos, fire_dir, _player, false)
 		if CombatDirector.instance:
 			CombatDirector.instance.transfer_danger_to_projectile(self, missile, 4.0)
+		if EventBus and EventBus.has_signal("enemy_fired_weapon"):
+			EventBus.enemy_fired_weapon.emit(self, spawn_pos, fire_dir, true)
 
 func _check_los() -> bool:
 	if not is_instance_valid(_player):

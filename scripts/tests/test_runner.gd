@@ -9950,4 +9950,3 @@ func test_phase2_build_paths_evolutions_and_xp_pacing(logs: Array[String]) -> bo
 	root_node.queue_free()
 	append_log("  -> Test 57 PASSED: Phase 2 Build Paths, Evolutions, Synergy & XP Pacing verified.", logs)
 	return true
-
