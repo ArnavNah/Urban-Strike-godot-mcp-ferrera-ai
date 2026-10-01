@@ -9836,9 +9836,118 @@ func test_phase2_build_paths_evolutions_and_xp_pacing(logs: Array[String]) -> bo
 		return false
 
 	menu.queue_free()
+	append_log("  -> Sub-step 5: Determinism and exhausted pool fallback verified.", logs)
+
+	# --- Step 6: Level 2 Tri-Path Early Offering (No Single Build Dominance) ---
+	var tri_mgr := UpgradeManager.new()
+	root_node.add_child(tri_mgr)
+	tri_mgr.reset_run()
+	tri_mgr.guarantee_mini_heli_on_first_offer = true
+	tri_mgr.current_level = 2
+	tri_mgr.pending_levels = [2]
+	var tri_choices := tri_mgr.get_random_choices(3)
+	if tri_choices.size() != 3:
+		append_log("FAIL: Level 2 choices did not return 3 cards (got %d)" % tri_choices.size(), logs)
+		root_node.queue_free()
+		return false
+
+	var has_gun_path := false
+	var has_missile_path := false
+	var has_defense_path := false
+	for c in tri_choices:
+		var cid: String = c.get("id", "")
+		if cid in ["faster_cannon", "twin_barrel", "multi_shot", "overclocked_feed", "armor_piercing", "ricochet_rounds"]:
+			has_gun_path = true
+		if cid in ["rapid_lock", "missile_capacity", "larger_explosions", "multi_launch"]:
+			has_missile_path = true
+		if cid == "mini_helicopter_support" or cid in ["reinforced_airframe", "movement_boost", "afterburner", "repair_drone"]:
+			has_defense_path = true
+
+	if not (has_gun_path and has_missile_path and has_defense_path):
+		append_log("FAIL: Level 2 offer did not represent all 3 build paths (gun=%s, missile=%s, defense=%s)" % [has_gun_path, has_missile_path, has_defense_path], logs)
+		root_node.queue_free()
+		return false
+	tri_mgr.queue_free()
+	append_log("  -> Sub-step 6: Level 2 tri-path early offering (balanced choice across all 3 paths) verified.", logs)
+
+	# --- Step 7: Complete Alternative Evolution Prerequisites ---
+	mgr.reset_run()
+	mgr.guarantee_mini_heli_on_first_offer = false
+	# AP Ricochet Cannon: armor_piercing + ricochet_rounds
+	mgr.acquired_upgrades.append("armor_piercing")
+	mgr.acquired_upgrades.append("ricochet_rounds")
+	if not mgr._is_eligible("ap_ricochet_cannon"):
+		append_log("FAIL: ap_ricochet_cannon should be eligible with armor_piercing + ricochet_rounds", logs)
+		root_node.queue_free()
+		return false
+	mgr.acquired_upgrades.clear()
+
+	# Siege Cannon: armor_piercing + reinforced_airframe
+	mgr.acquired_upgrades.append("armor_piercing")
+	mgr.acquired_upgrades.append("reinforced_airframe")
+	if not mgr._is_eligible("siege_cannon"):
+		append_log("FAIL: siege_cannon should be eligible with armor_piercing + reinforced_airframe", logs)
+		root_node.queue_free()
+		return false
+	mgr.acquired_upgrades.clear()
+
+	# Multi-Lock Hellfire: rapid_lock + larger_explosions
+	mgr.acquired_upgrades.append("rapid_lock")
+	mgr.acquired_upgrades.append("larger_explosions")
+	if not mgr._is_eligible("multi_lock_hellfire"):
+		append_log("FAIL: multi_lock_hellfire should be eligible with rapid_lock + larger_explosions", logs)
+		root_node.queue_free()
+		return false
+	mgr.acquired_upgrades.clear()
+	append_log("  -> Sub-step 7: Alternative evolution prerequisites across all 3 paths verified.", logs)
+
+	# --- Step 8: Multi-Level XP Carry-Over & High Burst Pacing ---
+	mgr.reset_run()
+	mgr.guarantee_mini_heli_on_first_offer = false
+	# 50 (lvl 2) + 90 (lvl 3) + 140 (lvl 4) + 75 remainder = 355 XP -> Level 4, current_xp = 75, pending = [2, 3, 4]
+	mgr.add_xp(355)
+	if mgr.current_level != 4 or mgr.current_xp != 75 or mgr.pending_levels.size() != 3:
+		append_log("FAIL: Multi-level high burst XP carry-over failed (lvl=%d [exp 4], xp=%d [exp 75], pending=%s [exp 3])" % [mgr.current_level, mgr.current_xp, str(mgr.pending_levels)], logs)
+		root_node.queue_free()
+		return false
+	if mgr.pending_levels != [2, 3, 4]:
+		append_log("FAIL: Pending levels queue incorrect: %s" % str(mgr.pending_levels), logs)
+		root_node.queue_free()
+		return false
+	append_log("  -> Sub-step 8: Multi-level high burst XP carry-over and FIFO pending queue verified.", logs)
+
+	# --- Step 9: Observable Visual and HUD Gameplay Feedback ---
+	var test_proj := Projectile.new()
+	var test_mesh := MeshInstance3D.new()
+	test_proj.add_child(test_mesh)
+	test_proj.mesh_instance = test_mesh
+	test_proj._is_player_projectile = true
+	test_proj.apply_visual_mode("hellfire")
+	if not test_mesh.material_override or test_mesh.scale.x < 1.2:
+		append_log("FAIL: Hellfire visual mode did not properly scale projectile mesh", logs)
+		test_proj.queue_free()
+		root_node.queue_free()
+		return false
+	test_proj.apply_visual_mode("ap_ricochet")
+	if not test_mesh.material_override or test_mesh.scale.z < 2.0:
+		append_log("FAIL: AP Ricochet visual mode did not properly scale projectile mesh", logs)
+		test_proj.queue_free()
+		root_node.queue_free()
+		return false
+	test_proj.queue_free()
+
+	# Verify Missile Pod Swarm Rockets configuration
+	if player.missile_pod:
+		player.missile_pod.is_swarm_rockets = true
+		if not player.missile_pod.is_swarm_rockets:
+			append_log("FAIL: Swarm rockets flag failed to set on missile pod", logs)
+			root_node.queue_free()
+			return false
+
+	append_log("  -> Sub-step 9: Observable visual modes and weapon evolution traits verified.", logs)
+
 	player.remove_from_group("player")
 	root_node.queue_free()
-	append_log("  -> Sub-step 5: Determinism and exhausted pool fallback verified.", logs)
 	append_log("  -> Test 57 PASSED: Phase 2 Build Paths, Evolutions, Synergy & XP Pacing verified.", logs)
 	return true
 

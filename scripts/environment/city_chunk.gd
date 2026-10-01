@@ -1872,16 +1872,13 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 	# --------------------------------------------------------------------------
 	var tree_x: float = ns_shoulder_w * 0.5 + 2.2
 	var tree_z: float = ew_shoulder_w * 0.5 + 2.2
-	var sidewalk_slots: Array[Vector3] = [
-		Vector3(-tree_x, 0.12, -48.0),
-		Vector3(-tree_x, 0.12, 48.0),
-		Vector3(tree_x, 0.12, -48.0),
-		Vector3(tree_x, 0.12, 48.0),
-		Vector3(-48.0, 0.12, -tree_z),
-		Vector3(48.0, 0.12, -tree_z),
-		Vector3(-48.0, 0.12, tree_z),
-		Vector3(48.0, 0.12, tree_z)
-	]
+	var sidewalk_slots: Array[Vector3] = []
+	for z_dist in [-54.0, -46.0, -38.0, -30.0, -22.0, 22.0, 30.0, 38.0, 46.0, 54.0]:
+		sidewalk_slots.append(Vector3(-tree_x, 0.12, z_dist))
+		sidewalk_slots.append(Vector3(tree_x, 0.12, z_dist))
+	for x_dist in [-54.0, -46.0, -38.0, -30.0, -22.0, 22.0, 30.0, 38.0, 46.0, 54.0]:
+		sidewalk_slots.append(Vector3(x_dist, 0.12, -tree_z))
+		sidewalk_slots.append(Vector3(x_dist, 0.12, tree_z))
 
 	for slot_pos in sidewalk_slots:
 		if coord == Vector2i.ZERO:
@@ -1902,21 +1899,29 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 			t_type = "large" if dec_rng.randf() < 0.6 else "small"
 		elif district_type == DistrictType.HIGH_RISE:
 			t_type = "planter" if dec_rng.randf() < 0.4 else "small"
+		elif district_type == DistrictType.HELIPAD:
+			t_type = "small" if dec_rng.randf() < 0.5 else "planter"
 		else:
 			t_type = "small" if dec_rng.randf() < 0.7 else "large"
 
 		_add_vegetation_instance(slot_pos, t_type, dec_rng, small_transforms, large_transforms, planter_transforms, placed_vegetation)
 
 	# --------------------------------------------------------------------------
-	# 2. Pocket Trees & Planters in Unused Gaps (District-Sensitive Density)
+	# 2. Helipad Spawn Environment Landscaping (Chunk 0,0 & Helipad Districts)
+	# --------------------------------------------------------------------------
+	if coord == Vector2i.ZERO or district_type == DistrictType.HELIPAD:
+		_build_helipad_vegetation(dec_rng, small_transforms, large_transforms, planter_transforms, placed_vegetation)
+
+	# --------------------------------------------------------------------------
+	# 3. Pocket Trees & Planters in Unused Gaps (District-Sensitive Density)
 	# --------------------------------------------------------------------------
 	var max_additional: int = 0
 	match district_type:
-		DistrictType.RESIDENTIAL: max_additional = 8
-		DistrictType.MID_RISE: max_additional = 4
-		DistrictType.HIGH_RISE: max_additional = 3
-		DistrictType.INDUSTRIAL: max_additional = 2
-		DistrictType.HELIPAD: max_additional = 1
+		DistrictType.RESIDENTIAL: max_additional = 14
+		DistrictType.MID_RISE: max_additional = 8
+		DistrictType.HIGH_RISE: max_additional = 6
+		DistrictType.INDUSTRIAL: max_additional = 4
+		DistrictType.HELIPAD: max_additional = 20
 
 	var target_additional: int = dec_rng.randi_range(int(max_additional * 0.5), max_additional)
 	if SaveSystem.low_particles:
@@ -2012,6 +2017,153 @@ func _build_tree_clusters(rng: RandomNumberGenerator) -> void:
 		mm_planter.cast_shadow = shadow_setting
 		props_root.add_child(mm_planter)
 
+func _build_helipad_vegetation(
+	rng: RandomNumberGenerator,
+	small_list: Array[Transform3D],
+	large_list: Array[Transform3D],
+	planter_list: Array[Transform3D],
+	placed: Array[Dictionary]
+) -> void:
+	# 1. Concrete Planter Boxes bordering the 28m asphalt apron perimeter
+	var apron_planters: Array[Vector3] = [
+		Vector3(-10.0, 0.12, -14.2),
+		Vector3(-5.0, 0.12, -14.2),
+		Vector3(5.0, 0.12, -14.2),
+		Vector3(10.0, 0.12, -14.2),
+		Vector3(-10.0, 0.12, 14.2),
+		Vector3(-5.0, 0.12, 14.2),
+		Vector3(5.0, 0.12, 14.2),
+		Vector3(10.0, 0.12, 14.2),
+		Vector3(-14.2, 0.12, -10.0),
+		Vector3(-14.2, 0.12, -5.0),
+		Vector3(-14.2, 0.12, 5.0),
+		Vector3(-14.2, 0.12, 10.0),
+		Vector3(14.2, 0.12, -10.0),
+		Vector3(14.2, 0.12, -5.0),
+		Vector3(14.2, 0.12, 5.0),
+		Vector3(14.2, 0.12, 10.0),
+		# Corner entrance flanking planters
+		Vector3(-15.2, 0.12, -15.2),
+		Vector3(15.2, 0.12, -15.2),
+		Vector3(-15.2, 0.12, 15.2),
+		Vector3(15.2, 0.12, 15.2)
+	]
+	for p_pos in apron_planters:
+		_add_vegetation_instance(p_pos, "planter", rng, small_list, large_list, planter_list, placed)
+
+	# 2. Manicured Apron Border Hedges & Shrubs (flanking grass-tarmac boundary)
+	var apron_bushes: Array[Vector3] = [
+		Vector3(-7.5, 0.10, -14.2),
+		Vector3(0.0, 0.10, -14.4),
+		Vector3(7.5, 0.10, -14.2),
+		Vector3(-7.5, 0.10, 14.2),
+		Vector3(0.0, 0.10, 14.4),
+		Vector3(7.5, 0.10, 14.2),
+		Vector3(-14.2, 0.10, -7.5),
+		Vector3(-14.4, 0.10, 0.0),
+		Vector3(-14.2, 0.10, 7.5),
+		Vector3(14.2, 0.10, -7.5),
+		Vector3(14.4, 0.10, 0.0),
+		Vector3(14.2, 0.10, 7.5)
+	]
+	for b_pos in apron_bushes:
+		_add_vegetation_instance(b_pos, "bush", rng, small_list, large_list, planter_list, placed)
+
+	# 3. Avenue Portal Framing (flanking the four boulevard entrances leaving the helipad)
+	var portal_vegetation: Array[Dictionary] = [
+		# North Avenue approach
+		{ "pos": Vector3(-12.5, 0.12, -16.5), "type": "small" },
+		{ "pos": Vector3(12.5, 0.12, -16.5), "type": "small" },
+		{ "pos": Vector3(-14.0, 0.10, -18.0), "type": "bush" },
+		{ "pos": Vector3(14.0, 0.10, -18.0), "type": "bush" },
+		# South Avenue approach
+		{ "pos": Vector3(-12.5, 0.12, 16.5), "type": "small" },
+		{ "pos": Vector3(12.5, 0.12, 16.5), "type": "small" },
+		{ "pos": Vector3(-14.0, 0.10, 18.0), "type": "bush" },
+		{ "pos": Vector3(14.0, 0.10, 18.0), "type": "bush" },
+		# East Avenue approach
+		{ "pos": Vector3(16.5, 0.12, -12.5), "type": "small" },
+		{ "pos": Vector3(16.5, 0.12, 12.5), "type": "small" },
+		{ "pos": Vector3(18.0, 0.10, -14.0), "type": "bush" },
+		{ "pos": Vector3(18.0, 0.10, 14.0), "type": "bush" },
+		# West Avenue approach
+		{ "pos": Vector3(-16.5, 0.12, -12.5), "type": "small" },
+		{ "pos": Vector3(-16.5, 0.12, 12.5), "type": "small" },
+		{ "pos": Vector3(-18.0, 0.10, -14.0), "type": "bush" },
+		{ "pos": Vector3(-18.0, 0.10, 14.0), "type": "bush" }
+	]
+	for p_veg in portal_vegetation:
+		_add_vegetation_instance(p_veg["pos"], p_veg["type"], rng, small_list, large_list, planter_list, placed)
+
+	# 4. Helipad Diagonal Park Groves & Botanical Landscaping framing the landing zone
+	var corner_groves: Array[Dictionary] = [
+		# Northeast Vista Park (x > 14, z < -14) - Primary forward-facing player viewcone
+		{ "pos": Vector3(18.5, 0.12, -18.5), "type": "large" },
+		{ "pos": Vector3(23.5, 0.12, -18.0), "type": "small" },
+		{ "pos": Vector3(18.0, 0.12, -23.5), "type": "small" },
+		{ "pos": Vector3(21.0, 0.10, -21.0), "type": "bush" },
+		{ "pos": Vector3(25.5, 0.12, -25.5), "type": "large" },
+		{ "pos": Vector3(22.0, 0.12, -22.5), "type": "planter" },
+		{ "pos": Vector3(27.0, 0.10, -21.5), "type": "bush" },
+		{ "pos": Vector3(30.0, 0.12, -20.0), "type": "large" },
+		{ "pos": Vector3(20.0, 0.12, -30.0), "type": "small" },
+		{ "pos": Vector3(33.0, 0.12, -26.0), "type": "large" },
+		{ "pos": Vector3(28.0, 0.12, -32.0), "type": "small" },
+		{ "pos": Vector3(34.0, 0.10, -32.5), "type": "bush" },
+		{ "pos": Vector3(22.0, 0.12, -35.0), "type": "large" },
+		{ "pos": Vector3(36.0, 0.12, -19.0), "type": "small" },
+		{ "pos": Vector3(19.0, 0.10, -28.0), "type": "bush" },
+		{ "pos": Vector3(26.0, 0.12, -28.0), "type": "planter" },
+
+		# Southeast Sunken Park (x > 14, z > 14)
+		{ "pos": Vector3(18.5, 0.12, 18.5), "type": "large" },
+		{ "pos": Vector3(24.0, 0.12, 18.0), "type": "small" },
+		{ "pos": Vector3(18.0, 0.12, 24.0), "type": "small" },
+		{ "pos": Vector3(21.0, 0.10, 21.0), "type": "bush" },
+		{ "pos": Vector3(25.5, 0.12, 25.5), "type": "large" },
+		{ "pos": Vector3(22.5, 0.12, 22.0), "type": "planter" },
+		{ "pos": Vector3(30.0, 0.12, 22.0), "type": "large" },
+		{ "pos": Vector3(22.0, 0.12, 30.0), "type": "small" },
+		{ "pos": Vector3(27.0, 0.10, 28.0), "type": "bush" },
+		{ "pos": Vector3(33.0, 0.12, 27.0), "type": "small" },
+		{ "pos": Vector3(28.0, 0.12, 34.0), "type": "large" },
+		{ "pos": Vector3(35.0, 0.12, 21.0), "type": "small" },
+		{ "pos": Vector3(19.0, 0.10, 28.0), "type": "bush" },
+		{ "pos": Vector3(26.0, 0.12, 32.0), "type": "planter" },
+
+		# Southwest Memorial Grove (x < -14, z > 14)
+		{ "pos": Vector3(-18.5, 0.12, 18.5), "type": "large" },
+		{ "pos": Vector3(-24.0, 0.12, 18.0), "type": "small" },
+		{ "pos": Vector3(-18.0, 0.12, 24.0), "type": "small" },
+		{ "pos": Vector3(-21.0, 0.10, 21.0), "type": "bush" },
+		{ "pos": Vector3(-25.5, 0.12, 25.5), "type": "large" },
+		{ "pos": Vector3(-22.0, 0.12, 22.0), "type": "planter" },
+		{ "pos": Vector3(-30.0, 0.12, 20.0), "type": "large" },
+		{ "pos": Vector3(-20.0, 0.12, 30.0), "type": "small" },
+		{ "pos": Vector3(-28.0, 0.10, 27.0), "type": "bush" },
+		{ "pos": Vector3(-33.0, 0.12, 26.0), "type": "large" },
+		{ "pos": Vector3(-27.0, 0.12, 33.0), "type": "small" },
+		{ "pos": Vector3(-34.0, 0.12, 20.0), "type": "small" },
+		{ "pos": Vector3(-19.0, 0.10, 28.0), "type": "bush" },
+		{ "pos": Vector3(-26.0, 0.12, 31.0), "type": "planter" },
+
+		# Northwest Maintenance & Staging Perimeter (x < -14, z < -14)
+		{ "pos": Vector3(-18.5, 0.12, -18.5), "type": "small" },
+		{ "pos": Vector3(-21.0, 0.10, -18.0), "type": "bush" },
+		{ "pos": Vector3(-18.0, 0.12, -26.5), "type": "large" },
+		{ "pos": Vector3(-27.0, 0.12, -16.5), "type": "small" },
+		{ "pos": Vector3(-28.5, 0.12, -28.0), "type": "large" },
+		{ "pos": Vector3(-17.0, 0.12, -32.0), "type": "planter" },
+		{ "pos": Vector3(-32.0, 0.12, -20.0), "type": "large" },
+		{ "pos": Vector3(-22.0, 0.10, -32.0), "type": "bush" },
+		{ "pos": Vector3(-34.0, 0.12, -26.0), "type": "small" },
+		{ "pos": Vector3(-30.0, 0.10, -33.0), "type": "bush" },
+		{ "pos": Vector3(-17.5, 0.12, -22.0), "type": "planter" }
+	]
+
+	for veg in corner_groves:
+		_add_vegetation_instance(veg["pos"], veg["type"], rng, small_list, large_list, planter_list, placed)
+
 func _add_vegetation_instance(
 	pos: Vector3,
 	type: String,
@@ -2023,19 +2175,24 @@ func _add_vegetation_instance(
 ) -> void:
 	var scale_factor: float = 10.0
 	var rad: float = 1.2
+	var final_pos := pos
 	if type == "large":
 		scale_factor = 10.0 * rng.randf_range(0.85, 1.15)
 		rad = 1.4
 	elif type == "planter":
 		scale_factor = 5.0 * rng.randf_range(0.90, 1.10)
 		rad = 1.0
+	elif type == "bush":
+		scale_factor = 4.8 * rng.randf_range(0.85, 1.15)
+		rad = 0.7
+		final_pos.y -= 0.35
 	else:
 		scale_factor = 10.0 * rng.randf_range(0.85, 1.15)
 		rad = 1.2
 
 	var rot_y: float = rng.randf_range(0.0, TAU)
 	var b := Basis().rotated(Vector3.UP, rot_y).scaled(Vector3(scale_factor, scale_factor, scale_factor))
-	var t := Transform3D(b, pos)
+	var t := Transform3D(b, final_pos)
 
 	match type:
 		"large": large_list.append(t)
@@ -2071,13 +2228,19 @@ func _is_vegetation_position_clear(
 	if absf(pos.x) > (60.0 - radius) or absf(pos.z) > (60.0 - radius):
 		return false
 
-	# 2. Road corridors and turning clearance
-	if absf(pos.x) < (x_inner + radius + 0.6) or absf(pos.z) < (z_inner + radius + 0.6):
+	# 2. Road corridors and turning clearance (keep trees off drivable asphalt and intersection box)
+	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
+	var ew_asphalt_w: float = 16.0 if ew_is_avenue else 9.0
+	if absf(pos.x) < (ns_asphalt_w * 0.5 + radius + 0.2) and absf(pos.z) >= z_inner:
+		return false
+	if absf(pos.z) < (ew_asphalt_w * 0.5 + radius + 0.2) and absf(pos.x) >= x_inner:
+		return false
+	if absf(pos.x) < (x_inner + radius + 0.2) and absf(pos.z) < (z_inner + radius + 0.2):
 		return false
 
-	# 3. Central Helipad Zone (chunk 0, 0)
-	if coord == Vector2i.ZERO:
-		if absf(pos.x) < 16.0 and absf(pos.z) < 16.0:
+	# 3. Central Helipad Zone (chunk 0, 0): keep the 24m concrete landing pad clear
+	if coord == Vector2i.ZERO or district_type == DistrictType.HELIPAD:
+		if absf(pos.x) < 13.5 and absf(pos.z) < 13.5:
 			return false
 
 	# 4. Building footprints & setbacks
@@ -2094,14 +2257,24 @@ func _is_vegetation_position_clear(
 		Vector3(0.0, 0.3, -56.0),
 		Vector3(0.0, 0.3, 56.0),
 		Vector3(-56.0, 0.3, 0.0),
-		Vector3(56.0, 0.3, 0.0),
-		Vector3(-20.0, 0.3, -20.0),
-		Vector3(20.0, 0.3, -20.0),
-		Vector3(-20.0, 0.3, 20.0),
-		Vector3(20.0, 0.3, 20.0)
+		Vector3(56.0, 0.3, 0.0)
 	]
+	if district_type != DistrictType.HELIPAD:
+		local_spawns.append_array([
+			Vector3(-20.0, 0.3, -20.0),
+			Vector3(20.0, 0.3, -20.0),
+			Vector3(-20.0, 0.3, 20.0),
+			Vector3(20.0, 0.3, 20.0)
+		])
+	else:
+		local_spawns.append_array([
+			Vector3(0.0, 0.3, -42.0),
+			Vector3(0.0, 0.3, 42.0),
+			Vector3(-42.0, 0.3, 0.0),
+			Vector3(42.0, 0.3, 0.0)
+		])
 	for sp in local_spawns:
-		if Vector2(pos.x - sp.x, pos.z - sp.z).length() < 6.0:
+		if Vector2(pos.x - sp.x, pos.z - sp.z).length() < 5.5:
 			return false
 
 	var local_pickups: Array[Vector3] = [
@@ -2139,7 +2312,6 @@ func _is_vegetation_position_clear(
 			return false
 
 	# 7. Parked / wrecked vehicles along curbs
-	var ns_asphalt_w: float = 16.0 if ns_is_avenue else 9.0
 	var car_x: float = ns_asphalt_w * 0.5 - 1.1
 	for car_z in [-32.0, -22.0, 22.0, 24.0, 30.0, 32.0]:
 		if Vector2(pos.x - (-car_x), pos.z - car_z).length() < 3.5:
@@ -2161,21 +2333,28 @@ func _build_procedural_fallback_trees(rng: RandomNumberGenerator, shadow_crowns:
 	var tree_x: float = ns_shoulder_w * 0.5 + 2.5
 	var tree_z: float = ew_shoulder_w * 0.5 + 2.5
 
-	var tree_positions: Array[Vector3] = [
-		Vector3(-tree_x, 0.0, -48.0),
-		Vector3(-tree_x, 0.0, 48.0),
-		Vector3(tree_x, 0.0, -48.0),
-		Vector3(tree_x, 0.0, 48.0),
-		Vector3(-48.0, 0.0, -tree_z),
-		Vector3(48.0, 0.0, -tree_z),
-		Vector3(-48.0, 0.0, tree_z),
-		Vector3(48.0, 0.0, tree_z)
-	]
+	var tree_positions: Array[Vector3] = []
+	for z_dist in [-54.0, -46.0, -38.0, -30.0, -22.0, 22.0, 30.0, 38.0, 46.0, 54.0]:
+		tree_positions.append(Vector3(-tree_x, 0.0, z_dist))
+		tree_positions.append(Vector3(tree_x, 0.0, z_dist))
+	for x_dist in [-54.0, -46.0, -38.0, -30.0, -22.0, 22.0, 30.0, 38.0, 46.0, 54.0]:
+		tree_positions.append(Vector3(x_dist, 0.0, -tree_z))
+		tree_positions.append(Vector3(x_dist, 0.0, tree_z))
 
 	if coord == Vector2i.ZERO:
 		tree_positions = tree_positions.filter(func(p: Vector3) -> bool:
-			return absf(p.x) > 14.0 or absf(p.z) > 14.0
+			return absf(p.x) > 13.5 or absf(p.z) > 13.5
 		)
+		tree_positions.append_array([
+			Vector3(18.5, 0.0, -18.5), Vector3(23.5, 0.0, -18.0), Vector3(18.0, 0.0, -23.5),
+			Vector3(25.5, 0.0, -25.5), Vector3(30.0, 0.0, -20.0), Vector3(20.0, 0.0, -30.0),
+			Vector3(18.5, 0.0, 18.5), Vector3(24.0, 0.0, 18.0), Vector3(18.0, 0.0, 24.0),
+			Vector3(25.5, 0.0, 25.5), Vector3(30.0, 0.0, 22.0), Vector3(22.0, 0.0, 30.0),
+			Vector3(-18.5, 0.0, 18.5), Vector3(-24.0, 0.0, 18.0), Vector3(-18.0, 0.0, 24.0),
+			Vector3(-25.5, 0.0, 25.5), Vector3(-30.0, 0.0, 20.0), Vector3(-20.0, 0.0, 30.0),
+			Vector3(-18.5, 0.0, -18.5), Vector3(-18.0, 0.0, -26.5), Vector3(-27.0, 0.0, -16.5),
+			Vector3(-28.5, 0.0, -28.0), Vector3(-32.0, 0.0, -20.0), Vector3(-34.0, 0.0, -26.0)
+		])
 
 	var count: int = tree_positions.size()
 	if count == 0:

@@ -58,6 +58,10 @@ signal flares_updated(charges_left: int, max_charges: int, is_ready: bool)
 signal incoming_missile_warning(source_pos: Vector3, is_active: bool)
 @warning_ignore("unused_signal")
 signal missile_impact_occurred(impact_pos: Vector3, is_player: bool)
+@warning_ignore("unused_signal")
+signal wingmen_status_updated(alive_count: int, max_count: int)
+@warning_ignore("unused_signal")
+signal defense_status_updated(armor_pct: float, repair_rate: float, aegis_ready: bool, aegis_cd: float)
 
 # --- Evasive & Rescue Mechanics ---
 @warning_ignore("unused_signal")

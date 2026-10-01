@@ -26,6 +26,9 @@ var has_hit_target: bool = false
 
 static var _player_mat: StandardMaterial3D = null
 static var _enemy_mat: StandardMaterial3D = null
+static var _hellfire_mat: StandardMaterial3D = null
+static var _ap_ricochet_mat: StandardMaterial3D = null
+static var _siege_mat: StandardMaterial3D = null
 
 @onready var raycast: RayCast3D = $RayCast3D
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
@@ -108,6 +111,44 @@ func launch(start_pos: Vector3, dir: Vector3, from_player: bool = true, proj_dam
 				raycast.add_exception(shooter_node as CollisionObject3D)
 		raycast.enabled = true
 		raycast.target_position = Vector3(0, 0, -speed * (1.0 / 60.0) * 1.5)
+
+func apply_visual_mode(mode: String) -> void:
+	if not mesh_instance or not _is_player_projectile:
+		return
+	match mode:
+		"hellfire":
+			if not _hellfire_mat:
+				_hellfire_mat = StandardMaterial3D.new()
+				_hellfire_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				_hellfire_mat.albedo_color = Color(2.5, 0.75, 0.15, 1.0)
+				_hellfire_mat.emission_enabled = true
+				_hellfire_mat.emission = Color(1.0, 0.40, 0.05, 1.0)
+				_hellfire_mat.emission_energy_multiplier = 5.0
+			mesh_instance.material_override = _hellfire_mat
+			mesh_instance.scale = Vector3(1.35, 1.35, 2.4)
+		"ap_ricochet":
+			if not _ap_ricochet_mat:
+				_ap_ricochet_mat = StandardMaterial3D.new()
+				_ap_ricochet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				_ap_ricochet_mat.albedo_color = Color(0.25, 1.8, 2.5, 1.0)
+				_ap_ricochet_mat.emission_enabled = true
+				_ap_ricochet_mat.emission = Color(0.15, 0.85, 1.0, 1.0)
+				_ap_ricochet_mat.emission_energy_multiplier = 5.0
+			mesh_instance.material_override = _ap_ricochet_mat
+			mesh_instance.scale = Vector3(0.95, 0.95, 2.6)
+		"siege":
+			if not _siege_mat:
+				_siege_mat = StandardMaterial3D.new()
+				_siege_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				_siege_mat.albedo_color = Color(2.2, 1.8, 1.2, 1.0)
+				_siege_mat.emission_enabled = true
+				_siege_mat.emission = Color(1.0, 0.85, 0.5, 1.0)
+				_siege_mat.emission_energy_multiplier = 4.0
+			mesh_instance.material_override = _siege_mat
+			mesh_instance.scale = Vector3(1.6, 1.6, 2.0)
+		_:
+			mesh_instance.material_override = _player_mat
+			mesh_instance.scale = Vector3(1.0, 1.0, 1.8)
 
 func _process(delta: float) -> void:
 	if not _is_active:

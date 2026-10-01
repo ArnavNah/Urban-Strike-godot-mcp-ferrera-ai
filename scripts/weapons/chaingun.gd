@@ -22,6 +22,8 @@ var enemy_hit_limit: int = 1
 
 var current_heat: float = 0.0
 var is_hellfire_active: bool = false
+var is_ap_ricochet_active: bool = false
+var is_siege_active: bool = false
 var is_overheated: bool = false
 var _overheat_timer: float = 0.0
 var _shot_cooldown: float = 0.0
@@ -119,6 +121,15 @@ func _execute_fire() -> void:
 				projectile.air_damage_multiplier = air_damage_multiplier
 				projectile.ground_damage_multiplier = ground_damage_multiplier
 				projectile.enemy_hit_limit = enemy_hit_limit
+				var v_mode := ""
+				if is_hellfire_active:
+					v_mode = "hellfire"
+				elif is_ap_ricochet_active:
+					v_mode = "ap_ricochet"
+				elif is_siege_active:
+					v_mode = "siege"
+				if projectile.has_method("apply_visual_mode"):
+					projectile.apply_visual_mode(v_mode)
 
 	# Spawn muzzle flash (VfxPool with fallback)
 	if VfxPool.instance:
@@ -129,6 +140,8 @@ func _execute_fire() -> void:
 			var flash := flash_scene.instantiate() as Node3D
 			if flash:
 				flash.transform.origin = muzzle_pos
+				if is_hellfire_active:
+					flash.scale = Vector3(1.4, 1.4, 1.4)
 				var target_parent := get_tree().current_scene if get_tree().current_scene else get_tree().root
 				target_parent.add_child.call_deferred(flash)
 

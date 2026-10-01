@@ -428,9 +428,15 @@ func _physics_process(delta: float) -> void:
 func enable_repair_drone(rate: float = 4.0) -> void:
 	repair_drone_enabled = true
 	repair_rate = rate
+	notify_defense_status()
 
 func enable_aegis_shield() -> void:
 	has_aegis_shield = true
+	notify_defense_status()
+
+func notify_defense_status() -> void:
+	if EventBus and EventBus.has_signal("defense_status_updated"):
+		EventBus.defense_status_updated.emit(armor_reduction, repair_rate if repair_drone_enabled else 0.0, has_aegis_shield and _aegis_cooldown <= 0.0, _aegis_cooldown)
 
 func enable_ghost_rotor(cooldown: float = 12.0) -> void:
 	has_ghost_rotor = true
@@ -1122,6 +1128,7 @@ func take_damage(amount: float, _source: Node = null, _hit_pos: Vector3 = Vector
 	var shield_damage: float = 0.0
 	if has_aegis_shield and _aegis_cooldown <= 0.0 and (current_health - amount) <= (max_health * 0.35):
 		_aegis_cooldown = 18.0
+		notify_defense_status()
 		if flare_dispenser and flare_dispenser.has_method("deploy_flares"):
 			flare_dispenser.deploy_flares()
 		if EventBus and EventBus.has_signal("camera_shake_requested"):

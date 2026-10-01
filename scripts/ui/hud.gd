@@ -63,6 +63,14 @@ var _upgrade_banner_timer: float = 0.0
 var attack_run_banner: PanelContainer = null
 var attack_run_label: Label = null
 
+var defense_status_label: Label = null
+var _wingmen_alive: int = 0
+var _has_wingmen: bool = false
+var _armor_pct: float = 0.0
+var _repair_rate: float = 0.0
+var _has_aegis: bool = false
+var _aegis_cooldown: float = 0.0
+
 var _player: Node3D = null
 var _current_target: Node3D = null
 var _is_manual_aim: bool = false
@@ -232,9 +240,14 @@ func _ready() -> void:
 			eb.survivors_evacuated.connect(_on_survivors_evacuated)
 		if eb.has_signal("attack_run_state_changed"):
 			eb.attack_run_state_changed.connect(_on_attack_run_state_changed)
+		if eb.has_signal("wingmen_status_updated"):
+			eb.wingmen_status_updated.connect(_on_wingmen_status_updated)
+		if eb.has_signal("defense_status_updated"):
+			eb.defense_status_updated.connect(_on_defense_status_updated)
 		if eb.has_signal("player_died"):
 			eb.player_died.connect(_on_player_died)
 
+	_setup_defense_status_ui()
 	_setup_mission_card()
 
 	if _player and "missile_pod" in _player and _player.missile_pod:
@@ -997,21 +1010,55 @@ func _on_ammo_full_notified() -> void:
 	_update_missile_status_display()
 
 func _on_heat_changed(current: float, maximum: float, is_overheated: bool) -> void:
+	var player_node: Node = _player if is_instance_valid(_player) else get_tree().get_first_node_in_group("player")
+	var is_hellfire := false
+	var is_ap_ric := false
+	var is_siege := false
+	var is_spread := false
+	if is_instance_valid(player_node) and "chaingun" in player_node and is_instance_valid(player_node.chaingun):
+		var cg: Node = player_node.chaingun
+		is_hellfire = bool(cg.get("is_hellfire_active"))
+		is_ap_ric = bool(cg.get("is_ap_ricochet_active"))
+		is_siege = bool(cg.get("is_siege_active"))
+		is_spread = int(cg.get("multishot_count")) > 1
+
 	if heat_bar:
 		heat_bar.max_value = maximum
 		if _heat_tween:
 			_heat_tween.kill()
 		_heat_tween = create_tween()
 		_heat_tween.tween_property(heat_bar, "value", current, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		heat_bar.visible = current > 0.05
+		heat_bar.visible = current > 0.05 and not is_hellfire
 		if is_overheated:
 			heat_bar.modulate = Color(1.0, 0.25, 0.25)
 		elif maximum > 0.0 and current >= maximum * 0.80:
 			heat_bar.modulate = Color(1.0, 0.55, 0.15)
 		else:
 			heat_bar.modulate = Color(1.0, 1.0, 1.0)
+
 	if overheat_warning:
-		overheat_warning.visible = is_overheated
+		if is_hellfire:
+			overheat_warning.text = "🔥 HELLFIRE MINIGUN // OVERHEAT IMMUNE 🔥"
+			overheat_warning.modulate = Color(1.0, 0.80, 0.2)
+			overheat_warning.visible = true
+		elif is_ap_ric:
+			overheat_warning.text = "⚡ AP RICOCHET CANNON // +2 PIERCE ⚡"
+			overheat_warning.modulate = Color(0.3, 0.9, 1.0)
+			overheat_warning.visible = current > 0.15 or is_overheated
+		elif is_siege:
+			overheat_warning.text = "💥 SIEGE CANNON // HEAVY AP 💥"
+			overheat_warning.modulate = Color(1.0, 0.65, 0.25)
+			overheat_warning.visible = current > 0.15 or is_overheated
+		elif is_overheated:
+			overheat_warning.text = "CHAINGUN OVERHEATED - 2.5s LOCKOUT"
+			overheat_warning.modulate = Color(1.0, 0.25, 0.25)
+			overheat_warning.visible = true
+		else:
+			overheat_warning.visible = false
+
+	if aim_mode_label and is_spread:
+		if not aim_mode_label.text.contains("2-SPREAD"):
+			aim_mode_label.text = "AIM: 2-ROUND SPREAD"
 
 func _update_missile_status_display() -> void:
 	if not missile_status:
@@ -1021,30 +1068,43 @@ func _update_missile_status_display() -> void:
 	for i in range(_max_missiles):
 		pips += "▮" if i < _missile_ammo else "▯"
 
+	var mode_tag := ""
+	var player_node: Node = _player if is_instance_valid(_player) else get_tree().get_first_node_in_group("player")
+	if is_instance_valid(player_node) and "missile_pod" in player_node and is_instance_valid(player_node.missile_pod):
+		var pod: Node = player_node.missile_pod
+		if pod.get("is_swarm_rockets") == true:
+			mode_tag = "  [SWARM 6x]"
+		elif pod.get("is_multi_lock") == true:
+			mode_tag = "  [MULTI-LOCK]"
+		elif int(pod.get("multi_launch_count")) > 1:
+			mode_tag = "  [SALVO x%d]" % int(pod.get("multi_launch_count"))
+		elif float(pod.get("lock_duration")) < 0.6:
+			mode_tag = "  [RAPID]"
+
 	if _missile_warning_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d   %s   NO MISSILES" % [_missile_ammo, _max_missiles, pips]
+		missile_status.text = "MISSILES  %d / %d   %s   NO MISSILES%s" % [_missile_ammo, _max_missiles, pips, mode_tag]
 		missile_status.modulate = Color(1.0, 0.25, 0.25)
 		return
 
 	if _ammo_full_timer > 0.0:
-		missile_status.text = "MISSILES  %d / %d   %s   FULL" % [_missile_ammo, _max_missiles, pips]
+		missile_status.text = "MISSILES  %d / %d   %s   FULL%s" % [_missile_ammo, _max_missiles, pips, mode_tag]
 		missile_status.modulate = Color(1.0, 0.75, 0.20)
 		return
 
 	if _missile_ammo <= 0:
-		missile_status.text = "MISSILES  0 / %d   %s   EMPTY" % [_max_missiles, pips]
+		missile_status.text = "MISSILES  0 / %d   %s   EMPTY%s" % [_max_missiles, pips, mode_tag]
 		missile_status.modulate = Color(0.85, 0.35, 0.35)
 		return
 
 	var jam_suffix := "  EW JAMMED" if _is_jammed else ""
 	if _is_missile_locked:
-		missile_status.text = "MISSILES  %d / %d   %s   LOCKED" % [_missile_ammo, _max_missiles, pips]
+		missile_status.text = "MISSILES  %d / %d   %s   LOCKED%s%s" % [_missile_ammo, _max_missiles, pips, mode_tag, jam_suffix]
 		missile_status.modulate = Color(0.25, 0.95, 0.55)
 	elif _last_lock_progress > 0.05:
-		missile_status.text = "MISSILES  %d / %d   %s   LOCKING %d%%%s" % [_missile_ammo, _max_missiles, pips, int(_last_lock_progress * 100.0), jam_suffix]
+		missile_status.text = "MISSILES  %d / %d   %s   LOCKING %d%%%s%s" % [_missile_ammo, _max_missiles, pips, int(_last_lock_progress * 100.0), jam_suffix, mode_tag]
 		missile_status.modulate = Color(1.0, 0.50, 0.15) if _is_jammed else Color(1.0, 0.78, 0.22)
 	else:
-		missile_status.text = "MISSILES  %d / %d   %s   READY%s" % [_missile_ammo, _max_missiles, pips, jam_suffix]
+		missile_status.text = "MISSILES  %d / %d   %s   READY%s%s" % [_missile_ammo, _max_missiles, pips, jam_suffix, mode_tag]
 		missile_status.modulate = Color(1.0, 0.55, 0.15) if _is_jammed else Color(0.88, 0.94, 1.0)
 
 func _on_missile_ammo_changed(current: int, maximum: int) -> void:
@@ -1396,7 +1456,14 @@ func _on_upgrade_applied(upgrade_id: String) -> void:
 			is_evo = bool(db[upgrade_id].get("is_evolution", false))
 	if upgrade_banner_label:
 		if is_evo:
-			upgrade_banner_label.text = "★ WEAPON EVOLUTION: %s" % title.to_upper()
+			var path_tag := ""
+			if upgrade_id in ["hellfire_minigun", "ap_ricochet_cannon", "siege_cannon"]:
+				path_tag = " [GUN BARRAGE]"
+			elif upgrade_id in ["swarm_rockets", "multi_lock_hellfire"]:
+				path_tag = " [MISSILE HUNTER]"
+			elif upgrade_id == "aegis_airframe":
+				path_tag = " [DEFENSIVE SQUADRON]"
+			upgrade_banner_label.text = "★ WEAPON EVOLUTION: %s%s" % [title.to_upper(), path_tag]
 			upgrade_banner_label.modulate = Color(1.0, 0.84, 0.0)
 		else:
 			upgrade_banner_label.text = "▲ UPGRADE INSTALLED: %s" % title.to_upper()
@@ -1405,6 +1472,75 @@ func _on_upgrade_applied(upgrade_id: String) -> void:
 		upgrade_banner.visible = true
 		upgrade_banner.modulate.a = 1.0
 	_upgrade_banner_timer = 2.8 if is_evo else 2.2
+	_update_missile_status_display()
+	_update_defense_status_display()
+	_on_heat_changed(0.0, 1.0, false)
+
+func _setup_defense_status_ui() -> void:
+	if defense_status_label:
+		return
+	var top_left := find_child("TopLeft", true, false) as VBoxContainer
+	if top_left:
+		var card := find_child("TopLeftCard", true, false) as Control
+		if card and card.offset_bottom < 132.0:
+			card.offset_bottom = 132.0
+		if top_left.offset_bottom < 126.0:
+			top_left.offset_bottom = 126.0
+
+		defense_status_label = Label.new()
+		defense_status_label.name = "DefenseStatusLabel"
+		var font := _get_hud_font()
+		if font:
+			defense_status_label.add_theme_font_override("font", font)
+		defense_status_label.add_theme_font_size_override("font_size", 12)
+		defense_status_label.modulate = Color(0.35, 0.95, 0.85)
+		defense_status_label.text = ""
+		top_left.add_child(defense_status_label)
+		defense_status_label.visible = false
+
+func _on_wingmen_status_updated(alive_count: int, _max_count: int) -> void:
+	_has_wingmen = true
+	_wingmen_alive = alive_count
+	_update_defense_status_display()
+
+func _on_defense_status_updated(armor_pct: float, rep_rate: float, aegis_ready: bool, aegis_cd: float) -> void:
+	_armor_pct = armor_pct
+	_repair_rate = rep_rate
+	_has_aegis = (aegis_ready or aegis_cd > 0.0)
+	_aegis_cooldown = aegis_cd
+	_update_defense_status_display()
+
+func _update_defense_status_display() -> void:
+	if not defense_status_label:
+		_setup_defense_status_ui()
+	if not defense_status_label:
+		return
+
+	var parts: Array[String] = []
+
+	if _has_wingmen:
+		var w_icons := ""
+		for i in range(2):
+			w_icons += "◆ " if i < _wingmen_alive else "◇ "
+		parts.append("ESCORT [ %s]" % w_icons.strip_edges())
+
+	if _armor_pct > 0.01:
+		parts.append("ARMOR +%d%%" % int(_armor_pct * 100.0))
+
+	if _repair_rate > 0.1:
+		parts.append("REPAIR 4/s")
+
+	if _has_aegis:
+		if _aegis_cooldown <= 0.0:
+			parts.append("AEGIS READY")
+		else:
+			parts.append("AEGIS [%.0fs]" % _aegis_cooldown)
+
+	if parts.is_empty():
+		defense_status_label.visible = false
+	else:
+		defense_status_label.text = " // ".join(parts)
+		defense_status_label.visible = true
 
 func _on_command_unit_destroyed(_pos: Vector3) -> void:
 	if not upgrade_banner:

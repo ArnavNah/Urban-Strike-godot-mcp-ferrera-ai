@@ -659,8 +659,10 @@ func get_random_choices(count: int) -> Array[Dictionary]:
 	if not eligible_evolutions.is_empty():
 		selected.append(enrich_card_data(eligible_evolutions[0]))
 
-	# 2. First Level-Up Guarantee:
-	# On the first level-up of every run (Level 2), one card MUST be Mini Helicopter Support.
+	# 2. First Level-Up Guarantee & Early Tri-Path Offer:
+	# On the first level-up of every run (Level 2), offer Support Wingmen (Defensive Squadron),
+	# one Gun Barrage card, and one Missile Hunter card. This ensures meaningful early choices
+	# across all three build paths and avoids one build dominating every run.
 	var is_first_level_up: bool = (current_level >= 2 or not pending_levels.is_empty())
 	if guarantee_mini_heli_on_first_offer and not has_guaranteed_mini_heli_offered and is_first_level_up:
 		has_guaranteed_mini_heli_offered = true
@@ -672,6 +674,28 @@ func get_random_choices(count: int) -> Array[Dictionary]:
 					break
 			if not already:
 				selected.append(enrich_card_data(upgrade_database["mini_helicopter_support"].duplicate(true)))
+
+		# Offer one Gun Barrage card
+		var gun_pool: Array[String] = ["faster_cannon", "twin_barrel", "multi_shot"]
+		var eligible_gun: Array[String] = []
+		for gid in gun_pool:
+			if _is_eligible(gid):
+				eligible_gun.append(gid)
+		if not eligible_gun.is_empty():
+			var rng := _get_upgrade_rng()
+			var picked_gun := eligible_gun[rng.randi() % eligible_gun.size()]
+			selected.append(enrich_card_data(upgrade_database[picked_gun].duplicate(true)))
+
+		# Offer one Missile Hunter card
+		var missile_pool: Array[String] = ["rapid_lock", "missile_capacity", "larger_explosions"]
+		var eligible_missile: Array[String] = []
+		for mid in missile_pool:
+			if _is_eligible(mid):
+				eligible_missile.append(mid)
+		if not eligible_missile.is_empty():
+			var rng := _get_upgrade_rng()
+			var picked_missile := eligible_missile[rng.randi() % eligible_missile.size()]
+			selected.append(enrich_card_data(upgrade_database[picked_missile].duplicate(true)))
 
 	# 3. Normalized 70% Common / 25% Rare / 5% Legendary Selection for remaining slots:
 	while selected.size() < count:
@@ -1177,6 +1201,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 			player.health_changed.emit(player.current_health, player.max_health)
 			if EventBus:
 				EventBus.player_health_changed.emit(player.current_health, player.max_health)
+			if player.has_method("notify_defense_status"):
+				player.notify_defense_status()
 		"afterburner":
 			player.strafe_speed *= 1.25
 			player.release_velocity_response /= 1.2
@@ -1217,11 +1243,13 @@ func apply_upgrade(upgrade_id: String) -> bool:
 		"siege_cannon":
 			if not gun:
 				return false
+			gun.is_siege_active = true
 			gun.ground_damage_multiplier *= 1.8
 			gun.enemy_hit_limit = 2
 		"ap_ricochet_cannon":
 			if not gun:
 				return false
+			gun.is_ap_ricochet_active = true
 			gun.armor_multiplier = 1.8
 			gun.pierce_count += 2
 			gun.ricochet_count += 1
@@ -1280,6 +1308,8 @@ func apply_upgrade(upgrade_id: String) -> bool:
 					living.max_health = 90.0
 					living.current_health = 90.0
 					living.apply_companion_modifiers(mini_heli_damage_mult, mini_heli_fire_rate_mult, mini_heli_range_mult, mini_heli_has_rockets)
+				if player.has_method("notify_defense_status"):
+					player.notify_defense_status()
 		_:
 			return false
 

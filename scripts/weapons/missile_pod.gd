@@ -170,6 +170,9 @@ func try_fire() -> bool:
 			var missile: Node3D = missile_scene.instantiate() as Node3D
 			if missile:
 				_configure_missile(missile)
+				missile.scale = Vector3(0.75, 0.75, 0.75)
+				if "speed" in missile:
+					missile.speed = 85.0
 				missile.transform.origin = spawn_pos
 				parent.add_child.call_deferred(missile)
 				missile.call_deferred("launch", spawn_pos, fwd, current_target if is_locked else null, true)

@@ -113,6 +113,7 @@ func _ready() -> void:
 	_collect_visual_meshes(self)
 	_setup_toon_materials()
 	_update_health_display()
+	_notify_wingmen_status.call_deferred()
 
 func _setup_toon_materials() -> void:
 	var drone_mat: Material = load("res://resources/materials/toon_escort_drone.tres")
@@ -495,4 +496,14 @@ func _die() -> void:
 	if mgr and mgr.has_method("on_wingman_destroyed"):
 		mgr.on_wingman_destroyed(slot_id, self)
 
+	if EventBus and EventBus.has_signal("wingmen_status_updated"):
+		var alive_cnt := (mgr.get_living_wingmen_count() - 1) if mgr else 0
+		EventBus.wingmen_status_updated.emit(maxi(0, alive_cnt), 2)
+
 	queue_free()
+
+func _notify_wingmen_status() -> void:
+	if EventBus and EventBus.has_signal("wingmen_status_updated"):
+		var mgr := get_tree().get_first_node_in_group("upgrade_manager") as UpgradeManager
+		var alive_cnt := mgr.get_living_wingmen_count() if mgr else 1
+		EventBus.wingmen_status_updated.emit(alive_cnt, 2)
