@@ -431,7 +431,7 @@ func _on_flares_updated(charges_left: int, max_charges: int, _is_ready: bool) ->
 	if charges_left < _prev_flare_charges:
 		_play_stream(_wav_flares, 0.50, 0.04)
 	elif charges_left == max_charges and _prev_flare_charges < max_charges:
-		_play_stream_on(hud_player, _wav_ammo_pickup, 0.35, 1.2)
+		_play_stream_on(hud_player, _wav_missile_pickup, 0.35, 1.2)
 	_prev_flare_charges = charges_left
 
 func _on_missile_impact(impact_pos: Vector3, _is_player: bool) -> void:
